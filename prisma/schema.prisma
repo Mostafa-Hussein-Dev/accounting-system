@@ -1,0 +1,13 @@
+// Prisma schema — Paradox v2 / HKMSoft Next (accounting system)
+// NOTE: This file intentionally contains ONLY the database connection setup.
+// Data models are added by the developers implementing each module.
+// The connection URL lives in prisma.config.ts / .env (Prisma 7).
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

@@ -1,0 +1,30 @@
+# compiled output
+/dist
+/node_modules
+/build
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / IDE
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code local config
+.claude
+
+# Tests
+/coverage
+/.nyc_output
+
+# Environment variables — keep secrets out of version control
+.env
+.env.*
+!.env.example

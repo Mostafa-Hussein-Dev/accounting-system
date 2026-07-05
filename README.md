@@ -46,7 +46,7 @@ Before writing any code, read these files in order:
    npx prisma generate
 
 7. Start the development server:
-   npm run start:dev
+   npm run dev
 
 8. API is available at: http://localhost:3000/api/v1
 9. Swagger UI is available at: http://localhost:3000/api/docs

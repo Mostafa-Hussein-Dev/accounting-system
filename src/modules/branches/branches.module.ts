@@ -4,6 +4,6 @@ import { BranchesController } from './branches.controller';
 
 @Module({
   providers: [BranchesService],
-  controllers: [BranchesController]
+  controllers: [BranchesController],
 })
 export class BranchesModule {}

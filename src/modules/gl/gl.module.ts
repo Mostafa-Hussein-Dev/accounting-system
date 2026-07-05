@@ -4,6 +4,6 @@ import { GlController } from './gl.controller';
 
 @Module({
   providers: [GlService],
-  controllers: [GlController]
+  controllers: [GlController],
 })
 export class GlModule {}

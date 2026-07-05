@@ -4,6 +4,6 @@ import { AccountsController } from './accounts.controller';
 
 @Module({
   providers: [AccountsService],
-  controllers: [AccountsController]
+  controllers: [AccountsController],
 })
 export class AccountsModule {}

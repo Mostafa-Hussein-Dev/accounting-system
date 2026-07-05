@@ -15,7 +15,9 @@ const envSchema = z.object({
 
 type ParsedEnv = z.infer<typeof envSchema>;
 
-export type EnvConfig = Omit<ParsedEnv, 'DATABASE_URL'> & { DATABASE_URL: string };
+export type EnvConfig = Omit<ParsedEnv, 'DATABASE_URL'> & {
+  DATABASE_URL: string;
+};
 
 function buildDatabaseUrl(env: ParsedEnv): string {
   const user = encodeURIComponent(env.DB_USER ?? '');

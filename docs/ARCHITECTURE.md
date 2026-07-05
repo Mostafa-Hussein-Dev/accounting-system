@@ -22,7 +22,7 @@ This repo contains the backend only. Frontend repos are separate.
 | Authorization | CASL (@casl/ability) |
 | Validation | Zod (config) + class-validator (DTOs) |
 | API Docs | @nestjs/swagger (Swagger UI + OpenAPI export) |
-| Runtime | Node.js 22 LTS |
+| Runtime | Node.js 24 LTS |
 | Package manager | npm |
 | Containerization | Docker + Docker Compose |
 

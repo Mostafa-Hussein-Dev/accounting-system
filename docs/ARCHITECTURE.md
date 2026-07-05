@@ -17,8 +17,8 @@ This repo contains the backend only. Frontend repos are separate.
 | HTTP engine | Fastify adapter |
 | Language | TypeScript — strict mode enabled |
 | ORM | Prisma |
-| Database | PostgreSQL 16 |
-| Cache / Queues | Redis 7 + BullMQ |
+| Database | PostgreSQL 17 |
+| Cache / Queues | Redis 8 + BullMQ |
 | Authorization | CASL (@casl/ability) |
 | Validation | Zod (config) + class-validator (DTOs) |
 | API Docs | @nestjs/swagger (Swagger UI + OpenAPI export) |

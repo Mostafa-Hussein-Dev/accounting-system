@@ -6,7 +6,7 @@ Lebanese trading companies.
 ## Tech stack
 - NestJS v11 + Fastify
 - TypeScript (strict)
-- Prisma + PostgreSQL 16
+- Prisma + PostgreSQL 17
 - Redis + BullMQ
 - CASL authorization
 - Swagger / OpenAPI
@@ -21,7 +21,35 @@ Before writing any code, read these files in order:
 5. docs/PRD_Paradox_v2_Detailed_Developer_Edition.md — full product requirements
 
 ## Getting started
-(To be filled in once Docker Compose and Prisma are configured)
+
+### Prerequisites
+- Docker Desktop installed and running
+- Node.js 22 LTS
+- npm
+
+### Local development setup
+
+1. Clone the repository
+2. Install dependencies:
+   npm install
+
+3. Copy the environment file:
+   cp .env.example .env
+
+4. Start the database and Redis:
+   docker compose up postgres redis -d
+
+5. Run database migrations:
+   npx prisma migrate dev --name init
+
+6. Generate Prisma client:
+   npx prisma generate
+
+7. Start the development server:
+   npm run start:dev
+
+8. API is available at: http://localhost:3000/api/v1
+9. Swagger UI is available at: http://localhost:3000/api/docs
 
 ## API documentation
 Once running, Swagger UI is available at:

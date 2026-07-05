@@ -1,24 +1,60 @@
 services:
   postgres:
-    image: postgres:16
-    restart: unless-stopped
+    image: postgres:17-alpine
+    container_name: accounting_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: accounting_system
+      POSTGRES_DB: accounting_db
+      POSTGRES_USER: accounting_user
+      POSTGRES_PASSWORD: accounting_pass
     ports:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U accounting_user -d accounting_db']
+      interval: 10s
+      retries: 5
+    networks:
+      - accounting_network
 
   redis:
-    image: redis:7
-    restart: unless-stopped
+    image: redis:8-alpine
+    container_name: accounting_redis
+    command: redis-server --appendonly yes
     ports:
       - '6379:6379'
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      retries: 5
+    networks:
+      - accounting_network
+
+  # Uncomment when Dockerfile is ready
+  # api:
+  #   build: .
+  #   container_name: accounting_api
+  #   ports:
+  #     - '3000:3000'
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   env_file: .env
+  #   volumes:
+  #     - ./src:/app/src
+  #   restart: unless-stopped
+  #   networks:
+  #     - accounting_network
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  accounting_network:

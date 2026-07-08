@@ -114,24 +114,43 @@ Any endpoint scoped to one company resolves its target company via
 - `POST /companies` and `GET /companies` (list) — platform admin only
   (`PlatformAdminGuard`). Direct company creation is an admin provisioning
   action; self-service company creation goes through `POST /auth/register`.
-- `GET/PATCH/DELETE /companies/:id` — platform admin (any company), or a
-  user whose own `companyId` matches `:id` (`CompanySelfOrAdminGuard`,
-  src/modules/companies/guards/company-self-or-admin.guard.ts). A
-  company-scoped user acting on another company gets 403
-  `COMPANY_ACCESS_DENIED`. There isn't a distinct "company admin" role yet —
-  today this means *any* user belonging to that company, not just its
-  owner; narrowing this further is CASL's job once roles exist.
+- `GET /companies/:id` — platform admin (any company), or any user whose own
+  `companyId` matches `:id` (`CompanySelfOrAdminGuard`). A company-scoped
+  user acting on another company gets 403 `COMPANY_ACCESS_DENIED`.
+- `PATCH`/`DELETE /companies/:id` — same tenancy check as above, PLUS a
+  permission check (`PermissionsGuard` + `@RequirePermissions`): the caller
+  must hold the `company.update`/`company.delete` permission, granted by the
+  `Company Admin` role. A company-scoped user without that role gets 403
+  `PERMISSION_DENIED` even though `CompanySelfOrAdminGuard` would otherwise
+  let them through — viewing your own company is open to any member, editing
+  or deleting it requires the admin role specifically.
 
 ### Users
 - Every route requires authentication only (`JwtAuthGuard`) — there's no
-  extra route guard. Scoping happens inside `UsersService` via the same
-  `PrismaService.forTenant()` mechanism used for tenant data: a
-  platform admin gets the bare client (any company, or none via an omitted
-  `companyId` in the body); a company-scoped caller gets
-  `forTenant(their own companyId)`, which forces every read and write to
-  their own company — they can create teammates, but can never see, edit,
-  or move a user into another company, and any `companyId` they submit is
-  silently overridden to their own.
+  extra route guard; scoping happens inside `UsersService` via the same
+  `PrismaService.forTenant()` mechanism used for tenant data (platform admin
+  gets the bare client, a company-scoped caller gets
+  `forTenant(their own companyId)` — see the Company-scoped section above).
+- Role assignment: `POST`/`PATCH /users` accept an optional `roleIds` array.
+  A company-scoped caller creating a teammate without specifying `roleIds`
+  defaults to the `Company Member` role, so nobody is ever role-less.
+  Removing the `Company Admin` role from a user (via `PATCH`) or soft-deleting
+  a user (`DELETE`) is blocked with 409 `LAST_COMPANY_ADMIN` if it would leave
+  their company with zero admins.
+
+### Roles and permissions (CASL)
+- Roles are global (not per-company) and a user can hold multiple; their
+  effective permissions are the union across all their roles
+  (`CaslAbilityFactory`, src/modules/casl/casl-ability.factory.ts, queries
+  fresh on every request — see the JWT section above for why).
+- `GET /roles` requires the `role.read` permission; a platform admin sees
+  both `PLATFORM`/`COMPANY` scope roles, a company-scoped caller sees
+  `COMPANY`-scope roles only.
+- Any route can require a permission via `@RequirePermissions({action, subject})`
+  alongside `PermissionsGuard` (src/modules/casl/guards/permissions.guard.ts),
+  returning 403 `PERMISSION_DENIED` when the caller's roles don't grant it.
+  A platform admin (`companyId === null`) always passes every check — CASL
+  grants them `manage all` without a database lookup.
 
 ## HTTP status codes used
 | Code | When |
@@ -179,15 +198,20 @@ Never send a bare number for a monetary value.
 All protected endpoints require:
 Authorization: Bearer <access_token>
 
-JWT payload structure:
+JWT payload structure (this is the actual, current shape — see
+src/modules/auth/interfaces/jwt-payload.interface.ts):
 {
   "sub": "user-uuid",
-  "companyId": "company-uuid",
-  "branchId": "branch-uuid or null",
-  "roles": ["accountant"],
+  "companyId": "company-uuid or null (null = platform admin/support)",
   "iat": 1234567890,
   "exp": 1234567890
 }
+
+Roles and permissions are deliberately NOT embedded in the token — they're
+resolved fresh from the database on every request by CaslAbilityFactory
+(src/modules/casl/casl-ability.factory.ts), keyed off `sub`. This trades a
+small per-request DB lookup for immediate revocation: removing a role takes
+effect on the user's very next request, with no token refresh required.
 
 ## Swagger documentation rules
 Every endpoint must have:

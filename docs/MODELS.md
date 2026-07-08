@@ -79,7 +79,9 @@ must enforce them:
 
 - A Company has many Branches
 - A Branch has many POS Stations
-- A User is assigned to one or more Companies, with a Role per Company
+- A User belongs to exactly one Company (or none, for platform admin/support)
+  and can hold multiple Roles within it; a Role is composed of Permissions,
+  and a user's effective permissions are the union across all their roles
 - A Partner (customer or supplier) is also a ledger Account in the
   chart of accounts — they are the same entity
 - A Document (invoice, purchase order, quotation, credit note) has

@@ -414,7 +414,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["companies", "{{companyId}}"]
             },
-            "description": "Platform admin can update any company; a company-scoped user can only update their own (403 COMPANY_ACCESS_DENIED otherwise)."
+            "description": "Platform admin can update any company; a company-scoped user needs the Company Admin role for their own company (403 COMPANY_ACCESS_DENIED for another company, 403 PERMISSION_DENIED if they belong to this company but lack the Company Admin role)."
           },
           "response": [
             {
@@ -432,6 +432,14 @@
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "403 Permission denied (not a Company Admin)",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
             }
           ]
         },
@@ -445,7 +453,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["companies", "{{companyId}}"]
             },
-            "description": "Platform admin can delete any company; a company-scoped user can only delete their own (403 COMPANY_ACCESS_DENIED otherwise)."
+            "description": "Platform admin can delete any company; a company-scoped user needs the Company Admin role for their own company (403 COMPANY_ACCESS_DENIED for another company, 403 PERMISSION_DENIED if they belong to this company but lack the Company Admin role)."
           },
           "response": [
             {
@@ -463,6 +471,70 @@
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "403 Permission denied (not a Company Admin)",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Roles",
+      "item": [
+        {
+          "name": "List roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles"]
+            },
+            "description": "Platform admin sees both PLATFORM and COMPANY scope roles; a company-scoped caller sees COMPANY-scope roles only. Requires the role.read permission (granted by both seeded roles). The test script saves companyAdminRoleId and companyMemberRoleId into the environment for use by Users requests below."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('List roles successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const roles = pm.response.json().data;",
+                  "    const admin = roles.find((r) => r.name === 'Company Admin');",
+                  "    const member = roles.find((r) => r.name === 'Company Member');",
+                  "    if (admin) pm.environment.set('companyAdminRoleId', admin.id);",
+                  "    if (member) pm.environment.set('companyMemberRoleId', member.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"d9d968e2-be6b-473e-b504-e7f90c1fd005\",\n      \"name\": \"Company Admin\",\n      \"description\": \"Full administrative access within the company's own data.\",\n      \"scope\": \"COMPANY\",\n      \"permissions\": [\"user.create\", \"user.read\", \"user.update\", \"user.delete\", \"company.read\", \"company.update\", \"company.delete\", \"role.read\"],\n      \"createdAt\": \"2026-07-08T20:18:20.987Z\",\n      \"updatedAt\": \"2026-07-08T20:18:20.987Z\"\n    },\n    {\n      \"id\": \"c000504e-ebdd-4c15-b540-d1d653fc8ac6\",\n      \"name\": \"Company Member\",\n      \"description\": \"Baseline access for a company teammate.\",\n      \"scope\": \"COMPANY\",\n      \"permissions\": [\"company.read\", \"role.read\"],\n      \"createdAt\": \"2026-07-08T20:18:21.044Z\",\n      \"updatedAt\": \"2026-07-08T20:18:21.044Z\"\n    }\n  ],\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
             }
           ]
         }
@@ -486,7 +558,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["users"]
             },
-            "description": "A company-scoped caller (e.g. the owner from Auth > Register) is always forced into their own company — the companyId above is ignored/overridden if it doesn't match. A platform admin can use companyId to target any company, or omit it to create another company-less admin."
+            "description": "A company-scoped caller (e.g. the owner from Auth > Register) is always forced into their own company — the companyId above is ignored/overridden if it doesn't match. A platform admin can use companyId to target any company, or omit it to create another company-less admin. Accepts an optional roleIds array (see Roles > List roles for IDs) — a company-scoped caller creating a teammate without specifying roleIds defaults to the Company Member role, so nobody is ever role-less."
           },
           "event": [
             {
@@ -603,7 +675,8 @@
               "raw": "{{baseUrl}}/users/{{userId}}",
               "host": ["{{baseUrl}}"],
               "path": ["users", "{{userId}}"]
-            }
+            },
+            "description": "Passing roleIds REPLACES the user's full role set (see Roles > List roles for IDs), e.g. {\"roleIds\": [\"{{companyMemberRoleId}}\"]}. Removing the Company Admin role from a company's last admin is blocked with 409 LAST_COMPANY_ADMIN."
           },
           "response": [
             {
@@ -613,6 +686,14 @@
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+961 3 000 000\",\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": null,\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T18:05:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Last company admin",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"LAST_COMPANY_ADMIN\",\n    \"message\": \"Cannot remove the company's last admin.\",\n    \"field\": \"roleIds\"\n  }\n}"
             }
           ]
         },
@@ -625,7 +706,8 @@
               "raw": "{{baseUrl}}/users/{{userId}}",
               "host": ["{{baseUrl}}"],
               "path": ["users", "{{userId}}"]
-            }
+            },
+            "description": "Deleting a company's last Company Admin is blocked with 409 LAST_COMPANY_ADMIN."
           },
           "response": [
             {
@@ -635,6 +717,14 @@
               "_postman_previewlanguage": "json",
               "header": [],
               "body": ""
+            },
+            {
+              "name": "409 Last company admin",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"LAST_COMPANY_ADMIN\",\n    \"message\": \"Cannot remove the company's last admin.\",\n    \"field\": \"roleIds\"\n  }\n}"
             }
           ]
         }

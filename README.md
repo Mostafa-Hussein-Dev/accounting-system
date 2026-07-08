@@ -18,7 +18,6 @@ Before writing any code, read these files in order:
 2. docs/CONVENTIONS.md — naming, structure, forbidden patterns
 3. docs/API-DESIGN.md — response shapes, money fields, Swagger rules
 4. docs/MODELS.md — data model, accounting invariants, business rules
-5. docs/PRD_Paradox_v2_Detailed_Developer_Edition.md — full product requirements
 
 ## Getting started
 

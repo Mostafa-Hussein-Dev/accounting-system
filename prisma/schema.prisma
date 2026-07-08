@@ -28,6 +28,7 @@ model Company {
   deletedAt  DateTime? @map("deleted_at")
 
   users User[]
+  roles Role[]
 
   @@map("companies")
   @@index([deletedAt])
@@ -60,14 +61,11 @@ model User {
   @@index([deletedAt])
 }
 
-enum RoleScope {
-  PLATFORM
-  COMPANY
-}
-
 // Global, reusable permission catalog. Not tenant-scoped — reference data,
 // same as currencies/tax rates. Every module appends its own subject/action
-// rows here as it's built; nothing else needs to change.
+// rows here as it's built; nothing else needs to change. Fixed/seeded only —
+// no CRUD API — a permission only means something if some @RequirePermissions
+// check in code actually enforces it.
 model Permission {
   id          String   @id @default(uuid()) @db.Uuid
   key         String   @unique @map("key")
@@ -81,19 +79,33 @@ model Permission {
   @@map("permissions")
 }
 
-// Global roles (not per-company). A user can hold multiple roles; their
-// effective permissions are the union of every role's permissions.
+// A role is either global (companyId null — available to every tenant, e.g.
+// the seeded Company Admin/Company Member) or a tenant's own private custom
+// role (companyId set). A user can hold multiple roles; effective
+// permissions are the union of every role's permissions. isSystem protects
+// the seeded roles from being renamed/deleted via the API — AuthService and
+// UsersService look them up by name and would break if they moved.
+// Deliberately NOT in prisma.service.ts's TENANT_SCOPED_MODELS: forTenant()
+// force-matches an exact companyId, but Role needs "null OR mine," which
+// that extension can't express — RolesService hand-writes that OR filter.
 model Role {
   id          String    @id @default(uuid()) @db.Uuid
-  name        String    @unique
+  name        String
   description String?
-  scope       RoleScope @default(COMPANY)
+  companyId   String?   @map("company_id") @db.Uuid
+  company     Company?  @relation(fields: [companyId], references: [id])
+  isSystem    Boolean   @default(false) @map("is_system")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   permissions RolePermission[]
   users       UserRole[]
 
+  // Postgres treats NULL as distinct in unique constraints, so this does NOT
+  // stop two global (companyId null) roles from sharing a name — that case
+  // is checked explicitly in RolesService.create() before insert.
+  @@unique([companyId, name])
+  @@index([companyId])
   @@map("roles")
 }
 

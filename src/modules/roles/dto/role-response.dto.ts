@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Role, RolePermission, Permission, RoleScope } from '@prisma/client';
+import { Role, RolePermission, Permission } from '@prisma/client';
 
 type RoleWithPermissions = Role & {
   permissions: (RolePermission & { permission: Permission })[];
@@ -18,8 +18,20 @@ export class RoleResponseDto {
   })
   description!: string | null;
 
-  @ApiProperty({ enum: RoleScope, example: RoleScope.COMPANY })
-  scope!: RoleScope;
+  @ApiPropertyOptional({
+    description:
+      "null for a global role usable by every company; set to a specific company for that company's own custom role.",
+    example: null,
+    nullable: true,
+  })
+  companyId!: string | null;
+
+  @ApiProperty({
+    description:
+      'System roles (the seeded Company Admin/Company Member) can never be updated or deleted via the API.',
+    example: true,
+  })
+  isSystem!: boolean;
 
   @ApiProperty({
     description: 'Permission keys granted by this role.',
@@ -39,7 +51,8 @@ export class RoleResponseDto {
     dto.id = role.id;
     dto.name = role.name;
     dto.description = role.description;
-    dto.scope = role.scope;
+    dto.companyId = role.companyId;
+    dto.isSystem = role.isSystem;
     dto.permissions = role.permissions.map((rp) => rp.permission.key);
     dto.createdAt = role.createdAt;
     dto.updatedAt = role.updatedAt;

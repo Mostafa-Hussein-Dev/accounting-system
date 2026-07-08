@@ -82,8 +82,8 @@ export class UsersService {
 
       let resolvedRoleIds = roleIds;
       if (!resolvedRoleIds && caller && user.companyId) {
-        const defaultRole = await client.role.findUnique({
-          where: { name: DEFAULT_TEAMMATE_ROLE_NAME },
+        const defaultRole = await client.role.findFirst({
+          where: { name: DEFAULT_TEAMMATE_ROLE_NAME, isSystem: true },
         });
         resolvedRoleIds = defaultRole ? [defaultRole.id] : [];
       }
@@ -240,8 +240,8 @@ export class UsersService {
     if (!companyId) {
       return;
     }
-    const adminRole = await client.role.findUnique({
-      where: { name: COMPANY_ADMIN_ROLE_NAME },
+    const adminRole = await client.role.findFirst({
+      where: { name: COMPANY_ADMIN_ROLE_NAME, isSystem: true },
     });
     if (!adminRole) {
       return;

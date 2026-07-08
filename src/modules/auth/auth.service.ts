@@ -46,8 +46,8 @@ export class AuthService {
       // The registering user is the company's owner/admin — assign the
       // seeded Company Admin role so a fresh company is never locked out
       // of managing itself.
-      const ownerRole = await tx.role.findUniqueOrThrow({
-        where: { name: OWNER_ROLE_NAME },
+      const ownerRole = await tx.role.findFirstOrThrow({
+        where: { name: OWNER_ROLE_NAME, isSystem: true },
       });
       await tx.userRole.create({
         data: { userId: createdUser.id, roleId: ownerRole.id },

@@ -1,4 +1,4 @@
-import { PrismaClient, RoleScope } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 const prisma = new PrismaClient({
@@ -14,19 +14,23 @@ const PERMISSIONS = [
   { key: 'company.update', subject: 'Company', action: 'update', description: 'Update a company' },
   { key: 'company.delete', subject: 'Company', action: 'delete', description: 'Delete a company' },
   { key: 'role.read', subject: 'Role', action: 'read', description: 'View roles' },
+  { key: 'role.create', subject: 'Role', action: 'create', description: 'Create roles' },
+  { key: 'role.update', subject: 'Role', action: 'update', description: 'Update roles' },
+  { key: 'role.delete', subject: 'Role', action: 'delete', description: 'Delete roles' },
 ] as const;
 
-const ROLES: { name: string; description: string; scope: RoleScope; permissionKeys: string[] }[] = [
+// Both seeded roles are global (companyId: null) and isSystem (protected
+// from update/delete via the API — AuthService and UsersService look them
+// up by name and would break if they moved).
+const ROLES: { name: string; description: string; permissionKeys: string[] }[] = [
   {
     name: 'Company Admin',
     description: "Full administrative access within the company's own data.",
-    scope: RoleScope.COMPANY,
     permissionKeys: PERMISSIONS.map((p) => p.key),
   },
   {
     name: 'Company Member',
     description: 'Baseline access for a company teammate.',
-    scope: RoleScope.COMPANY,
     permissionKeys: ['company.read', 'role.read'],
   },
 ];
@@ -45,15 +49,25 @@ async function main() {
   }
 
   for (const role of ROLES) {
-    const savedRole = await prisma.role.upsert({
-      where: { name: role.name },
-      update: { description: role.description, scope: role.scope },
-      create: {
-        name: role.name,
-        description: role.description,
-        scope: role.scope,
-      },
+    // Prisma's compound-unique-key type for [companyId, name] doesn't accept
+    // null for companyId (a generated-type limitation on nullable columns
+    // in compound unique constraints), so upsert-by-compound-key isn't
+    // available here — find-then-create/update instead.
+    const existingRole = await prisma.role.findFirst({
+      where: { companyId: null, name: role.name },
     });
+    const savedRole = existingRole
+      ? await prisma.role.update({
+          where: { id: existingRole.id },
+          data: { description: role.description, isSystem: true },
+        })
+      : await prisma.role.create({
+          data: {
+            name: role.name,
+            description: role.description,
+            isSystem: true,
+          },
+        });
 
     const permissions = await prisma.permission.findMany({
       where: { key: { in: role.permissionKeys } },

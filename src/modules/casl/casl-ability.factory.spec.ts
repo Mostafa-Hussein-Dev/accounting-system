@@ -28,8 +28,8 @@ describe('CaslAbilityFactory', () => {
     });
     companyId = company.id;
 
-    const memberRole = await prisma.role.findUniqueOrThrow({
-      where: { name: 'Company Member' },
+    const memberRole = await prisma.role.findFirstOrThrow({
+      where: { name: 'Company Member', isSystem: true },
     });
 
     const memberUser = await prisma.user.create({

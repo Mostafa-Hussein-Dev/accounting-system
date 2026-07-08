@@ -25,6 +25,8 @@ import { UserResponseDto } from './dto/user-response.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -34,7 +36,10 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new user' })
+  @ApiOperation({
+    summary:
+      'Create a new user (platform admin: any company via body companyId or none; company-scoped caller: forced into their own company)',
+  })
   @ApiResponse({
     status: 201,
     description: 'User created',
@@ -42,12 +47,18 @@ export class UsersController {
   })
   @ApiResponse({ status: 409, description: 'Email already in use' })
   @ApiResponse({ status: 404, description: 'Company not found' })
-  create(@Body() dto: CreateUserDto): Promise<UserResponseDto> {
-    return this.usersService.create(dto);
+  create(
+    @Body() dto: CreateUserDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<UserResponseDto> {
+    return this.usersService.create(dto, caller);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List users' })
+  @ApiOperation({
+    summary:
+      'List users (platform admin: everyone; company-scoped caller: their own company only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Paginated list of users',
@@ -56,8 +67,9 @@ export class UsersController {
   })
   findAll(
     @Query() query: PaginationQueryDto,
+    @CurrentUser() caller: AuthenticatedUser,
   ): Promise<Paginated<UserResponseDto>> {
-    return this.usersService.findAll(query);
+    return this.usersService.findAll(query, caller);
   }
 
   @Get(':id')
@@ -68,8 +80,11 @@ export class UsersController {
     type: UserResponseDto,
   })
   @ApiResponse({ status: 404, description: 'User not found' })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<UserResponseDto> {
-    return this.usersService.findOne(id);
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<UserResponseDto> {
+    return this.usersService.findOne(id, caller);
   }
 
   @Patch(':id')
@@ -83,8 +98,9 @@ export class UsersController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserDto,
+    @CurrentUser() caller: AuthenticatedUser,
   ): Promise<UserResponseDto> {
-    return this.usersService.update(id, dto);
+    return this.usersService.update(id, dto, caller);
   }
 
   @Delete(':id')
@@ -92,7 +108,10 @@ export class UsersController {
   @ApiOperation({ summary: 'Soft delete a user' })
   @ApiResponse({ status: 204, description: 'User deleted' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.usersService.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<void> {
+    return this.usersService.remove(id, caller);
   }
 }

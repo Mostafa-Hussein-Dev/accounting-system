@@ -24,9 +24,12 @@ const ALLOWED_SORT_FIELDS = [
 export class CompaniesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateCompanyDto): Promise<CompanyResponseDto> {
+  async create(
+    dto: CreateCompanyDto,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<CompanyResponseDto> {
     try {
-      const company = await this.prisma.company.create({ data: dto });
+      const company = await client.company.create({ data: dto });
       return CompanyResponseDto.fromEntity(company);
     } catch (error) {
       throw this.mapWriteError(error, dto.taxNumber);

@@ -25,6 +25,8 @@ import { CompanyResponseDto } from './dto/company-response.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PlatformAdminGuard } from '../auth/guards/platform-admin.guard';
+import { CompanySelfOrAdminGuard } from './guards/company-self-or-admin.guard';
 
 @ApiTags('Companies')
 @ApiBearerAuth()
@@ -34,25 +36,32 @@ export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new company' })
+  @UseGuards(PlatformAdminGuard)
+  @ApiOperation({
+    summary:
+      'Create a new company directly (platform admin only — self-service signup uses POST /auth/register)',
+  })
   @ApiResponse({
     status: 201,
     description: 'Company created',
     type: CompanyResponseDto,
   })
+  @ApiResponse({ status: 403, description: 'Platform admin access required' })
   @ApiResponse({ status: 409, description: 'Tax number already in use' })
   create(@Body() dto: CreateCompanyDto): Promise<CompanyResponseDto> {
     return this.companiesService.create(dto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List companies' })
+  @UseGuards(PlatformAdminGuard)
+  @ApiOperation({ summary: 'List companies (platform admin only)' })
   @ApiResponse({
     status: 200,
     description: 'Paginated list of companies',
     type: CompanyResponseDto,
     isArray: true,
   })
+  @ApiResponse({ status: 403, description: 'Platform admin access required' })
   findAll(
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<CompanyResponseDto>> {
@@ -60,24 +69,32 @@ export class CompaniesController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a company by id' })
+  @UseGuards(CompanySelfOrAdminGuard)
+  @ApiOperation({
+    summary: "Get a company by id (platform admin, or that company's own user)",
+  })
   @ApiResponse({
     status: 200,
     description: 'Company found',
     type: CompanyResponseDto,
   })
+  @ApiResponse({ status: 403, description: 'No access to this company' })
   @ApiResponse({ status: 404, description: 'Company not found' })
   findOne(@Param('id', ParseUUIDPipe) id: string): Promise<CompanyResponseDto> {
     return this.companiesService.findOne(id);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a company' })
+  @UseGuards(CompanySelfOrAdminGuard)
+  @ApiOperation({
+    summary: "Update a company (platform admin, or that company's own user)",
+  })
   @ApiResponse({
     status: 200,
     description: 'Company updated',
     type: CompanyResponseDto,
   })
+  @ApiResponse({ status: 403, description: 'No access to this company' })
   @ApiResponse({ status: 404, description: 'Company not found' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -87,9 +104,14 @@ export class CompaniesController {
   }
 
   @Delete(':id')
+  @UseGuards(CompanySelfOrAdminGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Soft delete a company' })
+  @ApiOperation({
+    summary:
+      "Soft delete a company (platform admin, or that company's own user)",
+  })
   @ApiResponse({ status: 204, description: 'Company deleted' })
+  @ApiResponse({ status: 403, description: 'No access to this company' })
   @ApiResponse({ status: 404, description: 'Company not found' })
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.companiesService.remove(id);

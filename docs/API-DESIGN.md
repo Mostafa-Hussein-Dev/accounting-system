@@ -83,6 +83,18 @@ Filters are passed as query params, prefixed by field name:
 - GET /api/v1/invoices?dateFrom=2025-01-01&dateTo=2025-03-31
 - GET /api/v1/partners?type=customer&hasBalance=true
 
+## Registration
+`POST /api/v1/auth/register` is how a company comes into existence via
+self-service: it creates a company and its first user atomically (one
+transaction — either both are created or neither is), then immediately
+returns a token pair (same shape as `POST /auth/login`) so the new user is
+authenticated with no separate login step. That first user is conceptually
+the company's admin/owner, though this isn't formally modeled yet (no
+`Role`/`user_company_role` table) — it's a known, accepted gap until roles
+and permissions (CASL) are implemented. Body shape: `{ company: {...same
+fields as POST /companies}, user: {...same fields as POST /users, minus
+companyId} }`.
+
 ## Company-scoped endpoints and platform admin access
 Any endpoint scoped to one company resolves its target company via
 `@CurrentCompanyId()` (src/modules/auth/decorators/current-company-id.decorator.ts):
@@ -94,9 +106,32 @@ Any endpoint scoped to one company resolves its target company via
   `GET /api/v1/accounts?companyId=<uuid>`. Omitting it returns 400
   `COMPANY_ID_QUERY_PARAM_REQUIRED`; an invalid value returns 400
   `INVALID_COMPANY_ID`-shaped validation (same code, field: "companyId").
-- Routes restricted to platform admin/support only (not yet applied to any
-  endpoint) use `PlatformAdminGuard` alongside `JwtAuthGuard`, returning 403
-  `PLATFORM_ADMIN_REQUIRED` for a company-scoped caller.
+- Routes restricted to platform admin/support only use `PlatformAdminGuard`
+  alongside `JwtAuthGuard`, returning 403 `PLATFORM_ADMIN_REQUIRED` for a
+  company-scoped caller.
+
+### Companies
+- `POST /companies` and `GET /companies` (list) — platform admin only
+  (`PlatformAdminGuard`). Direct company creation is an admin provisioning
+  action; self-service company creation goes through `POST /auth/register`.
+- `GET/PATCH/DELETE /companies/:id` — platform admin (any company), or a
+  user whose own `companyId` matches `:id` (`CompanySelfOrAdminGuard`,
+  src/modules/companies/guards/company-self-or-admin.guard.ts). A
+  company-scoped user acting on another company gets 403
+  `COMPANY_ACCESS_DENIED`. There isn't a distinct "company admin" role yet —
+  today this means *any* user belonging to that company, not just its
+  owner; narrowing this further is CASL's job once roles exist.
+
+### Users
+- Every route requires authentication only (`JwtAuthGuard`) — there's no
+  extra route guard. Scoping happens inside `UsersService` via the same
+  `PrismaService.forTenant()` mechanism used for tenant data: a
+  platform admin gets the bare client (any company, or none via an omitted
+  `companyId` in the body); a company-scoped caller gets
+  `forTenant(their own companyId)`, which forces every read and write to
+  their own company — they can create teammates, but can never see, edit,
+  or move a user into another company, and any `companyId` they submit is
+  silently overridden to their own.
 
 ## HTTP status codes used
 | Code | When |

@@ -72,6 +72,63 @@
           ]
         },
         {
+          "name": "Register (new company + owner)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company\": {\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 234 567\",\n    \"email\": \"info@beiruttrading.com\"\n  },\n  \"user\": {\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"password\": \"S3cur3P@ssword!\",\n    \"phone\": \"+961 3 123 456\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Creates a company and its first (owner) user atomically, then auto-logs in — same token pair shape as Log in. The test script saves accessToken, refreshToken, and companyId (decoded from the access token) into the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registration successful', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    const json = pm.response.json();",
+                  "    pm.environment.set('accessToken', json.data.accessToken);",
+                  "    pm.environment.set('refreshToken', json.data.refreshToken);",
+                  "    const payload = JSON.parse(atob(json.data.accessToken.split('.')[1]));",
+                  "    pm.environment.set('companyId', payload.companyId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Email or tax number already in use",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"USER_EMAIL_ALREADY_EXISTS\",\n    \"message\": \"A user with this email already exists.\",\n    \"field\": \"email\"\n  }\n}"
+            }
+          ]
+        },
+        {
           "name": "Refresh token",
           "request": {
             "auth": { "type": "noauth" },
@@ -220,7 +277,8 @@
               "raw": "{{baseUrl}}/companies",
               "host": ["{{baseUrl}}"],
               "path": ["companies"]
-            }
+            },
+            "description": "Platform admin only — direct company creation is an admin provisioning action. Self-service company creation is Auth > Register."
           },
           "event": [
             {
@@ -254,6 +312,14 @@
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_TAX_NUMBER_ALREADY_EXISTS\",\n    \"message\": \"A company with tax number \\\"LB-123456\\\" already exists.\",\n    \"field\": \"taxNumber\"\n  }\n}"
+            },
+            {
+              "name": "403 Platform admin access required",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PLATFORM_ADMIN_REQUIRED\",\n    \"message\": \"This action is restricted to platform admin/support users.\",\n    \"field\": null\n  }\n}"
             }
           ]
         },
@@ -272,7 +338,8 @@
                 { "key": "sortBy", "value": "createdAt" },
                 { "key": "sortOrder", "value": "desc" }
               ]
-            }
+            },
+            "description": "Platform admin only — a company-scoped user belongs to exactly one company, so listing all of them isn't meaningful for them."
           },
           "response": [
             {
@@ -282,6 +349,14 @@
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"name\": \"Beirut Trading Co.\",\n      \"taxNumber\": \"LB-123456\",\n      \"phone\": \"+961 1 234 567\",\n      \"email\": \"info@beiruttrading.com\",\n      \"logo\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n      \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            },
+            {
+              "name": "403 Platform admin access required",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PLATFORM_ADMIN_REQUIRED\",\n    \"message\": \"This action is restricted to platform admin/support users.\",\n    \"field\": null\n  }\n}"
             }
           ]
         },
@@ -294,7 +369,8 @@
               "raw": "{{baseUrl}}/companies/{{companyId}}",
               "host": ["{{baseUrl}}"],
               "path": ["companies", "{{companyId}}"]
-            }
+            },
+            "description": "Platform admin can fetch any company; a company-scoped user can only fetch their own (403 COMPANY_ACCESS_DENIED otherwise)."
           },
           "response": [
             {
@@ -312,6 +388,14 @@
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_NOT_FOUND\",\n    \"message\": \"Company with id b3f1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "403 No access to this company",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
             }
           ]
         },
@@ -329,7 +413,8 @@
               "raw": "{{baseUrl}}/companies/{{companyId}}",
               "host": ["{{baseUrl}}"],
               "path": ["companies", "{{companyId}}"]
-            }
+            },
+            "description": "Platform admin can update any company; a company-scoped user can only update their own (403 COMPANY_ACCESS_DENIED otherwise)."
           },
           "response": [
             {
@@ -339,6 +424,14 @@
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 999 999\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T18:02:11.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 No access to this company",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
             }
           ]
         },
@@ -351,7 +444,8 @@
               "raw": "{{baseUrl}}/companies/{{companyId}}",
               "host": ["{{baseUrl}}"],
               "path": ["companies", "{{companyId}}"]
-            }
+            },
+            "description": "Platform admin can delete any company; a company-scoped user can only delete their own (403 COMPANY_ACCESS_DENIED otherwise)."
           },
           "response": [
             {
@@ -361,6 +455,14 @@
               "_postman_previewlanguage": "json",
               "header": [],
               "body": ""
+            },
+            {
+              "name": "403 No access to this company",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
             }
           ]
         }
@@ -383,7 +485,8 @@
               "raw": "{{baseUrl}}/users",
               "host": ["{{baseUrl}}"],
               "path": ["users"]
-            }
+            },
+            "description": "A company-scoped caller (e.g. the owner from Auth > Register) is always forced into their own company — the companyId above is ignored/overridden if it doesn't match. A platform admin can use companyId to target any company, or omit it to create another company-less admin."
           },
           "event": [
             {

@@ -66,10 +66,16 @@ Each module owns its domain exclusively. Boundaries are strict:
 
 ## Multi-tenancy
 Every database table has a company_id column. Every request from an
-authenticated user carries a company_id in their JWT payload. Every
-query is automatically scoped to that company_id. PostgreSQL Row-Level
-Security (RLS) enforces this at the database level as a hard wall —
-even a buggy query cannot leak data across companies.
+authenticated user carries a company_id in their JWT payload. Company-scoped
+data is read and written exclusively through PrismaService.forTenant(companyId)
+(src/prisma/prisma.service.ts) — a Prisma Client Extension that forces
+company_id into every where clause and every write for tenant-scoped models,
+so a query made through it cannot omit or override the tenant boundary. This
+is enforced at the application layer, not the database layer: there is no
+Postgres Row-Level Security in this system. The bare (unscoped) PrismaService
+stays available on purpose, for deliberate cross-tenant admin operations
+(e.g. a platform admin viewing data across companies) — it is not a bypass to
+guard against, it is the intended escape hatch for that use case.
 
 ## Authentication flow
 1. Client sends POST /api/v1/auth/login

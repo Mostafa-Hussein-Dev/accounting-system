@@ -64,9 +64,16 @@ must enforce them:
    Never store just an amount without its currency, rate, and base amount.
 
 8. TENANT ISOLATION
-   Every record belongs to a company. Every query includes
-   where: { company_id: user.companyId }. RLS enforces this
-   at the DB level. No query may return data across company boundaries.
+   Every record belongs to a company. Company-scoped data must be read and
+   written through PrismaService.forTenant(companyId) (src/prisma/prisma.service.ts),
+   a Prisma Client Extension that forces company_id into every where clause and
+   every write for tenant-scoped models — a query through it cannot omit or
+   override company_id, even by accident. The bare PrismaService (no
+   .forTenant()) stays unscoped and is used deliberately for cross-tenant
+   admin operations (e.g. platform admin views across companies). This is an
+   application-level guarantee, not a database-level one — there is no
+   Postgres RLS in this system. A query that bypasses forTenant() by mistake
+   on a tenant-scoped model is trusted, not blocked by the database.
 
 ## Core entity relationships (plain language)
 

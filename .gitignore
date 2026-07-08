@@ -21,6 +21,9 @@ yarn-error.log*
 # Claude Code local config
 .claude
 
+# Postman local git-sync config (machine/workspace-specific, not shareable)
+.postman
+
 # Tests
 /coverage
 /.nyc_output

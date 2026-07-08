@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
@@ -102,6 +102,18 @@ export class UsersService {
     await this.prisma.user.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+  }
+
+  /** Returns the raw Prisma entity (including passwordHash) for credential checks. Auth-internal only — never expose this beyond the auth flow. */
+  async findAuthUserByEmail(email: string): Promise<User | null> {
+    return this.prisma.user.findFirst({ where: { email, deletedAt: null } });
+  }
+
+  async touchLastLogin(id: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id },
+      data: { lastLoginAt: new Date() },
     });
   }
 

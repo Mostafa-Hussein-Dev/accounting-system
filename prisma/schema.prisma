@@ -51,8 +51,25 @@ model User {
   companyId String?  @map("company_id") @db.Uuid
   company   Company? @relation(fields: [companyId], references: [id])
 
+  refreshTokens RefreshToken[]
+
   @@map("users")
   @@index([companyId])
   @@index([email])
   @@index([deletedAt])
+}
+
+// One row per issued refresh token. The row id is embedded in the token's
+// "jti" claim, so a lookup here is how logout/rotation revoke a token
+// before its natural expiry (the JWT signature alone can't be revoked).
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id])
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+  @@index([userId])
 }

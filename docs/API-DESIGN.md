@@ -83,6 +83,21 @@ Filters are passed as query params, prefixed by field name:
 - GET /api/v1/invoices?dateFrom=2025-01-01&dateTo=2025-03-31
 - GET /api/v1/partners?type=customer&hasBalance=true
 
+## Company-scoped endpoints and platform admin access
+Any endpoint scoped to one company resolves its target company via
+`@CurrentCompanyId()` (src/modules/auth/decorators/current-company-id.decorator.ts):
+- A normal, company-scoped user is always pinned to their own company — this
+  cannot be overridden by a query param, so a regular user can never escalate
+  into another tenant's data.
+- A platform admin/support user (a user with no company on their own account)
+  has no "own" company to default to, so they must name one explicitly:
+  `GET /api/v1/accounts?companyId=<uuid>`. Omitting it returns 400
+  `COMPANY_ID_QUERY_PARAM_REQUIRED`; an invalid value returns 400
+  `INVALID_COMPANY_ID`-shaped validation (same code, field: "companyId").
+- Routes restricted to platform admin/support only (not yet applied to any
+  endpoint) use `PlatformAdminGuard` alongside `JwtAuthGuard`, returning 403
+  `PLATFORM_ADMIN_REQUIRED` for a company-scoped caller.
+
 ## HTTP status codes used
 | Code | When |
 |---|---|

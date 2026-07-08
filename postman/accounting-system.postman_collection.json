@@ -1,0 +1,541 @@
+{
+  "info": {
+    "_postman_id": "8f1e2c3a-4b5d-4e6f-9a0b-1c2d3e4f5a6b",
+    "name": "accounting-system",
+    "description": "Backend API for a multi-tenant, dual-currency ERP platform for Lebanese trading companies. See docs/API-DESIGN.md for envelope, pagination, and money-field conventions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Log in",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Authenticate with email + password. On success, the test script saves accessToken and refreshToken into the environment for use by every other request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    pm.environment.set('accessToken', json.data.accessToken);",
+                  "    pm.environment.set('refreshToken', json.data.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "401 Invalid credentials",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_CREDENTIALS\",\n    \"message\": \"Email or password is incorrect.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "Exchanges a refresh token for a new access/refresh pair. Rotates the token: the old refresh token is revoked and cannot be reused."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Refresh successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    pm.environment.set('accessToken', json.data.accessToken);",
+                  "    pm.environment.set('refreshToken', json.data.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "401 Invalid, expired, or revoked",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_REFRESH_TOKEN\",\n    \"message\": \"Refresh token is invalid, expired, or has been revoked.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Log out",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Revokes the given refresh token immediately, ending that session."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logout successful', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "pm.environment.unset('accessToken');",
+                  "pm.environment.unset('refreshToken');"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": ""
+            }
+          ]
+        },
+        {
+          "name": "Get current user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Returns the profile of the user identified by the current access token."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": null,\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": \"2026-07-08T17:24:47.948Z\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:47.948Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "401 Missing or invalid access token",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"UNAUTHORIZED\",\n    \"message\": \"Unauthorized\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "Create a company",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Beirut Trading Co.\",\n  \"taxNumber\": \"LB-123456\",\n  \"phone\": \"+961 1 234 567\",\n  \"email\": \"info@beiruttrading.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/companies",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('companyId', pm.response.json().data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 234 567\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Tax number already in use",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_TAX_NUMBER_ALREADY_EXISTS\",\n    \"message\": \"A company with tax number \\\"LB-123456\\\" already exists.\",\n    \"field\": \"taxNumber\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List companies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/companies?page=1&limit=20&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "sortBy", "value": "createdAt" },
+                { "key": "sortOrder", "value": "desc" }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"name\": \"Beirut Trading Co.\",\n      \"taxNumber\": \"LB-123456\",\n      \"phone\": \"+961 1 234 567\",\n      \"email\": \"info@beiruttrading.com\",\n      \"logo\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n      \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get a company by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{companyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies", "{{companyId}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 234 567\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_NOT_FOUND\",\n    \"message\": \"Company with id b3f1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update a company",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+961 1 999 999\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{companyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies", "{{companyId}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 999 999\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T18:02:11.000Z\"\n  },\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Soft delete a company",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{companyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies", "{{companyId}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create a user",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"password\": \"S3cur3P@ssword!\",\n  \"phone\": \"+961 3 123 456\",\n  \"preferredLanguage\": \"EN\",\n  \"companyId\": \"{{companyId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('userId', pm.response.json().data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+961 3 123 456\",\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": null,\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Email already in use",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"USER_EMAIL_ALREADY_EXISTS\",\n    \"message\": \"A user with this email already exists.\",\n    \"field\": \"email\"\n  }\n}"
+            },
+            {
+              "name": "404 Company not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_NOT_FOUND\",\n    \"message\": \"Company with id 586b91ef-6b89-4e9b-bcaa-99976d65fc4a was not found.\",\n    \"field\": \"companyId\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=20&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "sortBy", "value": "createdAt" },
+                { "key": "sortOrder", "value": "desc" }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"firstName\": \"Jane\",\n      \"lastName\": \"Doe\",\n      \"email\": \"jane.doe@example.com\",\n      \"phone\": \"+961 3 123 456\",\n      \"avatarUrl\": null,\n      \"preferredLanguage\": \"EN\",\n      \"isActive\": true,\n      \"lastLoginAt\": null,\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n      \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get a user by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+961 3 123 456\",\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": null,\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"USER_NOT_FOUND\",\n    \"message\": \"User with id b3f1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update a user",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+961 3 000 000\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+961 3 000 000\",\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": null,\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T18:05:00.000Z\"\n  },\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Soft delete a user",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

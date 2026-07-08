@@ -52,11 +52,73 @@ model User {
   company   Company? @relation(fields: [companyId], references: [id])
 
   refreshTokens RefreshToken[]
+  roles         UserRole[]
 
   @@map("users")
   @@index([companyId])
   @@index([email])
   @@index([deletedAt])
+}
+
+enum RoleScope {
+  PLATFORM
+  COMPANY
+}
+
+// Global, reusable permission catalog. Not tenant-scoped — reference data,
+// same as currencies/tax rates. Every module appends its own subject/action
+// rows here as it's built; nothing else needs to change.
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique @map("key")
+  subject     String
+  action      String
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+// Global roles (not per-company). A user can hold multiple roles; their
+// effective permissions are the union of every role's permissions.
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique
+  description String?
+  scope       RoleScope @default(COMPANY)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// No companyId here on purpose — a user's company is already fixed via
+// User.companyId, so this only ever needs to say "this user has this role."
+model UserRole {
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId    String   @map("role_id") @db.Uuid
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
 }
 
 // One row per issued refresh token. The row id is embedded in the token's

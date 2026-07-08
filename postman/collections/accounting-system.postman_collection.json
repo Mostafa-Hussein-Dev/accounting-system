@@ -497,7 +497,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["roles"]
             },
-            "description": "Platform admin sees both PLATFORM and COMPANY scope roles; a company-scoped caller sees COMPANY-scope roles only. Requires the role.read permission (granted by both seeded roles). The test script saves companyAdminRoleId and companyMemberRoleId into the environment for use by Users requests below."
+            "description": "Platform admin sees every role; a company-scoped caller sees global roles (companyId null) plus their own company's custom roles. Requires the role.read permission (granted by both seeded roles). The test script saves companyAdminRoleId and companyMemberRoleId into the environment for use by Users requests below."
           },
           "event": [
             {
@@ -526,7 +526,7 @@
               "code": 200,
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"data\": [\n    {\n      \"id\": \"d9d968e2-be6b-473e-b504-e7f90c1fd005\",\n      \"name\": \"Company Admin\",\n      \"description\": \"Full administrative access within the company's own data.\",\n      \"scope\": \"COMPANY\",\n      \"permissions\": [\"user.create\", \"user.read\", \"user.update\", \"user.delete\", \"company.read\", \"company.update\", \"company.delete\", \"role.read\"],\n      \"createdAt\": \"2026-07-08T20:18:20.987Z\",\n      \"updatedAt\": \"2026-07-08T20:18:20.987Z\"\n    },\n    {\n      \"id\": \"c000504e-ebdd-4c15-b540-d1d653fc8ac6\",\n      \"name\": \"Company Member\",\n      \"description\": \"Baseline access for a company teammate.\",\n      \"scope\": \"COMPANY\",\n      \"permissions\": [\"company.read\", \"role.read\"],\n      \"createdAt\": \"2026-07-08T20:18:21.044Z\",\n      \"updatedAt\": \"2026-07-08T20:18:21.044Z\"\n    }\n  ],\n  \"meta\": null\n}"
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"d9d968e2-be6b-473e-b504-e7f90c1fd005\",\n      \"name\": \"Company Admin\",\n      \"description\": \"Full administrative access within the company's own data.\",\n      \"companyId\": null,\n      \"isSystem\": true,\n      \"permissions\": [\"user.create\", \"user.read\", \"user.update\", \"user.delete\", \"company.read\", \"company.update\", \"company.delete\", \"role.read\", \"role.create\", \"role.update\", \"role.delete\"],\n      \"createdAt\": \"2026-07-08T20:18:20.987Z\",\n      \"updatedAt\": \"2026-07-08T20:18:20.987Z\"\n    },\n    {\n      \"id\": \"c000504e-ebdd-4c15-b540-d1d653fc8ac6\",\n      \"name\": \"Company Member\",\n      \"description\": \"Baseline access for a company teammate.\",\n      \"companyId\": null,\n      \"isSystem\": true,\n      \"permissions\": [\"company.read\", \"role.read\"],\n      \"createdAt\": \"2026-07-08T20:18:21.044Z\",\n      \"updatedAt\": \"2026-07-08T20:18:21.044Z\"\n    }\n  ],\n  \"meta\": null\n}"
             },
             {
               "name": "403 Permission denied",
@@ -535,6 +535,165 @@
               "_postman_previewlanguage": "json",
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create a role (custom, own company)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sales Manager\",\n  \"description\": \"Manages the sales team.\",\n  \"permissionIds\": [\"{{companyMemberRoleId}}\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles"]
+            },
+            "description": "A company-scoped caller is always forced into their own company, regardless of any companyId sent — creates a custom role private to that company. A platform admin may omit companyId for a global role, or supply one to create it on behalf of a specific company. permissionIds must reference real Permission ids, not role ids — the placeholder above is illustrative only; substitute a real permission id. Two different companies may each have a role with the same name."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Role created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('customRoleId', pm.response.json().data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"f1a2b3c4-5678-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Sales Manager\",\n    \"description\": \"Manages the sales team.\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"isSystem\": false,\n    \"permissions\": [\"company.read\"],\n    \"createdAt\": \"2026-07-09T10:00:00.000Z\",\n    \"updatedAt\": \"2026-07-09T10:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "404 Permission not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_NOT_FOUND\",\n    \"message\": \"One or more permissionIds were not found.\",\n    \"field\": \"permissionIds\"\n  }\n}"
+            },
+            {
+              "name": "409 Global role name already exists",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ROLE_NAME_ALREADY_EXISTS\",\n    \"message\": \"A global role named \\\"Sales Manager\\\" already exists.\",\n    \"field\": \"name\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update a role",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{customRoleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{customRoleId}}"]
+            },
+            "description": "Platform admin can update any non-system role; a company-scoped caller only their own company's custom roles (403 ROLE_ACCESS_DENIED for a global role or another company's role). System roles (Company Admin/Company Member) can never be updated by anyone (403 SYSTEM_ROLE_PROTECTED). permissionIds, if provided, REPLACES the full permission set."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": {\n    \"id\": \"f1a2b3c4-5678-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Sales Manager\",\n    \"description\": \"Updated description\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"isSystem\": false,\n    \"permissions\": [\"company.read\"],\n    \"createdAt\": \"2026-07-09T10:00:00.000Z\",\n    \"updatedAt\": \"2026-07-09T10:05:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 No access to this role",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ROLE_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this role.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "403 System role protected",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SYSTEM_ROLE_PROTECTED\",\n    \"message\": \"System roles cannot be updated or deleted.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ROLE_NOT_FOUND\",\n    \"message\": \"Role with id f1a2b3c4-5678-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete a role",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{customRoleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{customRoleId}}"]
+            },
+            "description": "Same ownership/system-role rules as Update a role. Also blocked with 409 ROLE_IN_USE if any user currently holds this role."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": ""
+            },
+            {
+              "name": "403 System role protected",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SYSTEM_ROLE_PROTECTED\",\n    \"message\": \"System roles cannot be updated or deleted.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "409 Role in use",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ROLE_IN_USE\",\n    \"message\": \"Cannot delete a role that is currently assigned to a user.\",\n    \"field\": null\n  }\n}"
             }
           ]
         }

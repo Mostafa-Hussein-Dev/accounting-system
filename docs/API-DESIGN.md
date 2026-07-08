@@ -139,18 +139,41 @@ Any endpoint scoped to one company resolves its target company via
   their company with zero admins.
 
 ### Roles and permissions (CASL)
-- Roles are global (not per-company) and a user can hold multiple; their
-  effective permissions are the union across all their roles
-  (`CaslAbilityFactory`, src/modules/casl/casl-ability.factory.ts, queries
-  fresh on every request — see the JWT section above for why).
-- `GET /roles` requires the `role.read` permission; a platform admin sees
-  both `PLATFORM`/`COMPANY` scope roles, a company-scoped caller sees
-  `COMPANY`-scope roles only.
+- A user can hold multiple roles; their effective permissions are the union
+  across all of them (`CaslAbilityFactory`, src/modules/casl/casl-ability.factory.ts,
+  queries fresh on every request — see the JWT section above for why).
 - Any route can require a permission via `@RequirePermissions({action, subject})`
   alongside `PermissionsGuard` (src/modules/casl/guards/permissions.guard.ts),
   returning 403 `PERMISSION_DENIED` when the caller's roles don't grant it.
   A platform admin (`companyId === null`) always passes every check — CASL
   grants them `manage all` without a database lookup.
+- **Permissions are fixed/seeded, not creatable via the API** — a permission
+  only means something if some `@RequirePermissions` check in code actually
+  enforces it; letting anyone invent one would create a dead, misleading
+  entry. `GET /roles` requires `role.read`.
+- **Roles support two kinds of ownership**: global (`companyId: null` —
+  available to every tenant, e.g. the seeded `Company Admin`/`Company Member`)
+  and tenant-owned custom roles (`companyId` set — visible and usable only
+  within that company). `GET /roles`: platform admin sees every role; a
+  company-scoped caller sees global roles plus their own company's custom
+  roles only.
+- `POST /roles` (`role.create`): platform admin may omit `companyId` (global
+  role) or supply one (a custom role on behalf of that company); a
+  company-scoped caller is always forced into their own company. Two
+  different companies may each have a role with the same name (a database
+  constraint on `[companyId, name]`); creating a second *global* role with a
+  duplicate name is rejected with 409 `ROLE_NAME_ALREADY_EXISTS` (checked at
+  the application level, since a nullable column in a compound unique
+  constraint can't enforce that in Postgres).
+- `PATCH`/`DELETE /roles/:id` (`role.update`/`role.delete`): platform admin
+  can touch any non-system role; a company-scoped caller only their own
+  company's custom roles — 403 `ROLE_ACCESS_DENIED` for a global role or
+  another company's role. **System roles** (the two seeded roles) can never
+  be updated or deleted by anyone, including platform admin — 403
+  `SYSTEM_ROLE_PROTECTED` — since `AuthService.register()` and the
+  last-company-admin guard depend on `Company Admin` existing under that
+  exact name. Deleting a role currently assigned to any user is blocked with
+  409 `ROLE_IN_USE` rather than cascading or reassigning.
 
 ## HTTP status codes used
 | Code | When |

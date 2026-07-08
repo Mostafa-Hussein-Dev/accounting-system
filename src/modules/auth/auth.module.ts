@@ -6,9 +6,15 @@ import { AuthService } from './auth.service';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { UsersModule } from '../users/users.module';
+import { CompaniesModule } from '../companies/companies.module';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({}), UsersModule],
+  imports: [
+    PassportModule,
+    JwtModule.register({}),
+    UsersModule,
+    CompaniesModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, JwtAccessStrategy, JwtRefreshStrategy],
 })

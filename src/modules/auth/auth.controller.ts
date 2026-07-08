@@ -16,6 +16,7 @@ import {
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UserResponseDto } from '../users/dto/user-response.dto';
@@ -46,6 +47,24 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(dto);
+  }
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Register a new company and its first (owner) user',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Company and user created, authenticated',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Email or tax number already in use',
+  })
+  register(@Body() dto: RegisterDto): Promise<AuthResponseDto> {
+    return this.authService.register(dto);
   }
 
   @Post('refresh')
@@ -95,6 +114,6 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   me(@CurrentUser() user: AuthenticatedUser): Promise<UserResponseDto> {
-    return this.usersService.findOne(user.userId);
+    return this.usersService.findOne(user.userId, user);
   }
 }

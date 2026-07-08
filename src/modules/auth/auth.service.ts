@@ -5,8 +5,10 @@ import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { CompaniesService } from '../companies/companies.service';
 import { EnvConfig } from '../../config/env.schema';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import {
   JwtPayload,
@@ -25,10 +27,25 @@ const INVALID_CREDENTIALS_ERROR = {
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
+    private readonly companiesService: CompaniesService,
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<EnvConfig, true>,
   ) {}
+
+  async register(dto: RegisterDto): Promise<AuthResponseDto> {
+    const user = await this.prisma.$transaction(async (tx) => {
+      const company = await this.companiesService.create(dto.company, tx);
+      return this.usersService.create(
+        { ...dto.user, companyId: company.id },
+        undefined,
+        tx,
+      );
+    });
+
+    await this.usersService.touchLastLogin(user.id);
+    return this.issueTokenPair(user.id, user.companyId);
+  }
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
     const user = await this.usersService.findAuthUserByEmail(dto.email);

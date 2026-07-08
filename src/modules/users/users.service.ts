@@ -19,6 +19,8 @@ import {
 const PRISMA_UNIQUE_CONSTRAINT = 'P2002';
 const PRISMA_FOREIGN_KEY_CONSTRAINT = 'P2003';
 const BCRYPT_SALT_ROUNDS = 12;
+const DEFAULT_TEAMMATE_ROLE_NAME = 'Company Member';
+const COMPANY_ADMIN_ROLE_NAME = 'Company Admin';
 const ALLOWED_SORT_FIELDS = [
   'firstName',
   'lastName',
@@ -37,8 +39,9 @@ export class UsersService {
    * A platform admin/support caller (no companyId of their own) gets the bare
    * client — full flexibility, including creating another company-less admin.
    * A company-scoped caller gets forTenant(companyId), which forces every
-   * read and write to their own company — they can never see, create, or
-   * move a user into another company.
+   * read/write to their own company — they can invite teammates but can
+   * never see, edit, or move a user into another company, and any companyId
+   * they submit is silently overridden.
    *
    * forTenant() returns a Prisma Client Extension instance whose delegate
    * methods are runtime-identical to the base client (proven by
@@ -58,7 +61,9 @@ export class UsersService {
   /**
    * caller resolves the scoped client for a normal API call; client lets
    * /auth/register pass a shared transaction client directly (no caller
-   * exists yet — the company was just created in the same transaction).
+   * exists yet — the company was just created in the same transaction, and
+   * register() assigns the owner's role itself, so no default role is
+   * applied here when caller is undefined).
    */
   async create(
     dto: CreateUserDto,
@@ -67,13 +72,23 @@ export class UsersService {
       ? this.clientFor(caller)
       : this.prisma,
   ): Promise<UserResponseDto> {
-    const { password, ...rest } = dto;
+    const { password, roleIds, ...rest } = dto;
     const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     try {
       const user = await client.user.create({
         data: { ...rest, passwordHash },
       });
+
+      let resolvedRoleIds = roleIds;
+      if (!resolvedRoleIds && caller && user.companyId) {
+        const defaultRole = await client.role.findUnique({
+          where: { name: DEFAULT_TEAMMATE_ROLE_NAME },
+        });
+        resolvedRoleIds = defaultRole ? [defaultRole.id] : [];
+      }
+      await this.assignRoles(client, user.id, resolvedRoleIds ?? []);
+
       return UserResponseDto.fromEntity(user);
     } catch (error) {
       throw this.mapWriteError(error, dto.companyId);
@@ -135,10 +150,25 @@ export class UsersService {
     dto: UpdateUserDto,
     caller: AuthenticatedUser,
   ): Promise<UserResponseDto> {
-    await this.findOne(id, caller);
+    const existing = await this.findOne(id, caller);
     const client = this.clientFor(caller);
+    const { roleIds, ...rest } = dto;
+
+    if (roleIds) {
+      await this.assertNotRemovingLastCompanyAdmin(
+        client,
+        id,
+        existing.companyId,
+        roleIds,
+      );
+    }
+
     try {
-      const user = await client.user.update({ where: { id }, data: dto });
+      const user = await client.user.update({ where: { id }, data: rest });
+      if (roleIds) {
+        await client.userRole.deleteMany({ where: { userId: id } });
+        await this.assignRoles(client, id, roleIds);
+      }
       return UserResponseDto.fromEntity(user);
     } catch (error) {
       throw this.mapWriteError(error, dto.companyId);
@@ -146,8 +176,14 @@ export class UsersService {
   }
 
   async remove(id: string, caller: AuthenticatedUser): Promise<void> {
-    await this.findOne(id, caller);
+    const existing = await this.findOne(id, caller);
     const client = this.clientFor(caller);
+    await this.assertNotRemovingLastCompanyAdmin(
+      client,
+      id,
+      existing.companyId,
+      [],
+    );
     await client.user.update({
       where: { id },
       data: { deletedAt: new Date() },
@@ -164,6 +200,73 @@ export class UsersService {
       where: { id },
       data: { lastLoginAt: new Date() },
     });
+  }
+
+  private async assignRoles(
+    client: Prisma.TransactionClient,
+    userId: string,
+    roleIds: string[],
+  ): Promise<void> {
+    if (roleIds.length === 0) {
+      return;
+    }
+    const existingRoles = await client.role.findMany({
+      where: { id: { in: roleIds } },
+    });
+    if (existingRoles.length !== new Set(roleIds).size) {
+      throw new NotFoundException({
+        code: 'ROLE_NOT_FOUND',
+        message: 'One or more roleIds were not found.',
+        field: 'roleIds',
+      });
+    }
+    await client.userRole.createMany({
+      data: roleIds.map((roleId) => ({ userId, roleId })),
+      skipDuplicates: true,
+    });
+  }
+
+  /**
+   * Guards against a company ending up with zero Company Admins. newRoleIds
+   * is the user's role set AFTER the pending operation — an empty array
+   * represents removing the user entirely (soft delete).
+   */
+  private async assertNotRemovingLastCompanyAdmin(
+    client: Prisma.TransactionClient,
+    userId: string,
+    companyId: string | null,
+    newRoleIds: string[],
+  ): Promise<void> {
+    if (!companyId) {
+      return;
+    }
+    const adminRole = await client.role.findUnique({
+      where: { name: COMPANY_ADMIN_ROLE_NAME },
+    });
+    if (!adminRole) {
+      return;
+    }
+    const currentlyHasAdmin = await client.userRole.findUnique({
+      where: { userId_roleId: { userId, roleId: adminRole.id } },
+    });
+    if (!currentlyHasAdmin || newRoleIds.includes(adminRole.id)) {
+      return;
+    }
+
+    const otherAdminsCount = await client.userRole.count({
+      where: {
+        roleId: adminRole.id,
+        userId: { not: userId },
+        user: { companyId, deletedAt: null },
+      },
+    });
+    if (otherAdminsCount === 0) {
+      throw new ConflictException({
+        code: 'LAST_COMPANY_ADMIN',
+        message: "Cannot remove the company's last admin.",
+        field: 'roleIds',
+      });
+    }
   }
 
   private mapWriteError(error: unknown, companyId?: string): unknown {

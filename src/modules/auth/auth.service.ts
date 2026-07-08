@@ -22,6 +22,7 @@ const INVALID_CREDENTIALS_ERROR = {
   message: 'Email or password is incorrect.',
   field: null,
 };
+const OWNER_ROLE_NAME = 'Company Admin';
 
 @Injectable()
 export class AuthService {
@@ -36,11 +37,23 @@ export class AuthService {
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
     const user = await this.prisma.$transaction(async (tx) => {
       const company = await this.companiesService.create(dto.company, tx);
-      return this.usersService.create(
+      const createdUser = await this.usersService.create(
         { ...dto.user, companyId: company.id },
         undefined,
         tx,
       );
+
+      // The registering user is the company's owner/admin — assign the
+      // seeded Company Admin role so a fresh company is never locked out
+      // of managing itself.
+      const ownerRole = await tx.role.findUniqueOrThrow({
+        where: { name: OWNER_ROLE_NAME },
+      });
+      await tx.userRole.create({
+        data: { userId: createdUser.id, roleId: ownerRole.id },
+      });
+
+      return createdUser;
     });
 
     await this.usersService.touchLastLogin(user.id);

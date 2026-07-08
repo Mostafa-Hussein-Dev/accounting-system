@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Language } from '@prisma/client';
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -66,4 +67,15 @@ export class CreateUserDto {
   @IsOptional()
   @IsUUID()
   companyId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Roles to assign. A company-scoped caller creating a teammate without specifying this defaults to the Company Member role.',
+    example: ['b3f1c2e0-1234-4a5b-9c8d-1234567890ab'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  roleIds?: string[];
 }

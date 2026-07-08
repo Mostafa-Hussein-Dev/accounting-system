@@ -27,6 +27,8 @@ import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/guards/platform-admin.guard';
 import { CompanySelfOrAdminGuard } from './guards/company-self-or-admin.guard';
+import { PermissionsGuard } from '../casl/guards/permissions.guard';
+import { RequirePermissions } from '../casl/decorators/require-permissions.decorator';
 
 @ApiTags('Companies')
 @ApiBearerAuth()
@@ -85,16 +87,18 @@ export class CompaniesController {
   }
 
   @Patch(':id')
-  @UseGuards(CompanySelfOrAdminGuard)
+  @UseGuards(CompanySelfOrAdminGuard, PermissionsGuard)
+  @RequirePermissions({ action: 'update', subject: 'Company' })
   @ApiOperation({
-    summary: "Update a company (platform admin, or that company's own user)",
+    summary:
+      'Update a company (platform admin, or a Company Admin of that company)',
   })
   @ApiResponse({
     status: 200,
     description: 'Company updated',
     type: CompanyResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'No access to this company' })
+  @ApiResponse({ status: 403, description: 'No access, or permission denied' })
   @ApiResponse({ status: 404, description: 'Company not found' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -104,14 +108,15 @@ export class CompaniesController {
   }
 
   @Delete(':id')
-  @UseGuards(CompanySelfOrAdminGuard)
+  @UseGuards(CompanySelfOrAdminGuard, PermissionsGuard)
+  @RequirePermissions({ action: 'delete', subject: 'Company' })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary:
-      "Soft delete a company (platform admin, or that company's own user)",
+      'Soft delete a company (platform admin, or a Company Admin of that company)',
   })
   @ApiResponse({ status: 204, description: 'Company deleted' })
-  @ApiResponse({ status: 403, description: 'No access to this company' })
+  @ApiResponse({ status: 403, description: 'No access, or permission denied' })
   @ApiResponse({ status: 404, description: 'Company not found' })
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.companiesService.remove(id);

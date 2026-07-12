@@ -17,6 +17,7 @@ import { EnvConfig } from '../../config/env.schema';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import {
@@ -203,34 +204,33 @@ export class AuthService {
     }
   }
 
-  async resetPassword(dto: ResetPasswordDto): Promise<void> {
-    const user = await this.usersService.findAuthUserByEmail(dto.email);
-    if (!user || !user.isActive) {
-      // Same error as a wrong code — don't let this step confirm the email
-      // exists either.
-      throw new HttpException(INVALID_RESET_CODE_ERROR, HttpStatus.BAD_REQUEST);
-    }
-
-    const token = await this.prisma.passwordResetToken.findFirst({
-      where: {
-        userId: user.id,
-        consumedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (!token) {
-      throw new HttpException(INVALID_RESET_CODE_ERROR, HttpStatus.BAD_REQUEST);
-    }
-    if (token.attempts >= RESET_CODE_MAX_ATTEMPTS) {
-      throw new HttpException(
-        TOO_MANY_ATTEMPTS_ERROR,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+  /**
+   * Validates a code against the user's live reset token without consuming
+   * it — lets the frontend show a "code accepted" password step before the
+   * user has actually chosen a new password. resetPassword() below re-checks
+   * the code itself and is what actually spends it, so this step alone can
+   * never complete a reset.
+   */
+  async verifyResetCode(dto: VerifyResetCodeDto): Promise<void> {
+    const user = await this.findActiveUserOrThrowInvalidCode(dto.email);
+    const token = await this.getLiveResetTokenOrThrow(user.id);
 
     // bcrypt.compare is constant-time with respect to its inputs, so this
     // doesn't leak which digit of the code was wrong via timing.
+    const codeMatches = await bcrypt.compare(dto.code, token.codeHash);
+    if (!codeMatches) {
+      await this.prisma.passwordResetToken.update({
+        where: { id: token.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new HttpException(INVALID_RESET_CODE_ERROR, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    const user = await this.findActiveUserOrThrowInvalidCode(dto.email);
+    const token = await this.getLiveResetTokenOrThrow(user.id);
+
     const codeMatches = await bcrypt.compare(dto.code, token.codeHash);
     if (!codeMatches) {
       await this.prisma.passwordResetToken.update({
@@ -258,6 +258,37 @@ export class AuthService {
         data: { revokedAt: new Date() },
       }),
     ]);
+  }
+
+  // Same error as a wrong code — don't let this step confirm the email
+  // exists either.
+  private async findActiveUserOrThrowInvalidCode(email: string) {
+    const user = await this.usersService.findAuthUserByEmail(email);
+    if (!user || !user.isActive) {
+      throw new HttpException(INVALID_RESET_CODE_ERROR, HttpStatus.BAD_REQUEST);
+    }
+    return user;
+  }
+
+  private async getLiveResetTokenOrThrow(userId: string) {
+    const token = await this.prisma.passwordResetToken.findFirst({
+      where: {
+        userId,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!token) {
+      throw new HttpException(INVALID_RESET_CODE_ERROR, HttpStatus.BAD_REQUEST);
+    }
+    if (token.attempts >= RESET_CODE_MAX_ATTEMPTS) {
+      throw new HttpException(
+        TOO_MANY_ATTEMPTS_ERROR,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    return token;
   }
 
   private async issueTokenPair(

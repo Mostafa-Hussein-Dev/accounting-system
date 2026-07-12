@@ -20,6 +20,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UserResponseDto } from '../users/dto/user-response.dto';
@@ -127,6 +128,30 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Request accepted' })
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
     await this.authService.forgotPassword(dto);
+  }
+
+  @Post('verify-reset-code')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle(RESET_THROTTLE)
+  @ApiOperation({
+    summary: 'Check a password-reset code before showing the new-password step',
+    description:
+      'Validates the code but does not consume it or change anything — ' +
+      'reset-password still re-validates the code itself and is what ' +
+      'actually spends it.',
+  })
+  @ApiResponse({ status: 200, description: 'Code is valid' })
+  @ApiResponse({
+    status: 400,
+    description: 'Code is invalid, expired, or already used',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many incorrect attempts for this code',
+  })
+  async verifyResetCode(@Body() dto: VerifyResetCodeDto): Promise<void> {
+    await this.authService.verifyResetCode(dto);
   }
 
   @Post('reset-password')

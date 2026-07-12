@@ -11,7 +11,7 @@ import { UsersService } from '../users/users.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MailerService } from '../../common/mailer/mailer.service';
 
-describe('AuthService — forgotPassword / resetPassword', () => {
+describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () => {
   let prisma: PrismaService;
   let service: AuthService;
   let sendPasswordResetCode: jest.Mock;
@@ -137,6 +137,90 @@ describe('AuthService — forgotPassword / resetPassword', () => {
       ).rejects.toMatchObject({
         response: { code: 'AUTH_INVALID_RESET_CODE' },
       });
+    });
+  });
+
+  describe('verifyResetCode', () => {
+    it('accepts a correct code without consuming it, and resetPassword can still use it after', async () => {
+      await prisma.passwordResetToken.updateMany({
+        where: { userId, consumedAt: null },
+        data: { createdAt: new Date(Date.now() - 60_000) },
+      });
+      await service.forgotPassword({ email: userEmail });
+      const code = lastSentCode();
+
+      await expect(
+        service.verifyResetCode({ email: userEmail, code }),
+      ).resolves.toBeUndefined();
+
+      const token = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { userId, consumedAt: null },
+      });
+      expect(token.consumedAt).toBeNull();
+      expect(token.attempts).toBe(0);
+
+      await expect(
+        service.resetPassword({ email: userEmail, code, newPassword: 'VerifiedFlow1!' }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects a wrong code and increments attempts (shared ceiling with resetPassword)', async () => {
+      await prisma.passwordResetToken.updateMany({
+        where: { userId, consumedAt: null },
+        data: { createdAt: new Date(Date.now() - 60_000) },
+      });
+      await service.forgotPassword({ email: userEmail });
+      const token = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { userId, consumedAt: null },
+      });
+      expect(token.attempts).toBe(0);
+
+      await expect(
+        service.verifyResetCode({ email: userEmail, code: '000000' }),
+      ).rejects.toMatchObject({ response: { code: 'AUTH_INVALID_RESET_CODE' } });
+
+      const updated = await prisma.passwordResetToken.findUniqueOrThrow({
+        where: { id: token.id },
+      });
+      expect(updated.attempts).toBe(1);
+    });
+
+    it('locks out after the max number of wrong attempts', async () => {
+      const token = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { userId, consumedAt: null },
+      });
+      await prisma.passwordResetToken.update({
+        where: { id: token.id },
+        data: { attempts: 5 },
+      });
+
+      await expect(
+        service.verifyResetCode({ email: userEmail, code: '000000' }),
+      ).rejects.toMatchObject({ response: { code: 'AUTH_TOO_MANY_ATTEMPTS' } });
+    });
+
+    it('rejects an expired code', async () => {
+      await prisma.passwordResetToken.updateMany({
+        where: { userId, consumedAt: null },
+        data: { createdAt: new Date(Date.now() - 60_000) },
+      });
+      await service.forgotPassword({ email: userEmail });
+      const code = lastSentCode();
+
+      await prisma.passwordResetToken.updateMany({
+        where: { userId, consumedAt: null },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+
+      await expect(
+        service.verifyResetCode({ email: userEmail, code }),
+      ).rejects.toMatchObject({ response: { code: 'AUTH_INVALID_RESET_CODE' } });
+    });
+
+    it('gives the same error as a wrong code for an email that does not exist', async () => {
+      await expect(
+        service.verifyResetCode({ email: 'nobody@example.com', code: '123456' }),
+      ).rejects.toMatchObject({ response: { code: 'AUTH_INVALID_RESET_CODE' } });
     });
   });
 

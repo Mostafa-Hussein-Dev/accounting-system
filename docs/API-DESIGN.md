@@ -96,7 +96,7 @@ fields as POST /companies}, user: {...same fields as POST /users, minus
 companyId} }`.
 
 ## Password reset
-A code-based flow (not a link) across two endpoints, both unauthenticated:
+A code-based flow (not a link) across three endpoints, all unauthenticated:
 
 - `POST /auth/forgot-password` — body `{ email }`. **Always returns 200 with
   the same generic body, whether or not the email belongs to a registered,
@@ -108,21 +108,31 @@ A code-based flow (not a link) across two endpoints, both unauthenticated:
   `PasswordResetToken` row is created; if a live (unconsumed) code was
   already issued in the last 30 seconds, this silently no-ops rather than
   sending another email — same generic response either way.
+- `POST /auth/verify-reset-code` — body `{ email, code }`. Lets the client
+  show a "code accepted" new-password step before the user has typed a new
+  password, **without consuming the code or changing anything** —
+  `reset-password` below still re-validates the code itself and is what
+  actually spends it, so a verified-but-abandoned code (e.g. the user
+  reloads mid-flow) stays usable. Shares the same error codes, attempts
+  ceiling, and throttle as `reset-password` (see below) — this endpoint is
+  just as capable of being brute-forced against, so it counts against the
+  same per-code attempts ceiling rather than getting its own.
 - `POST /auth/reset-password` — body `{ email, code, newPassword }`. On
   success: the password is updated, the code is marked consumed
   (single-use), and **every existing refresh token for that user is
   revoked** — a reset invalidates all other sessions, not just future
-  logins. Errors:
+  logins. Errors (shared with `verify-reset-code`):
   - 400 `AUTH_INVALID_RESET_CODE` (field: `code`) — wrong code, no live
     code exists, the code expired (15 minutes), or it was already used.
     Deliberately the same code for all four cases, and also thrown for an
     unrecognized email — none of these should be distinguishable to the
     caller.
   - 429 `AUTH_TOO_MANY_ATTEMPTS` — 5 wrong attempts against the current
-    live code; the caller must request a new one (`forgot-password` again)
+    live code (across both `verify-reset-code` and `reset-password`
+    combined); the caller must request a new one (`forgot-password` again)
     rather than keep guessing.
 
-Both endpoints are throttled per-route (`@nestjs/throttler`, 3
+All three endpoints are throttled per-route (`@nestjs/throttler`, 3
 requests/15 min) — not globally, so this doesn't affect login/register/
 refresh. See `PasswordResetToken` in `docs/MODELS.md` for why a low-entropy
 6-digit code is safe here (short TTL + attempts ceiling + one live code per

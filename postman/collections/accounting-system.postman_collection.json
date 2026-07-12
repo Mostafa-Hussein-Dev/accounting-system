@@ -184,6 +184,95 @@
           ]
         },
         {
+          "name": "Verify reset code",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{resetEmail}}\",\n  \"code\": \"{{resetCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-reset-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-reset-code"
+              ]
+            },
+            "description": "Checks a 6-digit reset code before the client shows the new-password step, without consuming it or changing anything — Reset password (with code) still re-validates the code itself and is what actually spends it. Shares the same attempts ceiling and throttling as Reset password."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Code accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"meta\": null\n}"
+            },
+            {
+              "name": "400 Invalid or expired code",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_RESET_CODE\",\n    \"message\": \"That code is invalid or has expired.\",\n    \"field\": \"code\"\n  }\n}"
+            },
+            {
+              "name": "429 Too many incorrect attempts",
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_TOO_MANY_ATTEMPTS\",\n    \"message\": \"Too many incorrect attempts. Request a new code.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
           "name": "Reset password (with code)",
           "request": {
             "auth": {

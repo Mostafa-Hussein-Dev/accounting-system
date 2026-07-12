@@ -7,10 +7,20 @@
   },
   "auth": {
     "type": "bearer",
-    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000/api/v1", "type": "string" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    }
   ],
   "item": [
     {
@@ -19,18 +29,34 @@
         {
           "name": "Log in",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "Authenticate with email + password. On success, the test script saves accessToken and refreshToken into the environment for use by every other request."
           },
@@ -58,7 +84,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900\n  },\n  \"meta\": null\n}"
             },
             {
@@ -66,26 +97,212 @@
               "status": "Unauthorized",
               "code": 401,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_CREDENTIALS\",\n    \"message\": \"Email or password is incorrect.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Forgot password (request code)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{resetEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Always returns 200 with the same generic body, whether or not the email belongs to a registered, active account — this must never be usable to enumerate registered emails. If the account exists, a 6-digit code is emailed (mailpit in dev: http://localhost:8025). Throttled to 3 requests/15 min per IP; also no-ops (same response) if a live code was issued in the last 30s."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK (generic, always)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"meta\": null\n}"
+            },
+            {
+              "name": "429 Too many requests",
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"TOO_MANY_REQUESTS\",\n    \"message\": \"ThrottlerException: Too Many Requests\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reset password (with code)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{resetEmail}}\",\n  \"code\": \"{{resetCode}}\",\n  \"newPassword\": \"{{loginPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Resets the password using the 6-digit code emailed by Forgot password. On success, the password changes, the code is single-use (cannot be replayed), and every existing refresh token for the user is revoked (all other sessions end). code must match /^\\d{6}$/. See docs/API-DESIGN.md → Password reset for the full error-code table (AUTH_INVALID_RESET_CODE, AUTH_TOO_MANY_ATTEMPTS)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Password reset', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"meta\": null\n}"
+            },
+            {
+              "name": "400 Invalid or expired code",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_RESET_CODE\",\n    \"message\": \"That code is invalid or has expired.\",\n    \"field\": \"code\"\n  }\n}"
+            },
+            {
+              "name": "429 Too many incorrect attempts",
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_TOO_MANY_ATTEMPTS\",\n    \"message\": \"Too many incorrect attempts. Request a new code.\",\n    \"field\": null\n  }\n}"
             }
           ]
         },
         {
           "name": "Register (new company + owner)",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"company\": {\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 234 567\",\n    \"email\": \"info@beiruttrading.com\"\n  },\n  \"user\": {\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"password\": \"S3cur3P@ssword!\",\n    \"phone\": \"+961 3 123 456\"\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
             },
             "description": "Creates a company and its first (owner) user atomically, then auto-logs in — same token pair shape as Log in. The test script saves accessToken, refreshToken, and companyId (decoded from the access token) into the environment."
           },
@@ -115,7 +332,12 @@
               "status": "Created",
               "code": 201,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900\n  },\n  \"meta\": null\n}"
             },
             {
@@ -123,7 +345,12 @@
               "status": "Conflict",
               "code": 409,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"USER_EMAIL_ALREADY_EXISTS\",\n    \"message\": \"A user with this email already exists.\",\n    \"field\": \"email\"\n  }\n}"
             }
           ]
@@ -131,18 +358,34 @@
         {
           "name": "Refresh token",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/auth/refresh",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "refresh"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
             },
             "description": "Exchanges a refresh token for a new access/refresh pair. Rotates the token: the old refresh token is revoked and cannot be reused."
           },
@@ -170,7 +413,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900\n  },\n  \"meta\": null\n}"
             },
             {
@@ -178,7 +426,12 @@
               "status": "Unauthorized",
               "code": 401,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_REFRESH_TOKEN\",\n    \"message\": \"Refresh token is invalid, expired, or has been revoked.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -186,18 +439,34 @@
         {
           "name": "Log out",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/auth/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "logout"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
             },
             "description": "Revokes the given refresh token immediately, ending that session."
           },
@@ -234,8 +503,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
             },
             "description": "Returns the profile of the user identified by the current access token."
           },
@@ -245,7 +519,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": null,\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": \"2026-07-08T17:24:47.948Z\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:47.948Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -253,7 +532,12 @@
               "status": "Unauthorized",
               "code": 401,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"UNAUTHORIZED\",\n    \"message\": \"Unauthorized\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -267,16 +551,29 @@
           "name": "Create a company",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Beirut Trading Co.\",\n  \"taxNumber\": \"LB-123456\",\n  \"phone\": \"+961 1 234 567\",\n  \"email\": \"info@beiruttrading.com\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/companies",
-              "host": ["{{baseUrl}}"],
-              "path": ["companies"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies"
+              ]
             },
             "description": "Platform admin only — direct company creation is an admin provisioning action. Self-service company creation is Auth > Register."
           },
@@ -302,7 +599,12 @@
               "status": "Created",
               "code": 201,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 234 567\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -310,7 +612,12 @@
               "status": "Conflict",
               "code": 409,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_TAX_NUMBER_ALREADY_EXISTS\",\n    \"message\": \"A company with tax number \\\"LB-123456\\\" already exists.\",\n    \"field\": \"taxNumber\"\n  }\n}"
             },
             {
@@ -318,7 +625,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PLATFORM_ADMIN_REQUIRED\",\n    \"message\": \"This action is restricted to platform admin/support users.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -330,13 +642,29 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/companies?page=1&limit=20&sortBy=createdAt&sortOrder=desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["companies"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "limit", "value": "20" },
-                { "key": "sortBy", "value": "createdAt" },
-                { "key": "sortOrder", "value": "desc" }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
               ]
             },
             "description": "Platform admin only — a company-scoped user belongs to exactly one company, so listing all of them isn't meaningful for them."
@@ -347,7 +675,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"name\": \"Beirut Trading Co.\",\n      \"taxNumber\": \"LB-123456\",\n      \"phone\": \"+961 1 234 567\",\n      \"email\": \"info@beiruttrading.com\",\n      \"logo\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n      \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
             },
             {
@@ -355,7 +688,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PLATFORM_ADMIN_REQUIRED\",\n    \"message\": \"This action is restricted to platform admin/support users.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -367,8 +705,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/companies/{{companyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["companies", "{{companyId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies",
+                "{{companyId}}"
+              ]
             },
             "description": "Platform admin can fetch any company; a company-scoped user can only fetch their own (403 COMPANY_ACCESS_DENIED otherwise)."
           },
@@ -378,7 +721,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 234 567\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -386,7 +734,12 @@
               "status": "Not Found",
               "code": 404,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_NOT_FOUND\",\n    \"message\": \"Company with id b3f1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
             },
             {
@@ -394,7 +747,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -403,16 +761,30 @@
           "name": "Update a company",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"phone\": \"+961 1 999 999\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/companies/{{companyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["companies", "{{companyId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies",
+                "{{companyId}}"
+              ]
             },
             "description": "Platform admin can update any company; a company-scoped user needs the Company Admin role for their own company (403 COMPANY_ACCESS_DENIED for another company, 403 PERMISSION_DENIED if they belong to this company but lack the Company Admin role)."
           },
@@ -422,7 +794,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 999 999\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T18:02:11.000Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -430,7 +807,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
             },
             {
@@ -438,7 +820,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -450,8 +837,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/companies/{{companyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["companies", "{{companyId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies",
+                "{{companyId}}"
+              ]
             },
             "description": "Platform admin can delete any company; a company-scoped user needs the Company Admin role for their own company (403 COMPANY_ACCESS_DENIED for another company, 403 PERMISSION_DENIED if they belong to this company but lack the Company Admin role)."
           },
@@ -469,7 +861,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
             },
             {
@@ -477,7 +874,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -494,8 +896,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/roles",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ]
             },
             "description": "Platform admin sees every role; a company-scoped caller sees global roles (companyId null) plus their own company's custom roles. Requires the role.read permission (granted by both seeded roles). The test script saves companyAdminRoleId and companyMemberRoleId into the environment for use by Users requests below."
           },
@@ -525,7 +931,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": [\n    {\n      \"id\": \"d9d968e2-be6b-473e-b504-e7f90c1fd005\",\n      \"name\": \"Company Admin\",\n      \"description\": \"Full administrative access within the company's own data.\",\n      \"companyId\": null,\n      \"isSystem\": true,\n      \"permissions\": [\"user.create\", \"user.read\", \"user.update\", \"user.delete\", \"company.read\", \"company.update\", \"company.delete\", \"role.read\", \"role.create\", \"role.update\", \"role.delete\"],\n      \"createdAt\": \"2026-07-08T20:18:20.987Z\",\n      \"updatedAt\": \"2026-07-08T20:18:20.987Z\"\n    },\n    {\n      \"id\": \"c000504e-ebdd-4c15-b540-d1d653fc8ac6\",\n      \"name\": \"Company Member\",\n      \"description\": \"Baseline access for a company teammate.\",\n      \"companyId\": null,\n      \"isSystem\": true,\n      \"permissions\": [\"company.read\", \"role.read\"],\n      \"createdAt\": \"2026-07-08T20:18:21.044Z\",\n      \"updatedAt\": \"2026-07-08T20:18:21.044Z\"\n    }\n  ],\n  \"meta\": null\n}"
             },
             {
@@ -533,7 +944,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -542,16 +958,29 @@
           "name": "Create a role (custom, own company)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Sales Manager\",\n  \"description\": \"Manages the sales team.\",\n  \"permissionIds\": [\"{{companyMemberRoleId}}\"]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/roles",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ]
             },
             "description": "A company-scoped caller is always forced into their own company, regardless of any companyId sent — creates a custom role private to that company. A platform admin may omit companyId for a global role, or supply one to create it on behalf of a specific company. permissionIds must reference real Permission ids, not role ids — the placeholder above is illustrative only; substitute a real permission id. Two different companies may each have a role with the same name."
           },
@@ -577,7 +1006,12 @@
               "status": "Created",
               "code": 201,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"f1a2b3c4-5678-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Sales Manager\",\n    \"description\": \"Manages the sales team.\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"isSystem\": false,\n    \"permissions\": [\"company.read\"],\n    \"createdAt\": \"2026-07-09T10:00:00.000Z\",\n    \"updatedAt\": \"2026-07-09T10:00:00.000Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -585,7 +1019,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
             },
             {
@@ -593,7 +1032,12 @@
               "status": "Not Found",
               "code": 404,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_NOT_FOUND\",\n    \"message\": \"One or more permissionIds were not found.\",\n    \"field\": \"permissionIds\"\n  }\n}"
             },
             {
@@ -601,7 +1045,12 @@
               "status": "Conflict",
               "code": 409,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ROLE_NAME_ALREADY_EXISTS\",\n    \"message\": \"A global role named \\\"Sales Manager\\\" already exists.\",\n    \"field\": \"name\"\n  }\n}"
             }
           ]
@@ -610,16 +1059,30 @@
           "name": "Update a role",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"description\": \"Updated description\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/roles/{{customRoleId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles", "{{customRoleId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{customRoleId}}"
+              ]
             },
             "description": "Platform admin can update any non-system role; a company-scoped caller only their own company's custom roles (403 ROLE_ACCESS_DENIED for a global role or another company's role). System roles (Company Admin/Company Member) can never be updated by anyone (403 SYSTEM_ROLE_PROTECTED). permissionIds, if provided, REPLACES the full permission set."
           },
@@ -629,7 +1092,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"f1a2b3c4-5678-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Sales Manager\",\n    \"description\": \"Updated description\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"isSystem\": false,\n    \"permissions\": [\"company.read\"],\n    \"createdAt\": \"2026-07-09T10:00:00.000Z\",\n    \"updatedAt\": \"2026-07-09T10:05:00.000Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -637,7 +1105,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ROLE_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this role.\",\n    \"field\": null\n  }\n}"
             },
             {
@@ -645,7 +1118,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SYSTEM_ROLE_PROTECTED\",\n    \"message\": \"System roles cannot be updated or deleted.\",\n    \"field\": null\n  }\n}"
             },
             {
@@ -653,7 +1131,12 @@
               "status": "Not Found",
               "code": 404,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ROLE_NOT_FOUND\",\n    \"message\": \"Role with id f1a2b3c4-5678-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -665,8 +1148,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/roles/{{customRoleId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles", "{{customRoleId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles",
+                "{{customRoleId}}"
+              ]
             },
             "description": "Same ownership/system-role rules as Update a role. Also blocked with 409 ROLE_IN_USE if any user currently holds this role."
           },
@@ -684,7 +1172,12 @@
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SYSTEM_ROLE_PROTECTED\",\n    \"message\": \"System roles cannot be updated or deleted.\",\n    \"field\": null\n  }\n}"
             },
             {
@@ -692,7 +1185,12 @@
               "status": "Conflict",
               "code": 409,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ROLE_IN_USE\",\n    \"message\": \"Cannot delete a role that is currently assigned to a user.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -706,16 +1204,29 @@
           "name": "Create a user",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"password\": \"S3cur3P@ssword!\",\n  \"phone\": \"+961 3 123 456\",\n  \"preferredLanguage\": \"EN\",\n  \"companyId\": \"{{companyId}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["users"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
             },
             "description": "A company-scoped caller (e.g. the owner from Auth > Register) is always forced into their own company — the companyId above is ignored/overridden if it doesn't match. A platform admin can use companyId to target any company, or omit it to create another company-less admin. Accepts an optional roleIds array (see Roles > List roles for IDs) — a company-scoped caller creating a teammate without specifying roleIds defaults to the Company Member role, so nobody is ever role-less."
           },
@@ -741,7 +1252,12 @@
               "status": "Created",
               "code": 201,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+961 3 123 456\",\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": null,\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -749,7 +1265,12 @@
               "status": "Conflict",
               "code": 409,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"USER_EMAIL_ALREADY_EXISTS\",\n    \"message\": \"A user with this email already exists.\",\n    \"field\": \"email\"\n  }\n}"
             },
             {
@@ -757,7 +1278,12 @@
               "status": "Not Found",
               "code": 404,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_NOT_FOUND\",\n    \"message\": \"Company with id 586b91ef-6b89-4e9b-bcaa-99976d65fc4a was not found.\",\n    \"field\": \"companyId\"\n  }\n}"
             }
           ]
@@ -769,13 +1295,29 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/users?page=1&limit=20&sortBy=createdAt&sortOrder=desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["users"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "limit", "value": "20" },
-                { "key": "sortBy", "value": "createdAt" },
-                { "key": "sortOrder", "value": "desc" }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
               ]
             }
           },
@@ -785,7 +1327,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"firstName\": \"Jane\",\n      \"lastName\": \"Doe\",\n      \"email\": \"jane.doe@example.com\",\n      \"phone\": \"+961 3 123 456\",\n      \"avatarUrl\": null,\n      \"preferredLanguage\": \"EN\",\n      \"isActive\": true,\n      \"lastLoginAt\": null,\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n      \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
             }
           ]
@@ -797,8 +1344,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
             }
           },
           "response": [
@@ -807,7 +1359,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+961 3 123 456\",\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": null,\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -815,7 +1372,12 @@
               "status": "Not Found",
               "code": 404,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"USER_NOT_FOUND\",\n    \"message\": \"User with id b3f1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
             }
           ]
@@ -824,16 +1386,30 @@
           "name": "Update a user",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"phone\": \"+961 3 000 000\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
             },
             "description": "Passing roleIds REPLACES the user's full role set (see Roles > List roles for IDs), e.g. {\"roleIds\": [\"{{companyMemberRoleId}}\"]}. Removing the Company Admin role from a company's last admin is blocked with 409 LAST_COMPANY_ADMIN."
           },
@@ -843,7 +1419,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"firstName\": \"Jane\",\n    \"lastName\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+961 3 000 000\",\n    \"avatarUrl\": null,\n    \"preferredLanguage\": \"EN\",\n    \"isActive\": true,\n    \"lastLoginAt\": null,\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T18:05:00.000Z\"\n  },\n  \"meta\": null\n}"
             },
             {
@@ -851,7 +1432,12 @@
               "status": "Conflict",
               "code": 409,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"LAST_COMPANY_ADMIN\",\n    \"message\": \"Cannot remove the company's last admin.\",\n    \"field\": \"roleIds\"\n  }\n}"
             }
           ]
@@ -863,8 +1449,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
             },
             "description": "Deleting a company's last Company Admin is blocked with 409 LAST_COMPANY_ADMIN."
           },
@@ -882,7 +1473,12 @@
               "status": "Conflict",
               "code": 409,
               "_postman_previewlanguage": "json",
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"LAST_COMPANY_ADMIN\",\n    \"message\": \"Cannot remove the company's last admin.\",\n    \"field\": \"roleIds\"\n  }\n}"
             }
           ]

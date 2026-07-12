@@ -34,6 +34,20 @@ services:
     networks:
       - accounting_network
 
+  # Dev-only SMTP catcher — nothing sent through it ever leaves the machine.
+  # Web UI at http://localhost:8025 to actually read password-reset emails
+  # during local development; matches the SMTP_HOST/SMTP_PORT defaults in
+  # .env.example, no auth/TLS needed for local dev.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: accounting_mailpit
+    ports:
+      - '1025:1025' # SMTP
+      - '8025:8025' # Web UI
+    restart: unless-stopped
+    networks:
+      - accounting_network
+
   # Uncomment when Dockerfile is ready
   # api:
   #   build: .

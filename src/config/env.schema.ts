@@ -15,6 +15,25 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_EXPIRES: z.string().default('15m'),
   JWT_REFRESH_EXPIRES: z.string().default('7d'),
+  // Defaults point at the mailpit dev container (docker-compose.yml) — no
+  // auth/TLS needed locally. Set real SMTP credentials in production.
+  SMTP_HOST: z.string().default('localhost'),
+  SMTP_PORT: z.coerce.number().int().positive().default(1025),
+  // z.coerce.boolean() is a footgun here — Boolean("false") is true in JS,
+  // so it would silently treat SMTP_SECURE=false as enabled. Parse the
+  // string explicitly instead.
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  MAIL_FROM: z.string().default('Paradox <no-reply@paradox.app>'),
+  // Comma-separated list of allowed browser origins (the frontend's dev
+  // server / deployed URL) — the API has no CORS policy without this, so no
+  // browser-based request (from any origin, including the frontend) can
+  // ever succeed; only non-browser clients (curl, server-to-server) work.
+  CORS_ORIGINS: z.string().default('http://localhost:5173'),
 });
 
 type ParsedEnv = z.infer<typeof envSchema>;

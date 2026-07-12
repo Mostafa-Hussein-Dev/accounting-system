@@ -95,6 +95,39 @@ and permissions (CASL) are implemented. Body shape: `{ company: {...same
 fields as POST /companies}, user: {...same fields as POST /users, minus
 companyId} }`.
 
+## Password reset
+A code-based flow (not a link) across two endpoints, both unauthenticated:
+
+- `POST /auth/forgot-password` — body `{ email }`. **Always returns 200 with
+  the same generic body, whether or not the email belongs to a registered,
+  active account** — this endpoint must never be usable to enumerate
+  registered emails via its response, status code, or (as much as
+  practical) timing. If the account exists, a 6-digit code is emailed
+  (`src/common/mailer/mailer.service.ts`, mailpit in dev — see
+  `docker-compose.yml` and its web UI at `http://localhost:8025`) and a
+  `PasswordResetToken` row is created; if a live (unconsumed) code was
+  already issued in the last 30 seconds, this silently no-ops rather than
+  sending another email — same generic response either way.
+- `POST /auth/reset-password` — body `{ email, code, newPassword }`. On
+  success: the password is updated, the code is marked consumed
+  (single-use), and **every existing refresh token for that user is
+  revoked** — a reset invalidates all other sessions, not just future
+  logins. Errors:
+  - 400 `AUTH_INVALID_RESET_CODE` (field: `code`) — wrong code, no live
+    code exists, the code expired (15 minutes), or it was already used.
+    Deliberately the same code for all four cases, and also thrown for an
+    unrecognized email — none of these should be distinguishable to the
+    caller.
+  - 429 `AUTH_TOO_MANY_ATTEMPTS` — 5 wrong attempts against the current
+    live code; the caller must request a new one (`forgot-password` again)
+    rather than keep guessing.
+
+Both endpoints are throttled per-route (`@nestjs/throttler`, 3
+requests/15 min) — not globally, so this doesn't affect login/register/
+refresh. See `PasswordResetToken` in `docs/MODELS.md` for why a low-entropy
+6-digit code is safe here (short TTL + attempts ceiling + one live code per
+user, not the hash strength alone).
+
 ## Company-scoped endpoints and platform admin access
 Any endpoint scoped to one company resolves its target company via
 `@CurrentCompanyId()` (src/modules/auth/decorators/current-company-id.decorator.ts):

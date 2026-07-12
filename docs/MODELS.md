@@ -119,3 +119,27 @@ draft -> confirmed -> partially_paid -> paid -> void
 
 No status can go backwards except via void (which creates a reversal,
 it does not undo the original).
+
+## PasswordResetToken
+One row per issued password-reset code (`POST /auth/forgot-password` /
+`POST /auth/reset-password`, see `docs/API-DESIGN.md` → Password reset).
+Same lifecycle shape as `RefreshToken` — short-lived, revocable
+independent of anything else — but for a one-time 6-digit code instead of
+a JWT.
+
+- `code_hash` — bcrypt hash of the code, same as `User.password_hash`. The
+  raw code is never stored, only ever held in memory long enough to email
+  it once.
+- A 6-digit code has low entropy on its own (1,000,000 possibilities) —
+  hashing it protects against a database leak, but is not what makes the
+  code safe to guess online. That's the combination of three things
+  `AuthService` enforces together: a 15-minute `expires_at`, an `attempts`
+  ceiling (5) before the row is treated as dead, and at most one live
+  (unconsumed, unexpired) row per user at a time — requesting a new code
+  immediately supersedes any earlier one.
+- A successful reset revokes every `RefreshToken` for that user — a
+  password reset ends every other existing session, not just future
+  logins.
+- `POST /auth/forgot-password` always returns the same response whether or
+  not the email belongs to a real account; nothing about this table's
+  state is ever observable from the response.

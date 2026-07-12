@@ -13,6 +13,18 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
+  // Without this, the API has no CORS policy at all — every browser-based
+  // request (from the frontend or anywhere else) is blocked by the
+  // browser's own same-origin policy before it even reaches a controller,
+  // regardless of auth. Non-browser clients (curl, server-to-server) are
+  // unaffected either way, which is why this was easy to miss.
+  app.enableCors({
+    origin: configService
+      .get('CORS_ORIGINS', { infer: true })
+      .split(',')
+      .map((origin) => origin.trim()),
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

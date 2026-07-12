@@ -14,13 +14,15 @@ This repo contains the backend only. Frontend repos are separate.
 | Layer | Technology |
 |---|---|
 | Framework | NestJS v11 (single app, not monorepo) |
-| HTTP engine | Fastify adapter |
+| HTTP engine | Express adapter (`@nestjs/platform-express`) |
 | Language | TypeScript — strict mode enabled |
 | ORM | Prisma |
 | Database | PostgreSQL 17 |
-| Cache / Queues | Redis 8 + BullMQ |
+| Cache / Queues | Redis 8 — provisioned in `docker-compose.yml`, not yet consumed by any app code (no BullMQ/redis client installed). `MailerService` sends email synchronously rather than queueing, precisely because this isn't wired up yet — see Password reset flow below. |
 | Authorization | CASL (@casl/ability) |
 | Validation | Zod (config) + class-validator (DTOs) |
+| Email | Nodemailer, SMTP — mailpit container in dev (`docker-compose.yml`, web UI at `http://localhost:8025`) |
+| Rate limiting | `@nestjs/throttler`, applied per-route (not globally) — currently only `POST /auth/forgot-password` and `/auth/reset-password` |
 | API Docs | @nestjs/swagger (Swagger UI + OpenAPI export) |
 | Runtime | Node.js 24 LTS |
 | Package manager | npm |
@@ -30,7 +32,7 @@ This repo contains the backend only. Frontend repos are separate.
 
 src/
   common/           <- shared cross-cutting code (guards, filters,
-                       interceptors, decorators, types)
+                       interceptors, decorators, types, mailer)
   config/           <- environment config and validation
   prisma/           <- PrismaService and schema
   modules/          <- one folder per business domain
@@ -85,7 +87,14 @@ guard against, it is the intended escape hatch for that use case.
 5. JwtAuthGuard validates token on every protected route
 6. RolesGuard + CASL AbilityFactory check permissions after auth
 
+A forgotten password does not go through this flow at all — see
+`docs/API-DESIGN.md` → Password reset and `docs/MODELS.md` →
+PasswordResetToken. `POST /auth/forgot-password` /
+`POST /auth/reset-password` are unauthenticated by definition (that's the
+point) and issue no JWTs of their own; a successful reset instead revokes
+every existing refresh token for that user, ending every other session.
+
 ## Deployment
-- Local dev: Docker Compose (api + postgres + redis)
+- Local dev: Docker Compose (api + postgres + redis + mailpit)
 - Production: containerized, behind Nginx reverse proxy, with TLS
 - The POS terminal requires HTTPS (for WebUSB/WebSerial hardware APIs)

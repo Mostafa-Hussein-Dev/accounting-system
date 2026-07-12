@@ -7,6 +7,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -18,6 +19,8 @@ import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UserResponseDto } from '../users/dto/user-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -27,6 +30,13 @@ import type {
   AuthenticatedUser,
   AuthenticatedRefreshToken,
 } from './interfaces/authenticated-user.interface';
+
+// 3 requests per 15 minutes — throttled per-route (not globally) so this
+// only affects the two endpoints that can trigger an email/brute-force a
+// code. Defense in depth on top of AuthService's own per-account cooldown
+// and per-code attempts ceiling, which hold even if a caller spreads
+// requests across many IPs to dodge this.
+const RESET_THROTTLE = { default: { limit: 3, ttl: 900_000 } };
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -101,6 +111,40 @@ export class AuthController {
     @CurrentUser() token: AuthenticatedRefreshToken,
   ): Promise<void> {
     await this.authService.logout(token.tokenId);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle(RESET_THROTTLE)
+  @ApiOperation({
+    summary: 'Request a password reset code by email',
+    description:
+      'Always returns 200 with the same generic body, whether or not the ' +
+      'email belongs to a registered account — this endpoint must not be ' +
+      'usable to enumerate registered emails.',
+  })
+  @ApiResponse({ status: 200, description: 'Request accepted' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
+    await this.authService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle(RESET_THROTTLE)
+  @ApiOperation({ summary: 'Reset a password using an emailed code' })
+  @ApiResponse({ status: 200, description: 'Password reset' })
+  @ApiResponse({
+    status: 400,
+    description: 'Code is invalid, expired, or already used',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many incorrect attempts for this code',
+  })
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
+    await this.authService.resetPassword(dto);
   }
 
   @Get('me')

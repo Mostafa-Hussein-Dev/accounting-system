@@ -16,22 +16,22 @@ enum Language {
 }
 
 model Company {
-  id         String    @id @default(uuid()) @db.Uuid
-  name       String
-  taxNumber  String?   @unique @map("tax_number")
-  phone      String?
-  email      String?
-  logo       String?
-  isActive   Boolean   @default(true) @map("is_active")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-  deletedAt  DateTime? @map("deleted_at")
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  taxNumber String?   @unique @map("tax_number")
+  phone     String?
+  email     String?
+  logo      String?
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   users User[]
   roles Role[]
 
-  @@map("companies")
   @@index([deletedAt])
+  @@map("companies")
 }
 
 model User {
@@ -52,13 +52,14 @@ model User {
   companyId String?  @map("company_id") @db.Uuid
   company   Company? @relation(fields: [companyId], references: [id])
 
-  refreshTokens RefreshToken[]
-  roles         UserRole[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  roles               UserRole[]
 
-  @@map("users")
   @@index([companyId])
   @@index([email])
   @@index([deletedAt])
+  @@map("users")
 }
 
 // Global, reusable permission catalog. Not tenant-scoped — reference data,
@@ -89,14 +90,14 @@ model Permission {
 // force-matches an exact companyId, but Role needs "null OR mine," which
 // that extension can't express — RolesService hand-writes that OR filter.
 model Role {
-  id          String    @id @default(uuid()) @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
   name        String
   description String?
-  companyId   String?   @map("company_id") @db.Uuid
-  company     Company?  @relation(fields: [companyId], references: [id])
-  isSystem    Boolean   @default(false) @map("is_system")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  companyId   String?  @map("company_id") @db.Uuid
+  company     Company? @relation(fields: [companyId], references: [id])
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   permissions RolePermission[]
   users       UserRole[]
@@ -144,6 +145,28 @@ model RefreshToken {
   revokedAt DateTime? @map("revoked_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  @@map("refresh_tokens")
   @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// One row per issued password-reset code, same shape/lifecycle idea as
+// RefreshToken (short-lived, revocable independent of anything else). The
+// code itself is never stored — only codeHash (bcrypt, same as
+// User.passwordHash) — so a database leak alone can't hand over a valid
+// code. A 6-digit code has low entropy on its own (1,000,000 possibilities);
+// the real defense against that is AuthService enforcing all three of:
+// a short expiresAt window, an attempts ceiling before the row is treated as
+// dead, and at most one live (unconsumed, unexpired) row per user at a time.
+model PasswordResetToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String    @map("code_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }

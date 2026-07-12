@@ -106,6 +106,13 @@ These patterns are banned across the entire codebase:
   a dedicated Money value object
 - No hard deletes on financial records — use soft delete (deleted_at)
 - No storing computed balances — always derive from journal_line aggregation
+- No new or changed endpoint without updating the Postman collection
+  (`postman/collections/accounting-system.postman_collection.json`) in the
+  *same* change — see docs/API-DESIGN.md → Postman collection conventions
+  for the exact request/response/test-script shape to match. This is
+  the step most likely to get silently skipped (it's easy to consider an
+  endpoint "done" once the controller/service/tests are green) — treat it
+  as part of the endpoint, not a follow-up.
 
 ## Soft delete pattern
 Financial records (invoices, journal entries, payments, stock movements)

@@ -22,7 +22,7 @@ This repo contains the backend only. Frontend repos are separate.
 | Authorization | CASL (@casl/ability) |
 | Validation | Zod (config) + class-validator (DTOs) |
 | Email | Nodemailer, SMTP — mailpit container in dev (`docker-compose.yml`, web UI at `http://localhost:8025`) |
-| Rate limiting | `@nestjs/throttler`, applied per-route (not globally) — currently only `POST /auth/forgot-password` and `/auth/reset-password` |
+| Rate limiting | `@nestjs/throttler`, applied per-route (not globally) — currently only `POST /auth/forgot-password`, `/auth/verify-reset-code`, and `/auth/reset-password` |
 | API Docs | @nestjs/swagger (Swagger UI + OpenAPI export) |
 | Runtime | Node.js 24 LTS |
 | Package manager | npm |
@@ -89,10 +89,11 @@ guard against, it is the intended escape hatch for that use case.
 
 A forgotten password does not go through this flow at all — see
 `docs/API-DESIGN.md` → Password reset and `docs/MODELS.md` →
-PasswordResetToken. `POST /auth/forgot-password` /
-`POST /auth/reset-password` are unauthenticated by definition (that's the
-point) and issue no JWTs of their own; a successful reset instead revokes
-every existing refresh token for that user, ending every other session.
+PasswordResetToken. `POST /auth/forgot-password`,
+`POST /auth/verify-reset-code`, and `POST /auth/reset-password` are all
+unauthenticated by definition (that's the point) and issue no JWTs of
+their own; a successful reset instead revokes every existing refresh
+token for that user, ending every other session.
 
 ## Deployment
 - Local dev: Docker Compose (api + postgres + redis + mailpit)

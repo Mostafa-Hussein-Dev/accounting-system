@@ -122,7 +122,8 @@ it does not undo the original).
 
 ## PasswordResetToken
 One row per issued password-reset code (`POST /auth/forgot-password` /
-`POST /auth/reset-password`, see `docs/API-DESIGN.md` → Password reset).
+`POST /auth/verify-reset-code` / `POST /auth/reset-password`, see
+`docs/API-DESIGN.md` → Password reset).
 Same lifecycle shape as `RefreshToken` — short-lived, revocable
 independent of anything else — but for a one-time 6-digit code instead of
 a JWT.

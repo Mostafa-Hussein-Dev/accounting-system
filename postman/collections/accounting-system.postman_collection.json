@@ -1573,6 +1573,296 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Branches",
+      "item": [
+        {
+          "name": "Create a branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Beirut Main Branch\",\n  \"nameAr\": \"فرع بيروت الرئيسي\",\n  \"nameFr\": \"Succursale principale de Beyrouth\",\n  \"nameEn\": \"Beirut Main Branch\",\n  \"address\": \"Hamra Street, Beirut, Lebanon\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches"
+              ]
+            },
+            "description": "Requires the branch.create permission (granted by Company Admin). A company-scoped caller is always forced into their own company — any companyId sent is ignored/overridden. A platform admin must target a company via body companyId (or the ?companyId query param). stockLocationId is optional until the inventory module (FR-401) ships. The test script saves branchId into the environment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Branch created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('branchId', pm.response.json().data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"3aad4919-ce27-42bf-a6f6-70d9387162f6\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"name\": \"Beirut Main Branch\",\n    \"nameAr\": \"فرع بيروت الرئيسي\",\n    \"nameFr\": \"Succursale principale de Beyrouth\",\n    \"nameEn\": \"Beirut Main Branch\",\n    \"address\": \"Hamra Street, Beirut, Lebanon\",\n    \"stockLocationId\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-17T15:56:14.648Z\",\n    \"updatedAt\": \"2026-07-17T15:56:14.648Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "404 Company not found (platform admin, unknown companyId)",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_NOT_FOUND\",\n    \"message\": \"Company with id 586b91ef-6b89-4e9b-bcaa-99976d65fc4a was not found.\",\n    \"field\": \"companyId\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List branches",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/branches?page=1&limit=20&sortBy=createdAt&sortOrder=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Requires branch.read (granted by both seeded roles). Platform admin lists a company's branches via ?companyId=<uuid>; a company-scoped caller always lists their own company's branches only. Soft-deleted branches are excluded."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"3aad4919-ce27-42bf-a6f6-70d9387162f6\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"name\": \"Beirut Main Branch\",\n      \"nameAr\": \"فرع بيروت الرئيسي\",\n      \"nameFr\": \"Succursale principale de Beyrouth\",\n      \"nameEn\": \"Beirut Main Branch\",\n      \"address\": \"Hamra Street, Beirut, Lebanon\",\n      \"stockLocationId\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-17T15:56:14.648Z\",\n      \"updatedAt\": \"2026-07-17T15:56:14.648Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get a branch by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/branches/{{branchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                "{{branchId}}"
+              ]
+            },
+            "description": "Requires branch.read. A company-scoped caller can only fetch a branch in their own company; another company's branch (or a soft-deleted one) returns 404 BRANCH_NOT_FOUND — tenant isolation is enforced by scoping, so a cross-tenant id is indistinguishable from a non-existent one."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"3aad4919-ce27-42bf-a6f6-70d9387162f6\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"name\": \"Beirut Main Branch\",\n    \"nameAr\": \"فرع بيروت الرئيسي\",\n    \"nameFr\": \"Succursale principale de Beyrouth\",\n    \"nameEn\": \"Beirut Main Branch\",\n    \"address\": \"Hamra Street, Beirut, Lebanon\",\n    \"stockLocationId\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-17T15:56:14.648Z\",\n    \"updatedAt\": \"2026-07-17T15:56:14.648Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"BRANCH_NOT_FOUND\",\n    \"message\": \"Branch with id 3aad4919-ce27-42bf-a6f6-70d9387162f6 was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update a branch",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"Verdun Street, Beirut\",\n  \"isActive\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/branches/{{branchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                "{{branchId}}"
+              ]
+            },
+            "description": "Requires branch.update (granted by Company Admin). Partial update — also used to deactivate a branch without deleting it by setting isActive to false (FR-102). A company-scoped caller can only update a branch in their own company."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"3aad4919-ce27-42bf-a6f6-70d9387162f6\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"name\": \"Beirut Main Branch\",\n    \"nameAr\": \"فرع بيروت الرئيسي\",\n    \"nameFr\": \"Succursale principale de Beyrouth\",\n    \"nameEn\": \"Beirut Main Branch\",\n    \"address\": \"Verdun Street, Beirut\",\n    \"stockLocationId\": null,\n    \"isActive\": false,\n    \"createdAt\": \"2026-07-17T15:56:14.648Z\",\n    \"updatedAt\": \"2026-07-17T16:02:11.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"BRANCH_NOT_FOUND\",\n    \"message\": \"Branch with id 3aad4919-ce27-42bf-a6f6-70d9387162f6 was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Soft delete a branch",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/branches/{{branchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                "{{branchId}}"
+              ]
+            },
+            "description": "Requires branch.delete (granted by Company Admin). Soft delete — sets deletedAt; the row is retained but excluded from all reads. A company-scoped caller can only delete a branch in their own company."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": ""
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"BRANCH_NOT_FOUND\",\n    \"message\": \"Branch with id 3aad4919-ce27-42bf-a6f6-70d9387162f6 was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

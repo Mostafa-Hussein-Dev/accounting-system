@@ -27,11 +27,46 @@ model Company {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  users User[]
-  roles Role[]
+  users    User[]
+  roles    Role[]
+  branches Branch[]
 
   @@index([deletedAt])
   @@map("companies")
+}
+
+// A physical location of a company (FR-102). Always tenant-scoped — unlike
+// Role, a Branch never exists without a company, so companyId is required and
+// Branch is listed in prisma.service.ts's TENANT_SCOPED_MODELS.
+model Branch {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  // Trilingual names (FR-102, FR-107). `name` is the always-present fallback;
+  // the AR/FR/EN variants are optional until the i18n module formalizes a
+  // shared translations pattern.
+  name    String
+  nameAr  String? @map("name_ar")
+  nameFr  String? @map("name_fr")
+  nameEn  String? @map("name_en")
+  address String?
+
+  // NOTE (FR-401/FR-404): nullable + NO foreign key ON PURPOSE — the inventory
+  // `Location` model does not exist yet. When that model is created:
+  //   1. add the relation + FK constraint to `locations`, and
+  //   2. CHANGE THIS COLUMN FROM NULLABLE (String?) TO NOT-NULL (String),
+  //      backfilling existing rows in the same migration.
+  stockLocationId String? @map("stock_location_id") @db.Uuid
+
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([companyId])
+  @@index([deletedAt])
+  @@map("branches")
 }
 
 model User {

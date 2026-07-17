@@ -6,6 +6,7 @@ import { CaslModule } from './modules/casl/casl.module';
 import { CompaniesModule } from './modules/companies/companies.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { UsersModule } from './modules/users/users.module';
+import { BranchesModule } from './modules/branches/branches.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UsersModule } from './modules/users/users.module';
     CompaniesModule,
     RolesModule,
     UsersModule,
+    BranchesModule,
   ],
   controllers: [],
   providers: [],

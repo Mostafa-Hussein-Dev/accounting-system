@@ -17,6 +17,10 @@ const PERMISSIONS = [
   { key: 'role.create', subject: 'Role', action: 'create', description: 'Create roles' },
   { key: 'role.update', subject: 'Role', action: 'update', description: 'Update roles' },
   { key: 'role.delete', subject: 'Role', action: 'delete', description: 'Delete roles' },
+  { key: 'branch.read', subject: 'Branch', action: 'read', description: 'View branches' },
+  { key: 'branch.create', subject: 'Branch', action: 'create', description: 'Create branches' },
+  { key: 'branch.update', subject: 'Branch', action: 'update', description: 'Update branches' },
+  { key: 'branch.delete', subject: 'Branch', action: 'delete', description: 'Delete branches' },
 ] as const;
 
 // Both seeded roles are global (companyId: null) and isSystem (protected
@@ -31,7 +35,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
   {
     name: 'Company Member',
     description: 'Baseline access for a company teammate.',
-    permissionKeys: ['company.read', 'role.read'],
+    permissionKeys: ['company.read', 'role.read', 'branch.read'],
   },
 ];
 

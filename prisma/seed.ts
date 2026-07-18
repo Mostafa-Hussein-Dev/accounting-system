@@ -21,6 +21,37 @@ const PERMISSIONS = [
   { key: 'branch.create', subject: 'Branch', action: 'create', description: 'Create branches' },
   { key: 'branch.update', subject: 'Branch', action: 'update', description: 'Update branches' },
   { key: 'branch.delete', subject: 'Branch', action: 'delete', description: 'Delete branches' },
+  { key: 'currency.read', subject: 'Currency', action: 'read', description: 'View currencies' },
+  { key: 'currency.create', subject: 'Currency', action: 'create', description: 'Create currencies' },
+  { key: 'currency.update', subject: 'Currency', action: 'update', description: 'Update currencies' },
+  { key: 'currency.delete', subject: 'Currency', action: 'delete', description: 'Delete currencies' },
+  { key: 'exchangeRate.read', subject: 'ExchangeRate', action: 'read', description: 'View exchange rates' },
+  { key: 'exchangeRate.create', subject: 'ExchangeRate', action: 'create', description: 'Create exchange rates' },
+  { key: 'exchangeRate.update', subject: 'ExchangeRate', action: 'update', description: 'Update exchange rates' },
+  { key: 'exchangeRate.delete', subject: 'ExchangeRate', action: 'delete', description: 'Delete exchange rates' },
+] as const;
+
+// Global reference currencies (FR-103) — shared by every tenant. USD is the
+// base currency for both tenants (2 decimals); LBP carries 0 decimals.
+const CURRENCIES = [
+  {
+    code: 'USD',
+    name: 'US Dollar',
+    nameAr: 'دولار أمريكي',
+    nameFr: 'Dollar américain',
+    nameEn: 'US Dollar',
+    symbol: '$',
+    decimalPlaces: 2,
+  },
+  {
+    code: 'LBP',
+    name: 'Lebanese Pound',
+    nameAr: 'ليرة لبنانية',
+    nameFr: 'Livre libanaise',
+    nameEn: 'Lebanese Pound',
+    symbol: 'ل.ل',
+    decimalPlaces: 0,
+  },
 ] as const;
 
 // Both seeded roles are global (companyId: null) and isSystem (protected
@@ -35,7 +66,13 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
   {
     name: 'Company Member',
     description: 'Baseline access for a company teammate.',
-    permissionKeys: ['company.read', 'role.read', 'branch.read'],
+    permissionKeys: [
+      'company.read',
+      'role.read',
+      'branch.read',
+      'currency.read',
+      'exchangeRate.read',
+    ],
   },
 ];
 
@@ -49,6 +86,21 @@ async function main() {
         description: permission.description,
       },
       create: permission,
+    });
+  }
+
+  for (const currency of CURRENCIES) {
+    await prisma.currency.upsert({
+      where: { code: currency.code },
+      update: {
+        name: currency.name,
+        nameAr: currency.nameAr,
+        nameFr: currency.nameFr,
+        nameEn: currency.nameEn,
+        symbol: currency.symbol,
+        decimalPlaces: currency.decimalPlaces,
+      },
+      create: currency,
     });
   }
 
@@ -88,7 +140,9 @@ async function main() {
     }
   }
 
-  console.log(`Seeded ${PERMISSIONS.length} permissions and ${ROLES.length} roles.`);
+  console.log(
+    `Seeded ${PERMISSIONS.length} permissions, ${CURRENCIES.length} currencies, and ${ROLES.length} roles.`,
+  );
 }
 
 main()

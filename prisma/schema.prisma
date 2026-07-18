@@ -27,12 +27,78 @@ model Company {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  users    User[]
-  roles    Role[]
-  branches Branch[]
+  users         User[]
+  roles         Role[]
+  branches      Branch[]
+  exchangeRates ExchangeRate[]
 
   @@index([deletedAt])
   @@map("companies")
+}
+
+// A currency the system can transact in (FR-103), e.g. USD or LBP. Global
+// reference/configuration data — NOT tenant-scoped (the same USD/LBP rows are
+// shared by every company), same category as Permission. `code` is the ISO
+// 4217 identity and the primary key, so currencies are referenced by code
+// everywhere. Hard-deletable (a configuration table, per docs/MODELS.md) — no
+// deletedAt. Managed behind the currency.* permissions (Company Admin), read
+// by any authenticated user via currency.read.
+model Currency {
+  code          String  @id
+  name          String
+  nameAr        String? @map("name_ar")
+  nameFr        String? @map("name_fr")
+  nameEn        String? @map("name_en")
+  symbol        String
+  // USD keeps 2 decimals, LBP keeps 0 (FR-103). How many minor units a display
+  // amount in this currency carries.
+  decimalPlaces Int     @map("decimal_places")
+  isActive      Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  exchangeRates ExchangeRate[]
+
+  @@map("currencies")
+}
+
+// A dated exchange rate (FR-103, legacy SARFE/FOBRATE/BALBYRATE). Tenant-scoped
+// — each company maintains its own Official/Market/Custom rate history, so
+// ExchangeRate is listed in prisma.service.ts's TENANT_SCOPED_MODELS and
+// carries a required companyId, exactly like Branch.
+//
+// `rate` is always stored as "how many `currencyCode` units equal 1 USD" (the
+// project-wide LBP-per-1-USD convention generalized to any currency — see
+// docs/prd_developer.md §"Currency rate convention"). Never inverted.
+//
+// `rateType` is a free-form named type ("Official" / "Market" / "Custom", per
+// the PRD's "e.g." wording) rather than an enum/table, so tenants can name
+// their own without a migration. The full table IS the rate history; the rate
+// "in force" on a date is the newest row with effectiveDate <= that date for a
+// given (currency, rateType). Hard-deletable configuration data (no deletedAt).
+// Editing a rate row never alters already-posted amounts — postings freeze the
+// rate they used into their own Money fields.
+model ExchangeRate {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  currencyCode String   @map("currency_code")
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  rateType      String   @map("rate_type")
+  effectiveDate DateTime @map("effective_date") @db.Date
+  rate          Decimal  @map("rate") @db.Decimal(20, 6)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // One rate per (company, currency, type, day). Correct a same-day mistake
+  // with PATCH; a genuinely new rate gets a new effectiveDate.
+  @@unique([companyId, currencyCode, rateType, effectiveDate])
+  @@index([companyId, currencyCode, rateType, effectiveDate])
+  @@map("exchange_rates")
 }
 
 // A physical location of a company (FR-102). Always tenant-scoped — unlike

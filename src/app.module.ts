@@ -7,6 +7,8 @@ import { CompaniesModule } from './modules/companies/companies.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { UsersModule } from './modules/users/users.module';
 import { BranchesModule } from './modules/branches/branches.module';
+import { CurrenciesModule } from './modules/currencies/currencies.module';
+import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { BranchesModule } from './modules/branches/branches.module';
     RolesModule,
     UsersModule,
     BranchesModule,
+    CurrenciesModule,
+    ExchangeRatesModule,
   ],
   controllers: [],
   providers: [],

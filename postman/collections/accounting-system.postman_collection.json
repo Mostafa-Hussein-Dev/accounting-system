@@ -1863,6 +1863,687 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Currencies",
+      "item": [
+        {
+          "name": "Create a currency",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Euro\",\n  \"symbol\": \"€\",\n  \"decimalPlaces\": 2,\n  \"code\": \"EUR\",\n  \"nameEn\": \"Euro\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/currencies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "currencies"
+              ]
+            },
+            "description": "Requires currency.create (Company Admin). Currencies are global reference data shared by every tenant. The test script saves the returned code into {{currencyCode}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('currencyCode', pm.response.json().data.code);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"code\": \"EUR\",\n    \"name\": \"Euro\",\n    \"nameAr\": null,\n    \"nameFr\": null,\n    \"nameEn\": \"Euro\",\n    \"symbol\": \"€\",\n    \"decimalPlaces\": 2,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "409 Currency code already exists",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"CURRENCY_CODE_ALREADY_EXISTS\",\n    \"message\": \"Currency with code EUR already exists.\",\n    \"field\": \"code\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List currencies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/currencies?page=1&limit=20&sortBy=code&sortOrder=asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "currencies"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "code"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                }
+              ]
+            },
+            "description": "Requires currency.read (both seeded roles). Paginated."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"code\": \"LBP\",\n      \"name\": \"Lebanese Pound\",\n      \"nameAr\": \"ليرة لبنانية\",\n      \"nameFr\": \"Livre libanaise\",\n      \"nameEn\": \"Lebanese Pound\",\n      \"symbol\": \"ل.ل\",\n      \"decimalPlaces\": 0,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n      \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n    },\n    {\n      \"code\": \"USD\",\n      \"name\": \"US Dollar\",\n      \"nameAr\": \"دولار أمريكي\",\n      \"nameFr\": \"Dollar américain\",\n      \"nameEn\": \"US Dollar\",\n      \"symbol\": \"$\",\n      \"decimalPlaces\": 2,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n      \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 2,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get a currency by code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/currencies/{{currencyCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "currencies",
+                "{{currencyCode}}"
+              ]
+            },
+            "description": "Requires currency.read. Look up a single currency by its ISO 4217 code."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"code\": \"EUR\",\n    \"name\": \"Euro\",\n    \"nameAr\": null,\n    \"nameFr\": null,\n    \"nameEn\": \"Euro\",\n    \"symbol\": \"€\",\n    \"decimalPlaces\": 2,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"CURRENCY_NOT_FOUND\",\n    \"message\": \"Currency with code EUR was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update a currency",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symbol\": \"€\",\n  \"isActive\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/currencies/{{currencyCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "currencies",
+                "{{currencyCode}}"
+              ]
+            },
+            "description": "Requires currency.update. Also used to deactivate via isActive. The code itself is immutable."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"code\": \"EUR\",\n    \"name\": \"Euro\",\n    \"nameAr\": null,\n    \"nameFr\": null,\n    \"nameEn\": \"Euro\",\n    \"symbol\": \"€\",\n    \"decimalPlaces\": 2,\n    \"isActive\": false,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"CURRENCY_NOT_FOUND\",\n    \"message\": \"Currency with code EUR was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete a currency",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/currencies/{{currencyCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "currencies",
+                "{{currencyCode}}"
+              ]
+            },
+            "description": "Requires currency.delete. Hard delete (configuration table). Blocked with 409 CURRENCY_IN_USE if any exchange rate references it."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": ""
+            },
+            {
+              "name": "409 Currency in use",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"CURRENCY_IN_USE\",\n    \"message\": \"Currency EUR is referenced by existing exchange rates and cannot be deleted.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Exchange Rates",
+      "item": [
+        {
+          "name": "Create an exchange rate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currencyCode\": \"LBP\",\n  \"rateType\": \"Official\",\n  \"effectiveDate\": \"2026-07-18\",\n  \"rate\": 89500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/exchange-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exchange-rates"
+              ]
+            },
+            "description": "Requires exchangeRate.create (Company Admin). rate = how many currencyCode units per 1 USD (LBP-per-1-USD convention). A company-scoped caller is forced into their own company; a platform admin targets one via body companyId. The test script saves the returned id into {{exchangeRateId}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('exchangeRateId', pm.response.json().data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"f4a1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"currencyCode\": \"LBP\",\n    \"rateType\": \"Official\",\n    \"effectiveDate\": \"2026-07-18\",\n    \"rate\": 89500,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "404 Currency not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"CURRENCY_NOT_FOUND\",\n    \"message\": \"Currency with code XZZ was not found.\",\n    \"field\": \"currencyCode\"\n  }\n}"
+            },
+            {
+              "name": "409 Duplicate rate",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"EXCHANGE_RATE_ALREADY_EXISTS\",\n    \"message\": \"A Official rate for LBP already exists on that date. Update it instead.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List exchange rates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/exchange-rates?page=1&limit=20&sortBy=effectiveDate&sortOrder=desc&currencyCode=LBP&rateType=Official",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exchange-rates"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "effectiveDate"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                },
+                {
+                  "key": "currencyCode",
+                  "value": "LBP"
+                },
+                {
+                  "key": "rateType",
+                  "value": "Official"
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "dateTo",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Requires exchangeRate.read. Rate history, filterable by currencyCode, rateType, and effective-date range (dateFrom/dateTo). Company-scoped caller sees their own company only."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"f4a1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"currencyCode\": \"LBP\",\n      \"rateType\": \"Official\",\n      \"effectiveDate\": \"2026-07-18\",\n      \"rate\": 89500,\n      \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n      \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get current rate (in force on a date)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/exchange-rates/current?currencyCode=LBP&rateType={{rateType}}&date=2026-07-18",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exchange-rates",
+                "current"
+              ],
+              "query": [
+                {
+                  "key": "currencyCode",
+                  "value": "LBP"
+                },
+                {
+                  "key": "rateType",
+                  "value": "{{rateType}}"
+                },
+                {
+                  "key": "date",
+                  "value": "2026-07-18"
+                }
+              ]
+            },
+            "description": "Requires exchangeRate.read. Returns the rate in force on the given date (default today) for a currency + rate type — the default a document uses before any operator override."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"f4a1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"currencyCode\": \"LBP\",\n    \"rateType\": \"Official\",\n    \"effectiveDate\": \"2026-07-18\",\n    \"rate\": 89500,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 No rate in force",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"EXCHANGE_RATE_NOT_FOUND\",\n    \"message\": \"No Official rate for LBP is in force on 2026-07-18.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get an exchange rate by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/exchange-rates/{{exchangeRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exchange-rates",
+                "{{exchangeRateId}}"
+              ]
+            },
+            "description": "Requires exchangeRate.read."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"f4a1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"currencyCode\": \"LBP\",\n    \"rateType\": \"Official\",\n    \"effectiveDate\": \"2026-07-18\",\n    \"rate\": 89500,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"EXCHANGE_RATE_NOT_FOUND\",\n    \"message\": \"Exchange rate with id f4a1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update an exchange rate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rate\": 89750\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/exchange-rates/{{exchangeRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exchange-rates",
+                "{{exchangeRateId}}"
+              ]
+            },
+            "description": "Requires exchangeRate.update. Typically used to correct a mistyped rate value for the same day. Never alters already-posted amounts."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"f4a1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"currencyCode\": \"LBP\",\n    \"rateType\": \"Official\",\n    \"effectiveDate\": \"2026-07-18\",\n    \"rate\": 89750,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"EXCHANGE_RATE_NOT_FOUND\",\n    \"message\": \"Exchange rate with id f4a1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete an exchange rate",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/exchange-rates/{{exchangeRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exchange-rates",
+                "{{exchangeRateId}}"
+              ]
+            },
+            "description": "Requires exchangeRate.delete. Hard delete (configuration data)."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": ""
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"EXCHANGE_RATE_NOT_FOUND\",\n    \"message\": \"Exchange rate with id f4a1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

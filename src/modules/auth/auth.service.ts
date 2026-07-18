@@ -12,6 +12,7 @@ import { randomInt, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CompaniesService } from '../companies/companies.service';
+import { AccountsService } from '../accounts/accounts.service';
 import { MailerService } from '../../common/mailer/mailer.service';
 import { EnvConfig } from '../../config/env.schema';
 import { LoginDto } from './dto/login.dto';
@@ -64,6 +65,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly companiesService: CompaniesService,
+    private readonly accountsService: AccountsService,
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<EnvConfig, true>,
@@ -88,6 +90,11 @@ export class AuthService {
       await tx.userRole.create({
         data: { userId: createdUser.id, roleId: ownerRole.id },
       });
+
+      // Seed the default Plan Comptable Libanais so a fresh company starts with
+      // a working chart of accounts (FR-104), in the same transaction as the
+      // company/user — either the whole company is set up or none of it is.
+      await this.accountsService.applyDefaultChart(company.id, tx);
 
       return createdUser;
     });

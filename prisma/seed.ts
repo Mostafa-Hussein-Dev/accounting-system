@@ -29,6 +29,10 @@ const PERMISSIONS = [
   { key: 'exchangeRate.create', subject: 'ExchangeRate', action: 'create', description: 'Create exchange rates' },
   { key: 'exchangeRate.update', subject: 'ExchangeRate', action: 'update', description: 'Update exchange rates' },
   { key: 'exchangeRate.delete', subject: 'ExchangeRate', action: 'delete', description: 'Delete exchange rates' },
+  { key: 'account.read', subject: 'Account', action: 'read', description: 'View chart of accounts' },
+  { key: 'account.create', subject: 'Account', action: 'create', description: 'Create accounts' },
+  { key: 'account.update', subject: 'Account', action: 'update', description: 'Update accounts' },
+  { key: 'account.delete', subject: 'Account', action: 'delete', description: 'Delete accounts' },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -72,6 +76,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
       'branch.read',
       'currency.read',
       'exchangeRate.read',
+      'account.read',
     ],
   },
 ];

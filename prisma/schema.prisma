@@ -15,6 +15,31 @@ enum Language {
   EN
 }
 
+// Chart-of-accounts enums (FR-104). type = the accounting nature of an account;
+// normalBalance = the side (debit/credit) that increases it; controlType flags
+// the sub-ledger a control account fronts (AR, AP, output/input VAT, cash, bank).
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+}
+
+enum ControlType {
+  AR
+  AP
+  VAT_OUT
+  VAT_IN
+  CASH
+  BANK
+}
+
 model Company {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
@@ -31,6 +56,7 @@ model Company {
   roles         Role[]
   branches      Branch[]
   exchangeRates ExchangeRate[]
+  accounts      Account[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -58,7 +84,8 @@ model Currency {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  exchangeRates ExchangeRate[]
+  exchangeRates       ExchangeRate[]
+  restrictedAccounts  Account[]
 
   @@map("currencies")
 }
@@ -99,6 +126,61 @@ model ExchangeRate {
   @@unique([companyId, currencyCode, rateType, effectiveDate])
   @@index([companyId, currencyCode, rateType, effectiveDate])
   @@map("exchange_rates")
+}
+
+// A ledger account in a company's chart of accounts (FR-104). Tenant-scoped —
+// every account belongs to a company, so Account is in prisma.service.ts's
+// TENANT_SCOPED_MODELS and companyId is required, like Branch.
+//
+// Balances are NEVER stored here (accounting invariant #4) — an account's
+// balance is derived from journal_line (Σ debit_base − Σ credit_base) once the
+// GL module exists. Soft-deleted (deletedAt) like other master data; isActive
+// is a separate "deactivate but keep" flag.
+//
+// isControl/controlType mark accounts that front a sub-ledger (AR, AP, VAT,
+// cash, bank) and must not be posted to directly — that posting restriction is
+// enforced by the future posting engine; this model only carries the flags.
+model Account {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  number String
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  // Plan Comptable Libanais class 1–7 (kept as a plain int — a fixed range, no
+  // lookup table needed).
+  accountClass  Int           @map("account_class")
+  type          AccountType
+  normalBalance NormalBalance @map("normal_balance")
+
+  // Self-relation for nesting/roll-up. A parent is always in the same company
+  // (enforced in AccountsService, since forTenant already scopes both rows).
+  parentId String?   @map("parent_id") @db.Uuid
+  parent   Account?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children Account[] @relation("AccountHierarchy")
+
+  // null = multi-currency (no restriction); otherwise the only currency this
+  // account may hold, as a Currency.code FK (e.g. "USD" or "LBP").
+  currencyRestriction String?   @map("currency_restriction")
+  currency            Currency? @relation(fields: [currencyRestriction], references: [code])
+
+  isControl   Boolean      @default(false) @map("is_control")
+  controlType ControlType? @map("control_type")
+
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([companyId, number])
+  @@index([companyId])
+  @@index([parentId])
+  @@index([deletedAt])
+  @@map("accounts")
 }
 
 // A physical location of a company (FR-102). Always tenant-scoped — unlike

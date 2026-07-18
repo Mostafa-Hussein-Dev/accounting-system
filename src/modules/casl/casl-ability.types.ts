@@ -10,5 +10,6 @@ export type Subjects =
   | 'Branch'
   | 'Currency'
   | 'ExchangeRate'
+  | 'Account'
   | 'all';
 export type AppAbility = MongoAbility<[Action, Subjects]>;

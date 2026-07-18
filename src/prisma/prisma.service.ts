@@ -5,7 +5,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 // Add a model name here the moment it gets a companyId column (Account,
 // Branch, Partner, Item, ...). This is the only line that changes as new
 // company-owned models are added.
-const TENANT_SCOPED_MODELS = new Set(['User', 'Branch', 'ExchangeRate']);
+const TENANT_SCOPED_MODELS = new Set([
+  'User',
+  'Branch',
+  'ExchangeRate',
+  'Account',
+]);
 
 const OPERATIONS_WITH_WHERE = new Set([
   'findUnique',

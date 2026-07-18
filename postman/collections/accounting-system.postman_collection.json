@@ -2544,6 +2544,434 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Create an account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"number\": \"4111\",\n  \"name\": \"Customer — ACME\",\n  \"accountClass\": 4,\n  \"type\": \"ASSET\",\n  \"normalBalance\": \"DEBIT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            },
+            "description": "Requires account.create (Company Admin). Company-scoped caller is forced into their own company; a platform admin targets one via body companyId. type ∈ ASSET|LIABILITY|EQUITY|REVENUE|EXPENSE; normalBalance ∈ DEBIT|CREDIT; accountClass 1–7. Set parentId to nest, currencyRestriction (USD/LBP) to restrict, isControl+controlType (AR/AP/VAT_OUT/VAT_IN/CASH/BANK) for a control account. The test script saves accountId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('accountId', pm.response.json().data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"number\": \"4111\",\n    \"name\": \"Customer — ACME\",\n    \"nameAr\": null,\n    \"nameFr\": null,\n    \"nameEn\": null,\n    \"accountClass\": 4,\n    \"type\": \"ASSET\",\n    \"normalBalance\": \"DEBIT\",\n    \"parentId\": null,\n    \"currencyRestriction\": null,\n    \"isControl\": false,\n    \"controlType\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "404 Parent/currency/company not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PARENT_ACCOUNT_NOT_FOUND\",\n    \"message\": \"Parent account with id 00000000-0000-0000-0000-000000000000 was not found.\",\n    \"field\": \"parentId\"\n  }\n}"
+            },
+            {
+              "name": "409 Number already exists",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ACCOUNT_NUMBER_ALREADY_EXISTS\",\n    \"message\": \"An account with number 4111 already exists in this company.\",\n    \"field\": \"number\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Seed default chart",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/seed-default",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "seed-default"
+              ]
+            },
+            "description": "Requires account.create. Populates the caller's company with the default Plan Comptable Libanais (classes 1–7 + control accounts). Idempotent — existing numbers are skipped, so re-running returns an empty list. New companies get this automatically at registration; this endpoint is for existing companies. Company-scoped users only (a platform admin gets 400)."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"number\": \"1\",\n      \"name\": \"Equity\",\n      \"nameAr\": null,\n      \"nameFr\": null,\n      \"nameEn\": null,\n      \"accountClass\": 1,\n      \"type\": \"EQUITY\",\n      \"normalBalance\": \"CREDIT\",\n      \"parentId\": null,\n      \"currencyRestriction\": null,\n      \"isControl\": false,\n      \"controlType\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n      \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n    }\n  ],\n  \"meta\": null\n}"
+            },
+            {
+              "name": "400 Requires company scope",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_SCOPE_REQUIRED\",\n    \"message\": \"Seeding the default chart requires a company-scoped user (a platform admin has no company to seed into).\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List accounts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts?page=1&limit=50&sortBy=number&sortOrder=asc&accountClass=4&isControl=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "number"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                },
+                {
+                  "key": "accountClass",
+                  "value": "4"
+                },
+                {
+                  "key": "isControl",
+                  "value": "true"
+                },
+                {
+                  "key": "type",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "isActive",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "parentId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Requires account.read. Flat, paginated list filterable by accountClass, type, isControl, isActive, parentId, and a number/name search. Soft-deleted accounts are excluded."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"number\": \"4111\",\n      \"name\": \"Customer — ACME\",\n      \"nameAr\": null,\n      \"nameFr\": null,\n      \"nameEn\": null,\n      \"accountClass\": 4,\n      \"type\": \"ASSET\",\n      \"normalBalance\": \"DEBIT\",\n      \"parentId\": null,\n      \"currencyRestriction\": null,\n      \"isControl\": false,\n      \"controlType\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n      \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 50,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get account tree",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/tree",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "tree"
+              ]
+            },
+            "description": "Requires account.read. Returns the chart as a nested tree (each node has a children[] array), ordered by number at every level — for roll-up/display (screen 19.10)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"number\": \"4\",\n      \"name\": \"Third parties\",\n      \"nameAr\": null,\n      \"nameFr\": null,\n      \"nameEn\": null,\n      \"accountClass\": 4,\n      \"type\": \"ASSET\",\n      \"normalBalance\": \"DEBIT\",\n      \"parentId\": null,\n      \"currencyRestriction\": null,\n      \"isControl\": false,\n      \"controlType\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n      \"updatedAt\": \"2026-07-18T14:30:00.000Z\",\n      \"children\": [\n        {\n          \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n          \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n          \"number\": \"410\",\n          \"name\": \"Customers\",\n          \"nameAr\": null,\n          \"nameFr\": null,\n          \"nameEn\": null,\n          \"accountClass\": 4,\n          \"type\": \"ASSET\",\n          \"normalBalance\": \"DEBIT\",\n          \"parentId\": null,\n          \"currencyRestriction\": null,\n          \"isControl\": true,\n          \"controlType\": \"AR\",\n          \"isActive\": true,\n          \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n          \"updatedAt\": \"2026-07-18T14:30:00.000Z\",\n          \"children\": []\n        }\n      ]\n    }\n  ],\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get an account by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}"
+              ]
+            },
+            "description": "Requires account.read."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"number\": \"4111\",\n    \"name\": \"Customer — ACME\",\n    \"nameAr\": null,\n    \"nameFr\": null,\n    \"nameEn\": null,\n    \"accountClass\": 4,\n    \"type\": \"ASSET\",\n    \"normalBalance\": \"DEBIT\",\n    \"parentId\": null,\n    \"currencyRestriction\": null,\n    \"isControl\": false,\n    \"controlType\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ACCOUNT_NOT_FOUND\",\n    \"message\": \"Account with id b3f1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update an account",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Customer — ACME Holdings\",\n  \"isActive\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}"
+              ]
+            },
+            "description": "Requires account.update. Also used to deactivate (isActive) or re-parent (parentId — cycles rejected with 400 ACCOUNT_CYCLE). Control-flag consistency is enforced."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"number\": \"4111\",\n    \"name\": \"Customer — ACME Holdings\",\n    \"nameAr\": null,\n    \"nameFr\": null,\n    \"nameEn\": null,\n    \"accountClass\": 4,\n    \"type\": \"ASSET\",\n    \"normalBalance\": \"DEBIT\",\n    \"parentId\": null,\n    \"currencyRestriction\": null,\n    \"isControl\": false,\n    \"controlType\": null,\n    \"isActive\": false,\n    \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n    \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "400 Parent cycle",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ACCOUNT_CYCLE\",\n    \"message\": \"An account cannot be its own ancestor.\",\n    \"field\": \"parentId\"\n  }\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ACCOUNT_NOT_FOUND\",\n    \"message\": \"Account with id b3f1c2e0-1234-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete an account",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}"
+              ]
+            },
+            "description": "Requires account.delete. Soft delete. Blocked with 409 ACCOUNT_HAS_CHILDREN if the account has child accounts — delete or re-parent them first."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": ""
+            },
+            {
+              "name": "409 Has children",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ACCOUNT_HAS_CHILDREN\",\n    \"message\": \"Account b3f1c2e0-1234-4a5b-9c8d-1234567890ab has 2 child account(s) and cannot be deleted. Delete or re-parent them first.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

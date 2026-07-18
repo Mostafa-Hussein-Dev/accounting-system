@@ -9,6 +9,7 @@ import { UsersModule } from './modules/users/users.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { CurrenciesModule } from './modules/currencies/currencies.module';
 import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module';
+import { AccountsModule } from './modules/accounts/accounts.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.mod
     BranchesModule,
     CurrenciesModule,
     ExchangeRatesModule,
+    AccountsModule,
   ],
   controllers: [],
   providers: [],

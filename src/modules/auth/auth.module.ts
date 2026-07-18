@@ -8,6 +8,7 @@ import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { UsersModule } from '../users/users.module';
 import { CompaniesModule } from '../companies/companies.module';
+import { AccountsModule } from '../accounts/accounts.module';
 import { MailerModule } from '../../common/mailer/mailer.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { MailerModule } from '../../common/mailer/mailer.module';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 20 }]),
     UsersModule,
     CompaniesModule,
+    AccountsModule,
     MailerModule,
   ],
   controllers: [AuthController],

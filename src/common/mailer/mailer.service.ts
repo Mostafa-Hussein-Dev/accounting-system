@@ -26,9 +26,12 @@ export class MailerService {
   private readonly logger = new Logger(MailerService.name);
   private readonly transporter: nodemailer.Transporter;
   private readonly from: string;
+  private readonly isDev: boolean;
 
   constructor(private readonly configService: ConfigService<EnvConfig, true>) {
     this.from = this.configService.get('MAIL_FROM', { infer: true });
+    this.isDev =
+      this.configService.get('NODE_ENV', { infer: true }) === 'development';
     this.transporter = nodemailer.createTransport({
       host: this.configService.get('SMTP_HOST', { infer: true }),
       port: this.configService.get('SMTP_PORT', { infer: true }),
@@ -43,13 +46,39 @@ export class MailerService {
     return user && pass ? { user, pass } : undefined;
   }
 
+  /**
+   * Single choke point for every outgoing email. In development we skip SMTP
+   * entirely and print the message to the terminal instead — so local flows
+   * (password reset, etc.) work without a running SMTP server like mailpit,
+   * and the code/link is visible right in the server logs. In any other
+   * environment the message goes out over the real transporter.
+   */
+  private async send(options: nodemailer.SendMailOptions): Promise<void> {
+    if (this.isDev) {
+      this.logger.log(
+        [
+          '',
+          '──────── ✉️  DEV EMAIL (not sent) ────────',
+          `From:    ${String(options.from ?? this.from)}`,
+          `To:      ${String(options.to)}`,
+          `Subject: ${String(options.subject ?? '')}`,
+          '',
+          String(options.text ?? '(no text body)'),
+          '──────────────────────────────────────────',
+        ].join('\n'),
+      );
+      return;
+    }
+    await this.transporter.sendMail(options);
+  }
+
   async sendPasswordResetCode({
     to,
     firstName,
     code,
     expiresInMinutes,
   }: SendPasswordResetCodeParams): Promise<void> {
-    await this.transporter.sendMail({
+    await this.send({
       from: this.from,
       to,
       subject: 'Your password reset code',

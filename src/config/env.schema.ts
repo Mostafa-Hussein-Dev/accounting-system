@@ -28,7 +28,7 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
-  MAIL_FROM: z.string().default('Paradox <no-reply@paradox.app>'),
+  MAIL_FROM: z.string().default('Accounting System <no-reply@example.com>'),
   // Comma-separated list of allowed browser origins (the frontend's dev
   // server / deployed URL) — the API has no CORS policy without this, so no
   // browser-based request (from any origin, including the frontend) can

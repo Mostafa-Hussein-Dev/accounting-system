@@ -1,15 +1,15 @@
-# Paradox v2 ("HKMSoft Next") — Detailed Product Requirements Document (Developer Edition)
+# Accounting System — Detailed Product Requirements Document (Developer Edition)
 
-**A complete specification for rebuilding the legacy Paradox/HKMSoft desktop system as a modern web application. The MVP is the accounting and core commercial system (customers/suppliers, inventory, purchasing, invoicing, cash & payments); Point of Sale and Payroll are future work.**
+**A complete specification for rebuilding the legacy Corel Paradox 9 desktop system as a modern web application. The MVP is the accounting and core commercial system (customers/suppliers, inventory, purchasing, invoicing, cash & payments); Point of Sale and Payroll are future work.**
 
 | | |
 |---|---|
 | **Document** | Detailed PRD — Developer Edition |
-| **Product** | Paradox v2 / HKMSoft Next |
+| **Product** | Accounting System |
 | **Version** | 2.1 — Detailed |
 | **Status** | For development |
 | **Date** | June 2026 |
-| **Replaces** | Corel Paradox 9 / ObjectPAL thick-client ("Paradox / HKMSoft") |
+| **Replaces** | Corel Paradox 9 / ObjectPAL thick-client (legacy desktop system) |
 | **MVP scope** | Accounting + core commercial (sales, purchasing, inventory, cash & payments) |
 | **Future work** | Point of Sale, HR/Payroll (§17) |
 | **Audience** | Developers (frontend, backend, mobile), QA, project manager, accounting stakeholder |
@@ -41,7 +41,7 @@
 
 The business runs on a ~25-year-old Corel Paradox 9 desktop program (≈1,347 data tables, 1,069 screens, 2,838 reports). It manages a company's **sales, inventory, purchasing, cash, and full accounting**, in **Arabic / French / English**, in **two currencies (US Dollar and Lebanese Pound)**, for **multiple companies and branches**. It is a single-PC/LAN program with no internet capability; all "integrations" are done by scripts writing text files.
 
-Paradox v2 rebuilds this as a secure, multi-user **web application** backed by a proper relational database, while preserving the **Lebanese accounting behaviour** that the current system already implements. The first release (MVP) focuses on the **accounting and core commercial workflow**; Point of Sale and Payroll are planned as later work (§17). This document specifies it in full.
+The new system rebuilds this as a secure, multi-user **web application** backed by a proper relational database, while preserving the **Lebanese accounting behaviour** that the current system already implements. The first release (MVP) focuses on the **accounting and core commercial workflow**; Point of Sale and Payroll are planned as later work (§17). This document specifies it in full.
 
 ## 2. What This Application Is (in plain words)
 
@@ -627,9 +627,9 @@ USD: round to 2 decimals (banker's or standard, fixed per company)
 LBP: round to 0 decimals (whole pounds)
 ```
 
-## 22. Data Migration (from legacy Paradox)
+## 22. Data Migration (from the legacy Corel Paradox 9 system)
 
-- **R-MIG-1 Extract:** export in-scope `.DB` tables via the BDE data pump / Paradox export; use the legacy `Tablelst` registry for keys/indexes.
+- **R-MIG-1 Extract:** export in-scope `.DB` tables via the BDE data pump / Corel Paradox export; use the legacy `Tablelst` registry for keys/indexes.
 - **R-MIG-2 Encoding:** convert legacy Arabic/French text from its Windows/OEM code page (e.g. CP1256) to **UTF-8**; visually validate. *(Primary risk — budget a dedicated pass.)*
 - **R-MIG-3 Transform:** consolidate language/variant tables (e.g. `HISAB`/`HISABENG`/`HISABFR` → one `partner`/`account` with translations); map `COMP` → company; split header/line docs into `document`/`document_line`; derive `stock_movement` from legacy movement tables; convert posted history into `journal_entry`/`journal_line`.
 - **R-MIG-4 Validate:** detect/resolve orphans, duplicate keys, broken references (flat files have no FKs); produce a **reconciliation report** (counts in/out, rejects with reasons).
@@ -644,7 +644,7 @@ LBP: round to 0 decimals (whole pounds)
 | WhatsApp | WhatsMate v3 (plain HTTP) | **WhatsApp Business API / Twilio** (HTTPS, templates) |
 | SMS | SMS module | SMS gateway |
 | Excel export | VBScript → Excel COM | Server-side library (e.g. ExcelJS) |
-| PDF | Paradox/Crystal | Server-side HTML→PDF (trilingual, RTL) |
+| PDF | Corel Paradox/Crystal | Server-side HTML→PDF (trilingual, RTL) |
 | Barcode labels | BarTender `.btw` | In-app label engine (bwip-js + print) |
 | Barcode scanner | HID | HID keyboard (no driver) |
 | E-commerce | Shopify import | Shopify API sync (orders in; catalog/stock out optional) |

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -16,7 +17,13 @@ import { UpdateAccountDto } from './dto/update-account.dto';
 import { QueryAccountDto } from './dto/query-account.dto';
 import { AccountResponseDto } from './dto/account-response.dto';
 import { AccountTreeNodeDto } from './dto/account-tree-node.dto';
-import { DEFAULT_CHART } from './account-defaults';
+import { ImportChartResultDto } from './dto/import-chart-result.dto';
+import { DEFAULT_CHART, type DefaultAccountSeed } from './account-defaults';
+import { OFFICIAL_CHART_REST } from './official-chart';
+
+// The full official chart is large (600+ rows); give the import transaction
+// generous headroom over Prisma's 5s interactive-transaction default.
+const IMPORT_TRANSACTION_TIMEOUT_MS = 60_000;
 
 const PRISMA_UNIQUE_CONSTRAINT = 'P2002';
 const PRISMA_FOREIGN_KEY_CONSTRAINT = 'P2003';
@@ -202,53 +209,114 @@ export class AccountsService {
   }
 
   /**
-   * Insert the default chart for a company, resolving each account's parent by
-   * number in a single ordered pass (parents precede children in DEFAULT_CHART).
-   * Skips any number that already exists. `client` may be a transaction client
-   * — this is how AuthService.register seeds a brand-new company's chart in the
-   * same transaction that creates the company. companyId is always set
-   * explicitly, so a bare/tx client is correct here.
+   * Seed the common subset of the Plan Comptable Libanais for a company
+   * (FR-104). Idempotent — numbers that already exist are skipped. `client` may
+   * be a transaction client — this is how AuthService.register seeds a
+   * brand-new company's chart in the same transaction that creates the company.
    */
   async applyDefaultChart(
     companyId: string,
+    client: Prisma.TransactionClient,
+  ): Promise<Account[]> {
+    return this.insertSeeds(companyId, DEFAULT_CHART, client);
+  }
+
+  /**
+   * Import the remainder of the full official chart (everything not in the
+   * common subset already seeded at registration), once per company. Blocked
+   * with 409 if it has already run for this company.
+   */
+  async importOfficialChart(
+    caller: AuthenticatedUser,
+  ): Promise<ImportChartResultDto> {
+    if (isPlatformAdmin(caller)) {
+      throw new BadRequestException({
+        code: 'COMPANY_SCOPE_REQUIRED',
+        message:
+          'Importing the official chart requires a company-scoped user (a platform admin has no company to import into).',
+        field: null,
+      });
+    }
+    const companyId = caller.companyId as string;
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (company?.officialChartImportedAt) {
+      throw new ConflictException({
+        code: 'OFFICIAL_CHART_ALREADY_IMPORTED',
+        message:
+          'The full official chart has already been imported for this company.',
+        field: null,
+      });
+    }
+
+    const imported = await this.prisma.$transaction(
+      async (tx) => {
+        const created = await this.insertSeeds(
+          companyId,
+          OFFICIAL_CHART_REST,
+          tx,
+        );
+        await tx.company.update({
+          where: { id: companyId },
+          data: { officialChartImportedAt: new Date() },
+        });
+        return created.length;
+      },
+      { timeout: IMPORT_TRANSACTION_TIMEOUT_MS },
+    );
+    return { imported };
+  }
+
+  /**
+   * Insert a list of seed accounts for a company, resolving each parent by
+   * number. Skips numbers that already exist (idempotent). Ids are generated up
+   * front so parentId resolves in one pass — parents already in the DB, or
+   * earlier in the same seed list (parents always precede children), both
+   * resolve — and the whole set is written with a single createMany.
+   */
+  private async insertSeeds(
+    companyId: string,
+    seeds: DefaultAccountSeed[],
     client: Prisma.TransactionClient,
   ): Promise<Account[]> {
     const existing = await client.account.findMany({
       where: { companyId },
       select: { number: true, id: true },
     });
-    const numberToId = new Map<string, string>(
+    const idByNumber = new Map<string, string>(
       existing.map((a) => [a.number, a.id]),
     );
-    const created: Account[] = [];
-
-    for (const seed of DEFAULT_CHART) {
-      if (numberToId.has(seed.number)) {
-        continue;
-      }
-      const parentId = seed.parentNumber
-        ? (numberToId.get(seed.parentNumber) ?? null)
-        : null;
-      const account = await client.account.create({
-        data: {
-          companyId,
-          number: seed.number,
-          name: seed.name,
-          nameAr: seed.nameAr,
-          nameFr: seed.nameFr,
-          nameEn: seed.nameEn,
-          accountClass: seed.accountClass,
-          type: seed.type,
-          normalBalance: seed.normalBalance,
-          parentId,
-          isControl: seed.isControl ?? false,
-          controlType: seed.controlType ?? null,
-        },
-      });
-      numberToId.set(account.number, account.id);
-      created.push(account);
+    const toCreate = seeds.filter((s) => !idByNumber.has(s.number));
+    if (toCreate.length === 0) {
+      return [];
     }
-    return created;
+    for (const seed of toCreate) {
+      idByNumber.set(seed.number, randomUUID());
+    }
+
+    const rows: Prisma.AccountCreateManyInput[] = toCreate.map((seed) => ({
+      id: idByNumber.get(seed.number),
+      companyId,
+      number: seed.number,
+      name: seed.name,
+      nameAr: seed.nameAr,
+      nameFr: seed.nameFr,
+      nameEn: seed.nameEn,
+      accountClass: seed.accountClass,
+      type: seed.type,
+      normalBalance: seed.normalBalance,
+      parentId: seed.parentNumber
+        ? (idByNumber.get(seed.parentNumber) ?? null)
+        : null,
+      isControl: seed.isControl ?? false,
+      controlType: seed.controlType ?? null,
+    }));
+
+    await client.account.createMany({ data: rows });
+    return client.account.findMany({
+      where: { companyId, number: { in: toCreate.map((s) => s.number) } },
+    });
   }
 
   private buildTree(accounts: Account[]): AccountTreeNodeDto[] {

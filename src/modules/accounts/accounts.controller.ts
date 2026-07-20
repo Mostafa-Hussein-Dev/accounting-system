@@ -24,6 +24,7 @@ import { UpdateAccountDto } from './dto/update-account.dto';
 import { QueryAccountDto } from './dto/query-account.dto';
 import { AccountResponseDto } from './dto/account-response.dto';
 import { AccountTreeNodeDto } from './dto/account-tree-node.dto';
+import { ImportChartResultDto } from './dto/import-chart-result.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -85,6 +86,31 @@ export class AccountsController {
     @CurrentUser() caller: AuthenticatedUser,
   ): Promise<AccountResponseDto[]> {
     return this.accountsService.seedDefault(caller);
+  }
+
+  // Declared before :id so "import-official" is never parsed as an id.
+  @Post('import-official')
+  @RequirePermissions({ action: 'create', subject: 'Account' })
+  @ApiOperation({
+    summary:
+      "Import the rest of the full official Plan Comptable Libanais into the caller's company (everything beyond the common subset seeded at registration). Allowed once per company.",
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Import result (count of accounts created)',
+    type: ImportChartResultDto,
+  })
+  @ApiResponse({ status: 400, description: 'Requires a company-scoped user' })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'The official chart has already been imported for this company',
+  })
+  importOfficial(
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<ImportChartResultDto> {
+    return this.accountsService.importOfficialChart(caller);
   }
 
   @Get()

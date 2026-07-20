@@ -11,6 +11,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountsService } from './accounts.service';
 import { DEFAULT_CHART } from './account-defaults';
+import { OFFICIAL_CHART_REST } from './official-chart';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 
 describe('AccountsService', () => {
@@ -277,14 +278,14 @@ describe('AccountsService', () => {
     const created = await service.seedDefault(callerC);
     expect(created.length).toBe(DEFAULT_CHART.length);
 
-    // control accounts came through with their flags
-    const ar = created.find((a) => a.number === '410');
+    // control accounts came through with their flags (official PCL numbers)
+    const ar = created.find((a) => a.number === '41');
     expect(ar?.isControl).toBe(true);
     expect(ar?.controlType).toBe(ControlType.AR);
-    const outVat = created.find((a) => a.number === '4457');
+    const outVat = created.find((a) => a.number === '4427');
     expect(outVat?.controlType).toBe(ControlType.VAT_OUT);
-    // nesting resolved by number
-    const vatParent = created.find((a) => a.number === '445');
+    // nesting resolved by number: 4427's parent is 442
+    const vatParent = created.find((a) => a.number === '442');
     expect(outVat?.parentId).toBe(vatParent?.id);
 
     // second run creates nothing
@@ -294,6 +295,43 @@ describe('AccountsService', () => {
 
   it('rejects seedDefault for a platform admin (no company to seed)', async () => {
     await expect(service.seedDefault(platformAdmin)).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('imports the full official chart once, then blocks a second import', async () => {
+    // companyC already has the common subset seeded above.
+    const commonCount = await prisma.account.count({
+      where: { companyId: companyCId, deletedAt: null },
+    });
+
+    const result = await service.importOfficialChart(callerC);
+    expect(result.imported).toBe(OFFICIAL_CHART_REST.length);
+
+    // common + rest together make up the full official chart (759 accounts),
+    // plus any ad-hoc accounts created earlier in this suite for companyC.
+    const totalCount = await prisma.account.count({
+      where: { companyId: companyCId, deletedAt: null },
+    });
+    expect(totalCount).toBe(commonCount + OFFICIAL_CHART_REST.length);
+
+    // a REST account resolved its parent against an already-seeded common one
+    const supplierChild = await prisma.account.findFirst({
+      where: { companyId: companyCId, number: '4011' },
+    });
+    const supplierParent = await prisma.account.findFirst({
+      where: { companyId: companyCId, number: '401' },
+    });
+    expect(supplierChild?.parentId).toBe(supplierParent?.id);
+
+    // second import is blocked
+    await expect(service.importOfficialChart(callerC)).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
+  it('rejects importOfficialChart for a platform admin', async () => {
+    await expect(service.importOfficialChart(platformAdmin)).rejects.toThrow(
       BadRequestException,
     );
   });

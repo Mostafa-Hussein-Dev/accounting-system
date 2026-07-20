@@ -52,6 +52,11 @@ model Company {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
+  // Set the first time the full official Plan Comptable Libanais is imported
+  // (POST /accounts/import-official). Enforces the one-time-per-company rule —
+  // every company already starts with the common subset at registration.
+  officialChartImportedAt DateTime? @map("official_chart_imported_at")
+
   users         User[]
   roles         Role[]
   branches      Branch[]

@@ -2664,7 +2664,7 @@
                 "seed-default"
               ]
             },
-            "description": "Requires account.create. Populates the caller's company with the default Plan Comptable Libanais (classes 1–7 + control accounts). Idempotent — existing numbers are skipped, so re-running returns an empty list. New companies get this automatically at registration; this endpoint is for existing companies. Company-scoped users only (a platform admin gets 400)."
+            "description": "Populate the caller's company with the common subset of the official Plan Comptable Libanais (FR-104). Names carry both Arabic and English. Idempotent — existing account numbers are skipped. New companies get this automatically at registration; the rest of the full official chart is added via POST /accounts/import-official."
           },
           "response": [
             {
@@ -2678,7 +2678,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"number\": \"1\",\n      \"name\": \"Equity\",\n      \"nameAr\": null,\n      \"nameFr\": null,\n      \"nameEn\": null,\n      \"accountClass\": 1,\n      \"type\": \"EQUITY\",\n      \"normalBalance\": \"CREDIT\",\n      \"parentId\": null,\n      \"currencyRestriction\": null,\n      \"isControl\": false,\n      \"controlType\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-18T14:30:00.000Z\",\n      \"updatedAt\": \"2026-07-18T14:30:00.000Z\"\n    }\n  ],\n  \"meta\": null\n}"
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"3aad4919-ce27-42bf-a6f6-70d9387162f6\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"number\": \"1\",\n      \"name\": \"Permanent capital accounts\",\n      \"nameAr\": \"حسابات الرساميل الدائمة\",\n      \"nameFr\": null,\n      \"nameEn\": \"Permanent capital accounts\",\n      \"accountClass\": 1,\n      \"type\": \"EQUITY\",\n      \"normalBalance\": \"CREDIT\",\n      \"parentId\": null,\n      \"currencyRestriction\": null,\n      \"isControl\": false,\n      \"controlType\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-20T15:56:14.648Z\",\n      \"updatedAt\": \"2026-07-20T15:56:14.648Z\"\n    },\n    {\n      \"id\": \"5bbe5a2a-df38-53c0-b7a7-81ea498273a7\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"number\": \"41\",\n      \"name\": \"Customers\",\n      \"nameAr\": \"الزبائن\",\n      \"nameFr\": null,\n      \"nameEn\": \"Customers\",\n      \"accountClass\": 4,\n      \"type\": \"ASSET\",\n      \"normalBalance\": \"DEBIT\",\n      \"parentId\": \"9cf0...\",\n      \"currencyRestriction\": null,\n      \"isControl\": true,\n      \"controlType\": \"AR\",\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-20T15:56:14.648Z\",\n      \"updatedAt\": \"2026-07-20T15:56:14.648Z\"\n    }\n  ],\n  \"meta\": null\n}"
             },
             {
               "name": "400 Requires company scope",
@@ -2692,6 +2692,78 @@
                 }
               ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_SCOPE_REQUIRED\",\n    \"message\": \"Seeding the default chart requires a company-scoped user (a platform admin has no company to seed into).\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Import full official chart",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/import-official",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "import-official"
+              ]
+            },
+            "description": "Import the remainder of the full official Plan Comptable Libanais into the caller's company (everything beyond the common subset seeded at registration). Requires account.create (Company Admin). Allowed ONCE per company — a second call returns 409 OFFICIAL_CHART_ALREADY_IMPORTED. Both Arabic and English names are populated; parents in the common subset are resolved by number."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"imported\": 653\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Already imported",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"OFFICIAL_CHART_ALREADY_IMPORTED\",\n    \"message\": \"The full official chart has already been imported for this company.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "400 Requires company scope",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_SCOPE_REQUIRED\",\n    \"message\": \"Importing the official chart requires a company-scoped user (a platform admin has no company to import into).\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
             }
           ]
         },

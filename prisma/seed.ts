@@ -1,9 +1,23 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
+
+const BCRYPT_SALT_ROUNDS = 12;
+
+// A platform-admin/support user has NO company (companyId null) — CASL grants
+// it `manage all` and PlatformAdminGuard lets it through the admin-only routes.
+// Seeded so the admin-scoped APIs are reachable on a fresh database; override
+// the credentials via env in any non-local environment.
+const PLATFORM_ADMIN = {
+  email: process.env.PLATFORM_ADMIN_EMAIL ?? 'admin@paradox.app',
+  password: process.env.PLATFORM_ADMIN_PASSWORD ?? 'Admin@12345',
+  firstName: 'Platform',
+  lastName: 'Admin',
+};
 
 const PERMISSIONS = [
   { key: 'user.create', subject: 'User', action: 'create', description: 'Create users' },
@@ -145,8 +159,26 @@ async function main() {
     }
   }
 
+  const existingAdmin = await prisma.user.findUnique({
+    where: { email: PLATFORM_ADMIN.email },
+  });
+  if (!existingAdmin) {
+    await prisma.user.create({
+      data: {
+        firstName: PLATFORM_ADMIN.firstName,
+        lastName: PLATFORM_ADMIN.lastName,
+        email: PLATFORM_ADMIN.email,
+        passwordHash: await bcrypt.hash(
+          PLATFORM_ADMIN.password,
+          BCRYPT_SALT_ROUNDS,
+        ),
+        companyId: null,
+      },
+    });
+  }
+
   console.log(
-    `Seeded ${PERMISSIONS.length} permissions, ${CURRENCIES.length} currencies, and ${ROLES.length} roles.`,
+    `Seeded ${PERMISSIONS.length} permissions, ${CURRENCIES.length} currencies, ${ROLES.length} roles, and 1 platform-admin user (${PLATFORM_ADMIN.email}).`,
   );
 }
 

@@ -1,12 +1,42 @@
-import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
+import { DEFAULT_CHART } from '../src/modules/accounts/account-defaults';
+import { OFFICIAL_CHART_REST } from '../src/modules/accounts/official-chart';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
 const BCRYPT_SALT_ROUNDS = 12;
+
+// A ready-to-use demo tenant: one company with the FULL official chart of
+// accounts (common subset + the rest = every account), plus an admin/owner and
+// a member so the app has real, operable data on a fresh database. All seeding
+// below is idempotent — re-running never duplicates.
+const DEMO_COMPANY = {
+  name: 'Demo Company',
+  taxNumber: 'DEMO-0001',
+  phone: '+961 1 000 000',
+  email: 'info@demo.example.com',
+};
+const DEMO_USERS = [
+  {
+    email: 'owner@demo.example.com',
+    password: process.env.DEMO_OWNER_PASSWORD ?? 'Owner@12345',
+    firstName: 'Demo',
+    lastName: 'Owner',
+    roleName: 'Company Admin',
+  },
+  {
+    email: 'member@demo.example.com',
+    password: process.env.DEMO_MEMBER_PASSWORD ?? 'Member@12345',
+    firstName: 'Demo',
+    lastName: 'Member',
+    roleName: 'Company Member',
+  },
+] as const;
 
 // A platform-admin/support user has NO company (companyId null) — CASL grants
 // it `manage all` and PlatformAdminGuard lets it through the admin-only routes.
@@ -177,9 +207,92 @@ async function main() {
     });
   }
 
+  // --- Demo tenant: company + full chart of accounts + owner/admin + member ---
+  let demoCompany = await prisma.company.findFirst({
+    where: { taxNumber: DEMO_COMPANY.taxNumber },
+  });
+  if (!demoCompany) {
+    demoCompany = await prisma.company.create({ data: DEMO_COMPANY });
+  }
+
+  const chartCreated = await seedFullChart(demoCompany.id);
+
+  for (const demoUser of DEMO_USERS) {
+    let user = await prisma.user.findUnique({
+      where: { email: demoUser.email },
+    });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          firstName: demoUser.firstName,
+          lastName: demoUser.lastName,
+          email: demoUser.email,
+          passwordHash: await bcrypt.hash(demoUser.password, BCRYPT_SALT_ROUNDS),
+          companyId: demoCompany.id,
+        },
+      });
+    }
+    const role = await prisma.role.findFirst({
+      where: { name: demoUser.roleName, isSystem: true, companyId: null },
+    });
+    if (role) {
+      await prisma.userRole.upsert({
+        where: { userId_roleId: { userId: user.id, roleId: role.id } },
+        update: {},
+        create: { userId: user.id, roleId: role.id },
+      });
+    }
+  }
+
   console.log(
     `Seeded ${PERMISSIONS.length} permissions, ${CURRENCIES.length} currencies, ${ROLES.length} roles, and 1 platform-admin user (${PLATFORM_ADMIN.email}).`,
   );
+  console.log(
+    `Demo tenant "${DEMO_COMPANY.name}": ${chartCreated} chart accounts created this run, users ${DEMO_USERS.map((u) => u.email).join(', ')}.`,
+  );
+}
+
+/**
+ * Insert the full official chart of accounts (common subset + the rest = every
+ * account) for a company. Idempotent: numbers that already exist are skipped.
+ * Ids are generated up front so each account's parent resolves by number in a
+ * single createMany. Returns how many accounts were created this run.
+ */
+async function seedFullChart(companyId: string): Promise<number> {
+  const seeds = [...DEFAULT_CHART, ...OFFICIAL_CHART_REST];
+  const existing = await prisma.account.findMany({
+    where: { companyId },
+    select: { number: true, id: true },
+  });
+  const idByNumber = new Map<string, string>(
+    existing.map((a) => [a.number, a.id]),
+  );
+  const toCreate = seeds.filter((s) => !idByNumber.has(s.number));
+  if (toCreate.length === 0) {
+    return 0;
+  }
+  for (const seed of toCreate) {
+    idByNumber.set(seed.number, randomUUID());
+  }
+  const rows: Prisma.AccountCreateManyInput[] = toCreate.map((seed) => ({
+    id: idByNumber.get(seed.number),
+    companyId,
+    number: seed.number,
+    name: seed.name,
+    nameAr: seed.nameAr,
+    nameFr: seed.nameFr,
+    nameEn: seed.nameEn,
+    accountClass: seed.accountClass,
+    type: seed.type,
+    normalBalance: seed.normalBalance,
+    parentId: seed.parentNumber
+      ? (idByNumber.get(seed.parentNumber) ?? null)
+      : null,
+    isControl: seed.isControl ?? false,
+    controlType: seed.controlType ?? null,
+  }));
+  await prisma.account.createMany({ data: rows });
+  return rows.length;
 }
 
 main()

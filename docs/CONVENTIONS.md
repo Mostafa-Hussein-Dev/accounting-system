@@ -26,6 +26,18 @@ them without exception. When in doubt, follow the convention — do not invent.
 - API response fields: camelCase -> companyId, createdAt
 - Environment variables: SCREAMING_SNAKE_CASE -> DATABASE_URL
 
+## Product naming
+- Refer to this platform only by the **generic name "Accounting System"** (or a
+  neutral term like "the platform" / "the system") in code, config, docs,
+  comments, seed data, emails, and sample values. Do not introduce a brand name.
+- **"Paradox" and "HKMSoft" are NOT product names** and must never be used to
+  refer to this platform — not in email addresses, MAIL_FROM, display names,
+  titles, or comments. The only permitted use is naming the legacy third-party
+  system being replaced, written in full as **"Corel Paradox 9"** (the old
+  desktop program); never bare "Paradox" or "HKMSoft" for our product.
+- Sample/seed emails use a neutral domain (`example.com`), never a
+  product-branded one.
+
 ## Module structure
 Every domain module must have exactly this structure:
 

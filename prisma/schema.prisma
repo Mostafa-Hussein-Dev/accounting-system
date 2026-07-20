@@ -1,4 +1,4 @@
-// Prisma schema — Paradox v2 / HKMSoft Next (accounting system)
+// Prisma schema — accounting-system backend
 // Docs: https://pris.ly/d/prisma-schema
 
 generator client {

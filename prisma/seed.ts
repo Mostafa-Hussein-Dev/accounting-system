@@ -13,7 +13,7 @@ const BCRYPT_SALT_ROUNDS = 12;
 // Seeded so the admin-scoped APIs are reachable on a fresh database; override
 // the credentials via env in any non-local environment.
 const PLATFORM_ADMIN = {
-  email: process.env.PLATFORM_ADMIN_EMAIL ?? 'admin@paradox.app',
+  email: process.env.PLATFORM_ADMIN_EMAIL ?? 'admin@example.com',
   password: process.env.PLATFORM_ADMIN_PASSWORD ?? 'Admin@12345',
   firstName: 'Platform',
   lastName: 'Admin',

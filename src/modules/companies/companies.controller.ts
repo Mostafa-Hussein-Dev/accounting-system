@@ -22,6 +22,8 @@ import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CompanyResponseDto } from './dto/company-response.dto';
+import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
+import { CompanySettingsResponseDto } from './dto/company-settings-response.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -120,5 +122,45 @@ export class CompaniesController {
   @ApiResponse({ status: 404, description: 'Company not found' })
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.companiesService.remove(id);
+  }
+
+  @Get(':id/settings')
+  @UseGuards(CompanySelfOrAdminGuard)
+  @ApiOperation({
+    summary:
+      "Get a company's settings (FR-108): base currency, fiscal-year start, rounding, templates, enabled modules, and feature flags.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Resolved company settings',
+    type: CompanySettingsResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'No access to this company' })
+  @ApiResponse({ status: 404, description: 'Company not found' })
+  getSettings(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<CompanySettingsResponseDto> {
+    return this.companiesService.getSettings(id);
+  }
+
+  @Patch(':id/settings')
+  @UseGuards(CompanySelfOrAdminGuard, PermissionsGuard)
+  @RequirePermissions({ action: 'update', subject: 'Company' })
+  @ApiOperation({
+    summary:
+      "Update a company's settings/feature flags (platform admin, or a Company Admin of that company). Provided keys are merged; feature flags are toggled without resending the whole set.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Updated company settings',
+    type: CompanySettingsResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'No access, or permission denied' })
+  @ApiResponse({ status: 404, description: 'Company not found' })
+  updateSettings(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCompanySettingsDto,
+  ): Promise<CompanySettingsResponseDto> {
+    return this.companiesService.updateSettings(id, dto);
   }
 }

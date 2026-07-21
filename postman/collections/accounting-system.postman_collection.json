@@ -648,7 +648,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Beirut Trading Co.\",\n  \"taxNumber\": \"LB-123456\",\n  \"phone\": \"+961 1 234 567\",\n  \"email\": \"info@beiruttrading.com\"\n}",
+              "raw": "{\n  \"name\": \"Beirut Trading Co.\",\n  \"taxNumber\": \"LB-123456\",\n  \"phone\": \"+961 1 234 567\",\n  \"email\": \"info@beiruttrading.com\",\n  \"baseCurrencyCode\": \"USD\",\n  \"fiscalYearStartMonth\": 1\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -694,7 +694,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 234 567\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-08T17:24:28.969Z\",\n    \"updatedAt\": \"2026-07-08T17:24:28.969Z\"\n  },\n  \"meta\": null\n}"
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"name\": \"Beirut Trading Co.\",\n    \"taxNumber\": \"LB-123456\",\n    \"phone\": \"+961 1 234 567\",\n    \"email\": \"info@beiruttrading.com\",\n    \"logo\": null,\n    \"isActive\": true,\n    \"baseCurrencyCode\": \"USD\",\n    \"fiscalYearStartMonth\": 1,\n    \"createdAt\": \"2026-07-21T15:56:14.648Z\",\n    \"updatedAt\": \"2026-07-21T15:56:14.648Z\"\n  },\n  \"meta\": null\n}"
             },
             {
               "name": "409 Tax number already in use",
@@ -960,6 +960,114 @@
             },
             {
               "name": "403 Permission denied (not a Company Admin)",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get company settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{companyId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies",
+                "{{companyId}}",
+                "settings"
+              ]
+            },
+            "description": "FR-108. Returns the resolved per-company configuration: base currency, fiscal-year start, rounding rules, default templates, enabled modules, and feature flags (defaults filled in for unset keys). Platform admin, or any user of that company (CompanySelfOrAdminGuard)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"baseCurrencyCode\": \"USD\",\n    \"fiscalYearStartMonth\": 1,\n    \"rounding\": {\n      \"decimals\": 2,\n      \"mode\": \"HALF_UP\"\n    },\n    \"defaultTemplates\": {\n      \"invoice\": \"a4-standard\"\n    },\n    \"enabledModules\": [\n      \"invoicing\",\n      \"purchasing\"\n    ],\n    \"featureFlags\": {\n      \"creditNotes\": true\n    },\n    \"fieldVisibility\": {\n      \"item.cost\": false\n    }\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 No access to this company",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_ACCESS_DENIED\",\n    \"message\": \"You do not have access to this company.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update company settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabledModules\": [\n    \"invoicing\",\n    \"purchasing\"\n  ],\n  \"featureFlags\": {\n    \"creditNotes\": true\n  },\n  \"rounding\": {\n    \"decimals\": 2,\n    \"mode\": \"HALF_UP\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{companyId}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies",
+                "{{companyId}}",
+                "settings"
+              ]
+            },
+            "description": "FR-108. Merge a partial settings payload. featureFlags / fieldVisibility / defaultTemplates are deep-merged (toggle one without resending all); rounding / enabledModules are replaced. Platform admin, or a Company Admin of that company (needs company.update). Base currency and fiscal-year start are set via PATCH /companies/:id instead."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"baseCurrencyCode\": \"USD\",\n    \"fiscalYearStartMonth\": 1,\n    \"rounding\": {\n      \"decimals\": 2,\n      \"mode\": \"HALF_UP\"\n    },\n    \"defaultTemplates\": {\n      \"invoice\": \"a4-standard\"\n    },\n    \"enabledModules\": [\n      \"invoicing\",\n      \"purchasing\"\n    ],\n    \"featureFlags\": {\n      \"creditNotes\": true\n    },\n    \"fieldVisibility\": {\n      \"item.cost\": false\n    }\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 No access, or permission denied",
               "status": "Forbidden",
               "code": 403,
               "_postman_previewlanguage": "json",

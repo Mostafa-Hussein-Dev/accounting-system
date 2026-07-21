@@ -26,6 +26,15 @@ export class CompanyResponseDto {
   @ApiProperty({ example: true })
   isActive!: boolean;
 
+  @ApiProperty({
+    description: 'Base currency the books are kept in',
+    example: 'USD',
+  })
+  baseCurrencyCode!: string;
+
+  @ApiProperty({ description: 'Fiscal-year start month (1–12)', example: 1 })
+  fiscalYearStartMonth!: number;
+
   @ApiProperty({ example: '2025-06-03T14:30:00.000Z' })
   createdAt!: Date;
 
@@ -41,6 +50,8 @@ export class CompanyResponseDto {
     dto.email = company.email;
     dto.logo = company.logo;
     dto.isActive = company.isActive;
+    dto.baseCurrencyCode = company.baseCurrencyCode;
+    dto.fiscalYearStartMonth = company.fiscalYearStartMonth;
     dto.createdAt = company.createdAt;
     dto.updatedAt = company.updatedAt;
     return dto;

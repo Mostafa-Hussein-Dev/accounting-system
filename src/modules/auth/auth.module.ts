@@ -10,6 +10,7 @@ import { UsersModule } from '../users/users.module';
 import { CompaniesModule } from '../companies/companies.module';
 import { AccountsModule } from '../accounts/accounts.module';
 import { TaxesModule } from '../taxes/taxes.module';
+import { SequencesModule } from '../sequences/sequences.module';
 import { MailerModule } from '../../common/mailer/mailer.module';
 
 @Module({
@@ -24,6 +25,7 @@ import { MailerModule } from '../../common/mailer/mailer.module';
     CompaniesModule,
     AccountsModule,
     TaxesModule,
+    SequencesModule,
     MailerModule,
   ],
   controllers: [AuthController],

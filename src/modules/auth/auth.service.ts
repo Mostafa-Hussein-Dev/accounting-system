@@ -14,6 +14,7 @@ import { UsersService } from '../users/users.service';
 import { CompaniesService } from '../companies/companies.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { TaxesService } from '../taxes/taxes.service';
+import { SequencesService } from '../sequences/sequences.service';
 import { MailerService } from '../../common/mailer/mailer.service';
 import { EnvConfig } from '../../config/env.schema';
 import { LoginDto } from './dto/login.dto';
@@ -68,6 +69,7 @@ export class AuthService {
     private readonly companiesService: CompaniesService,
     private readonly accountsService: AccountsService,
     private readonly taxesService: TaxesService,
+    private readonly sequencesService: SequencesService,
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<EnvConfig, true>,
@@ -101,6 +103,10 @@ export class AuthService {
       // Seed the default standard VAT rate (FR-105), wired to the VAT control
       // accounts just created above — a fresh company can invoice with VAT.
       await this.taxesService.applyDefaultVatRate(company.id, tx);
+
+      // Seed the default document-numbering series (FR-106) so a fresh company
+      // can issue invoices/orders/receipts with proper numbers immediately.
+      await this.sequencesService.applyDefaultSequences(company.id, tx);
 
       return createdUser;
     });

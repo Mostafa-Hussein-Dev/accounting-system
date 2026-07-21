@@ -11,6 +11,7 @@ import { UsersService } from '../users/users.service';
 import { CompaniesService } from '../companies/companies.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { TaxesService } from '../taxes/taxes.service';
+import { SequencesService } from '../sequences/sequences.service';
 import { MailerService } from '../../common/mailer/mailer.service';
 
 describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () => {
@@ -40,6 +41,7 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
         CompaniesService,
         AccountsService,
         TaxesService,
+        SequencesService,
         { provide: MailerService, useValue: { sendPasswordResetCode } },
       ],
     }).compile();

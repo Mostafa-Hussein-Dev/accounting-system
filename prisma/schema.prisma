@@ -46,6 +46,28 @@ enum TaxTreatment {
   EXEMPT // outside VAT scope
 }
 
+// When a document sequence's counter restarts (FR-106). The period is embedded
+// in the produced number (e.g. INV-2026-0001) and the counter resets when it
+// rolls over.
+enum ResetPeriod {
+  NONE
+  YEARLY
+  MONTHLY
+}
+
+// The kinds of documents that carry their own numbering series (FR-106).
+// Extended as document modules are built; the sequence engine is type-agnostic.
+enum DocumentType {
+  SALES_INVOICE
+  SALES_ORDER
+  QUOTATION
+  DELIVERY_NOTE
+  CREDIT_NOTE
+  PURCHASE_ORDER
+  PAYMENT_RECEIPT
+  JOURNAL_ENTRY
+}
+
 model Company {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
@@ -63,12 +85,13 @@ model Company {
   // every company already starts with the common subset at registration.
   officialChartImportedAt DateTime? @map("official_chart_imported_at")
 
-  users         User[]
-  roles         Role[]
-  branches      Branch[]
-  exchangeRates ExchangeRate[]
-  accounts      Account[]
-  taxRates      TaxRate[]
+  users             User[]
+  roles             Role[]
+  branches          Branch[]
+  exchangeRates     ExchangeRate[]
+  accounts          Account[]
+  taxRates          TaxRate[]
+  documentSequences DocumentSequence[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -230,6 +253,46 @@ model TaxRate {
   @@map("tax_rates")
 }
 
+// A gap-controlled numbering series for one document type (FR-106), optionally
+// scoped to a branch (branchId null = a company-wide series). The produced
+// number is prefix + period token + zero-padded counter + suffix, e.g.
+// "INV-2026-0001". Tenant-scoped; a configuration table (hard delete allowed).
+//
+// nextNumber is handed out atomically inside the document-creation transaction
+// (SELECT ... FOR UPDATE on the row), so concurrent callers never get a
+// duplicate and never skip a number — the legal "gap-controlled, never reused"
+// requirement. periodKey records which period the counter belongs to so it can
+// reset when the document date crosses into a new year/month.
+model DocumentSequence {
+  id        String       @id @default(uuid()) @db.Uuid
+  companyId String       @map("company_id") @db.Uuid
+  company   Company      @relation(fields: [companyId], references: [id])
+  branchId  String?      @map("branch_id") @db.Uuid
+  branch    Branch?      @relation(fields: [branchId], references: [id])
+  docType   DocumentType @map("doc_type")
+
+  prefix      String      @default("")
+  suffix      String      @default("")
+  padWidth    Int         @default(4) @map("pad_width")
+  resetPeriod ResetPeriod @default(YEARLY) @map("reset_period")
+  nextNumber  Int         @default(1) @map("next_number")
+
+  // The period the current counter belongs to ("2026", "2026-07", or "ALL" for
+  // resetPeriod NONE). A document dated outside it triggers a reset to 1.
+  periodKey String? @map("period_key")
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Postgres treats NULL as distinct in unique constraints, so this does NOT
+  // stop two company-wide (branchId null) series of the same docType — that
+  // case is checked explicitly in SequencesService before insert.
+  @@unique([companyId, branchId, docType])
+  @@index([companyId])
+  @@map("document_sequences")
+}
+
 // A physical location of a company (FR-102). Always tenant-scoped — unlike
 // Role, a Branch never exists without a company, so companyId is required and
 // Branch is listed in prisma.service.ts's TENANT_SCOPED_MODELS.
@@ -258,6 +321,8 @@ model Branch {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
+
+  documentSequences DocumentSequence[]
 
   @@index([companyId])
   @@index([deletedAt])

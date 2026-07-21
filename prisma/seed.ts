@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma, DocumentType } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 import { DEFAULT_CHART } from '../src/modules/accounts/account-defaults';
@@ -11,30 +11,59 @@ const prisma = new PrismaClient({
 
 const BCRYPT_SALT_ROUNDS = 12;
 
-// A ready-to-use demo tenant: one company with the FULL official chart of
-// accounts (common subset + the rest = every account), plus an admin/owner and
-// a member so the app has real, operable data on a fresh database. All seeding
-// below is idempotent — re-running never duplicates.
-const DEMO_COMPANY = {
-  name: 'Demo Company',
-  taxNumber: 'DEMO-0001',
-  phone: '+961 1 000 000',
-  email: 'info@demo.example.com',
-};
-const DEMO_USERS = [
+// Ready-to-use demo tenants: each is a company with the FULL official chart of
+// accounts (common subset + the rest = every account), a default VAT rate and
+// document sequences, plus an admin/owner and a member — so the app has real,
+// operable data on a fresh database. All seeding below is idempotent —
+// re-running never duplicates.
+const DEMO_TENANTS = [
   {
-    email: 'owner@demo.example.com',
-    password: process.env.DEMO_OWNER_PASSWORD ?? 'Owner@12345',
-    firstName: 'Demo',
-    lastName: 'Owner',
-    roleName: 'Company Admin',
+    company: {
+      name: 'Demo Company',
+      taxNumber: 'DEMO-0001',
+      phone: '+961 1 000 000',
+      email: 'info@demo.example.com',
+    },
+    users: [
+      {
+        email: 'owner@demo.example.com',
+        password: process.env.DEMO_OWNER_PASSWORD ?? 'Owner@12345',
+        firstName: 'Demo',
+        lastName: 'Owner',
+        roleName: 'Company Admin',
+      },
+      {
+        email: 'member@demo.example.com',
+        password: process.env.DEMO_MEMBER_PASSWORD ?? 'Member@12345',
+        firstName: 'Demo',
+        lastName: 'Member',
+        roleName: 'Company Member',
+      },
+    ],
   },
   {
-    email: 'member@demo.example.com',
-    password: process.env.DEMO_MEMBER_PASSWORD ?? 'Member@12345',
-    firstName: 'Demo',
-    lastName: 'Member',
-    roleName: 'Company Member',
+    company: {
+      name: 'Second Company',
+      taxNumber: 'DEMO-0002',
+      phone: '+961 1 000 002',
+      email: 'info@second.example.com',
+    },
+    users: [
+      {
+        email: 'owner2@demo.example.com',
+        password: process.env.DEMO_OWNER2_PASSWORD ?? 'Owner@12345',
+        firstName: 'Second',
+        lastName: 'Owner',
+        roleName: 'Company Admin',
+      },
+      {
+        email: 'member2@demo.example.com',
+        password: process.env.DEMO_MEMBER2_PASSWORD ?? 'Member@12345',
+        firstName: 'Second',
+        lastName: 'Member',
+        roleName: 'Company Member',
+      },
+    ],
   },
 ] as const;
 
@@ -81,6 +110,10 @@ const PERMISSIONS = [
   { key: 'tax.create', subject: 'TaxRate', action: 'create', description: 'Create tax rates' },
   { key: 'tax.update', subject: 'TaxRate', action: 'update', description: 'Update tax rates' },
   { key: 'tax.delete', subject: 'TaxRate', action: 'delete', description: 'Delete tax rates' },
+  { key: 'sequence.read', subject: 'DocumentSequence', action: 'read', description: 'View document sequences' },
+  { key: 'sequence.create', subject: 'DocumentSequence', action: 'create', description: 'Create document sequences' },
+  { key: 'sequence.update', subject: 'DocumentSequence', action: 'update', description: 'Update document sequences' },
+  { key: 'sequence.delete', subject: 'DocumentSequence', action: 'delete', description: 'Delete document sequences' },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -126,6 +159,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
       'exchangeRate.read',
       'account.read',
       'tax.read',
+      'sequence.read',
     ],
   },
 ];
@@ -212,49 +246,58 @@ async function main() {
     });
   }
 
-  // --- Demo tenant: company + full chart of accounts + owner/admin + member ---
-  let demoCompany = await prisma.company.findFirst({
-    where: { taxNumber: DEMO_COMPANY.taxNumber },
-  });
-  if (!demoCompany) {
-    demoCompany = await prisma.company.create({ data: DEMO_COMPANY });
+  // --- Demo tenants: each = company + full chart + VAT + sequences + owner/member ---
+  for (const tenant of DEMO_TENANTS) {
+    let company = await prisma.company.findFirst({
+      where: { taxNumber: tenant.company.taxNumber },
+    });
+    if (!company) {
+      company = await prisma.company.create({ data: tenant.company });
+    }
+
+    await seedFullChart(company.id);
+    await seedDefaultVatRate(company.id);
+    await seedDefaultSequences(company.id);
+
+    for (const demoUser of tenant.users) {
+      let user = await prisma.user.findUnique({
+        where: { email: demoUser.email },
+      });
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            firstName: demoUser.firstName,
+            lastName: demoUser.lastName,
+            email: demoUser.email,
+            passwordHash: await bcrypt.hash(
+              demoUser.password,
+              BCRYPT_SALT_ROUNDS,
+            ),
+            companyId: company.id,
+          },
+        });
+      }
+      const role = await prisma.role.findFirst({
+        where: { name: demoUser.roleName, isSystem: true, companyId: null },
+      });
+      if (role) {
+        await prisma.userRole.upsert({
+          where: { userId_roleId: { userId: user.id, roleId: role.id } },
+          update: {},
+          create: { userId: user.id, roleId: role.id },
+        });
+      }
+    }
   }
 
-  const chartCreated = await seedFullChart(demoCompany.id);
-  await seedDefaultVatRate(demoCompany.id);
-
-  for (const demoUser of DEMO_USERS) {
-    let user = await prisma.user.findUnique({
-      where: { email: demoUser.email },
-    });
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          firstName: demoUser.firstName,
-          lastName: demoUser.lastName,
-          email: demoUser.email,
-          passwordHash: await bcrypt.hash(demoUser.password, BCRYPT_SALT_ROUNDS),
-          companyId: demoCompany.id,
-        },
-      });
-    }
-    const role = await prisma.role.findFirst({
-      where: { name: demoUser.roleName, isSystem: true, companyId: null },
-    });
-    if (role) {
-      await prisma.userRole.upsert({
-        where: { userId_roleId: { userId: user.id, roleId: role.id } },
-        update: {},
-        create: { userId: user.id, roleId: role.id },
-      });
-    }
-  }
-
+  const demoUserEmails = DEMO_TENANTS.flatMap((t) =>
+    t.users.map((u) => u.email),
+  );
   console.log(
     `Seeded ${PERMISSIONS.length} permissions, ${CURRENCIES.length} currencies, ${ROLES.length} roles, and 1 platform-admin user (${PLATFORM_ADMIN.email}).`,
   );
   console.log(
-    `Demo tenant "${DEMO_COMPANY.name}": ${chartCreated} chart accounts created this run, users ${DEMO_USERS.map((u) => u.email).join(', ')}.`,
+    `Demo tenants: ${DEMO_TENANTS.map((t) => t.company.name).join(', ')} — users ${demoUserEmails.join(', ')}.`,
   );
 }
 
@@ -327,6 +370,43 @@ async function seedDefaultVatRate(companyId: string): Promise<void> {
       vatOutAccountId: vatOut?.id ?? null,
       vatInAccountId: vatIn?.id ?? null,
     },
+  });
+}
+
+/**
+ * Seed a company's default document-numbering series (FR-106). Idempotent —
+ * skips a docType that already has a company-wide series. Mirrors
+ * SequencesService.applyDefaultSequences for seed use.
+ */
+async function seedDefaultSequences(companyId: string): Promise<void> {
+  const defaults: { docType: DocumentType; prefix: string }[] = [
+    { docType: 'SALES_INVOICE', prefix: 'INV-' },
+    { docType: 'SALES_ORDER', prefix: 'SO-' },
+    { docType: 'QUOTATION', prefix: 'QUO-' },
+    { docType: 'DELIVERY_NOTE', prefix: 'DN-' },
+    { docType: 'CREDIT_NOTE', prefix: 'CN-' },
+    { docType: 'PURCHASE_ORDER', prefix: 'PO-' },
+    { docType: 'PAYMENT_RECEIPT', prefix: 'REC-' },
+    { docType: 'JOURNAL_ENTRY', prefix: 'JE-' },
+  ];
+  const existing = await prisma.documentSequence.findMany({
+    where: { companyId, branchId: null },
+    select: { docType: true },
+  });
+  const have = new Set(existing.map((e) => e.docType));
+  const toCreate = defaults.filter((s) => !have.has(s.docType));
+  if (toCreate.length === 0) {
+    return;
+  }
+  await prisma.documentSequence.createMany({
+    data: toCreate.map((s) => ({
+      companyId,
+      docType: s.docType,
+      prefix: s.prefix,
+      resetPeriod: 'YEARLY',
+      padWidth: 4,
+      nextNumber: 1,
+    })),
   });
 }
 

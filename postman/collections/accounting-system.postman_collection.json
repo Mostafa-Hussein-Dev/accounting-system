@@ -3387,6 +3387,314 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Sequences",
+      "item": [
+        {
+          "name": "Create a sequence",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sequence created', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) { pm.environment.set('documentSequenceId', pm.response.json().data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"docType\": \"SALES_INVOICE\",\n  \"prefix\": \"INV-\",\n  \"suffix\": \"\",\n  \"padWidth\": 4,\n  \"resetPeriod\": \"YEARLY\",\n  \"nextNumber\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sequences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sequences"
+              ]
+            },
+            "description": "Requires sequence.create (Company Admin). Company-scoped caller forced into their own company; platform admin targets one via body companyId. Omit branchId for a company-wide series, or set it for a branch-specific one. New companies are auto-seeded a default set (INV/SO/QUO/DN/CN/PO/REC/JE, yearly) at registration. Test script saves documentSequenceId."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"c1d2e3f4-0000-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"branchId\": null,\n    \"docType\": \"SALES_INVOICE\",\n    \"prefix\": \"INV-\",\n    \"suffix\": \"\",\n    \"padWidth\": 4,\n    \"resetPeriod\": \"YEARLY\",\n    \"nextNumber\": 1,\n    \"periodKey\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-21T19:00:00.000Z\",\n    \"updatedAt\": \"2026-07-21T19:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Already exists",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SEQUENCE_ALREADY_EXISTS\",\n    \"message\": \"A SALES_INVOICE sequence already exists for this company.\",\n    \"field\": \"docType\"\n  }\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List sequences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sequences?docType=SALES_INVOICE&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sequences"
+              ],
+              "query": [
+                {
+                  "key": "docType",
+                  "value": "SALES_INVOICE"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Requires sequence.read (both seeded roles). Filterable by docType and branchId. Company-scoped caller sees only their own company's sequences."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"c1d2e3f4-0000-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"branchId\": null,\n      \"docType\": \"SALES_INVOICE\",\n      \"prefix\": \"INV-\",\n      \"suffix\": \"\",\n      \"padWidth\": 4,\n      \"resetPeriod\": \"YEARLY\",\n      \"nextNumber\": 1,\n      \"periodKey\": null,\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-21T19:00:00.000Z\",\n      \"updatedAt\": \"2026-07-21T19:00:00.000Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get a sequence by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sequences/{{documentSequenceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sequences",
+                "{{documentSequenceId}}"
+              ]
+            },
+            "description": "Requires sequence.read. A company-scoped caller can only fetch a sequence in their own company (404 otherwise)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"c1d2e3f4-0000-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"branchId\": null,\n    \"docType\": \"SALES_INVOICE\",\n    \"prefix\": \"INV-\",\n    \"suffix\": \"\",\n    \"padWidth\": 4,\n    \"resetPeriod\": \"YEARLY\",\n    \"nextNumber\": 1,\n    \"periodKey\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-21T19:00:00.000Z\",\n    \"updatedAt\": \"2026-07-21T19:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SEQUENCE_NOT_FOUND\",\n    \"message\": \"Document sequence with id c1d2e3f4-0000-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Preview next number",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sequences/{{documentSequenceId}}/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sequences",
+                "{{documentSequenceId}}",
+                "preview"
+              ]
+            },
+            "description": "Requires sequence.read. Shows what the next document number would look like today WITHOUT consuming it (the counter is not advanced). Actual consumption happens atomically when a document is created."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"number\": \"INV-2026-0001\"\n  },\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update a sequence",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prefix\": \"INV/\",\n  \"padWidth\": 5,\n  \"nextNumber\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sequences/{{documentSequenceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sequences",
+                "{{documentSequenceId}}"
+              ]
+            },
+            "description": "Requires sequence.update. Edit prefix/suffix/padWidth/resetPeriod/nextNumber, or deactivate via isActive."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"c1d2e3f4-0000-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"branchId\": null,\n    \"docType\": \"SALES_INVOICE\",\n    \"prefix\": \"INV/\",\n    \"suffix\": \"\",\n    \"padWidth\": 5,\n    \"resetPeriod\": \"YEARLY\",\n    \"nextNumber\": 100,\n    \"periodKey\": null,\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-21T19:00:00.000Z\",\n    \"updatedAt\": \"2026-07-21T19:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete a sequence",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sequences/{{documentSequenceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sequences",
+                "{{documentSequenceId}}"
+              ]
+            },
+            "description": "Requires sequence.delete. Hard delete (configuration data, per docs/MODELS.md)."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": ""
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SEQUENCE_NOT_FOUND\",\n    \"message\": \"Document sequence with id c1d2e3f4-0000-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

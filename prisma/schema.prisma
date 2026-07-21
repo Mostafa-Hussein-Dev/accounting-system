@@ -40,6 +40,12 @@ enum ControlType {
   BANK
 }
 
+enum TaxTreatment {
+  STANDARD // taxed at ratePct (e.g. 11%)
+  ZERO // zero-rated (0%, still reported)
+  EXEMPT // outside VAT scope
+}
+
 model Company {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
@@ -62,6 +68,7 @@ model Company {
   branches      Branch[]
   exchangeRates ExchangeRate[]
   accounts      Account[]
+  taxRates      TaxRate[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -176,6 +183,10 @@ model Account {
   isControl   Boolean      @default(false) @map("is_control")
   controlType ControlType? @map("control_type")
 
+  // Tax rates that post their output/input VAT to this account (class 44).
+  vatOutForTaxRates TaxRate[] @relation("TaxRateVatOut")
+  vatInForTaxRates  TaxRate[] @relation("TaxRateVatIn")
+
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -186,6 +197,37 @@ model Account {
   @@index([parentId])
   @@index([deletedAt])
   @@map("accounts")
+}
+
+// VAT rates per company (FR-105). Tenant-scoped — listed in
+// prisma.service.ts's TENANT_SCOPED_MODELS. A configuration table, so a hard
+// delete is allowed (docs/MODELS.md); editing/removing a rate never touches
+// already-posted amounts. The rate in force on a document's date is the newest
+// row (per treatment) whose effectiveDate is on or before that date.
+model TaxRate {
+  id            String       @id @default(uuid()) @db.Uuid
+  companyId     String       @map("company_id") @db.Uuid
+  company       Company      @relation(fields: [companyId], references: [id])
+  name          String
+  ratePct       Decimal      @map("rate_pct") @db.Decimal(5, 2)
+  treatment     TaxTreatment
+  effectiveDate DateTime     @map("effective_date")
+
+  // Output/input VAT control accounts (class 44, controlType VAT_OUT / VAT_IN).
+  // Null for zero-rated/exempt treatments, which post no VAT — this is a real
+  // optional mapping, not a placeholder awaiting a future model.
+  vatOutAccountId String?  @map("vat_out_account_id") @db.Uuid
+  vatOutAccount   Account? @relation("TaxRateVatOut", fields: [vatOutAccountId], references: [id])
+  vatInAccountId  String?  @map("vat_in_account_id") @db.Uuid
+  vatInAccount    Account? @relation("TaxRateVatIn", fields: [vatInAccountId], references: [id])
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([companyId, treatment, effectiveDate])
+  @@map("tax_rates")
 }
 
 // A physical location of a company (FR-102). Always tenant-scoped — unlike

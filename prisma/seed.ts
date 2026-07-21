@@ -77,6 +77,10 @@ const PERMISSIONS = [
   { key: 'account.create', subject: 'Account', action: 'create', description: 'Create accounts' },
   { key: 'account.update', subject: 'Account', action: 'update', description: 'Update accounts' },
   { key: 'account.delete', subject: 'Account', action: 'delete', description: 'Delete accounts' },
+  { key: 'tax.read', subject: 'TaxRate', action: 'read', description: 'View tax rates' },
+  { key: 'tax.create', subject: 'TaxRate', action: 'create', description: 'Create tax rates' },
+  { key: 'tax.update', subject: 'TaxRate', action: 'update', description: 'Update tax rates' },
+  { key: 'tax.delete', subject: 'TaxRate', action: 'delete', description: 'Delete tax rates' },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -121,6 +125,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
       'currency.read',
       'exchangeRate.read',
       'account.read',
+      'tax.read',
     ],
   },
 ];
@@ -216,6 +221,7 @@ async function main() {
   }
 
   const chartCreated = await seedFullChart(demoCompany.id);
+  await seedDefaultVatRate(demoCompany.id);
 
   for (const demoUser of DEMO_USERS) {
     let user = await prisma.user.findUnique({
@@ -293,6 +299,35 @@ async function seedFullChart(companyId: string): Promise<number> {
   }));
   await prisma.account.createMany({ data: rows });
   return rows.length;
+}
+
+/**
+ * Seed a company's default standard VAT rate (FR-105, 11%), wired to its
+ * VAT_OUT / VAT_IN control accounts. Idempotent — a no-op if a standard rate
+ * already exists. Mirrors TaxesService.applyDefaultVatRate for seed use.
+ */
+async function seedDefaultVatRate(companyId: string): Promise<void> {
+  const existing = await prisma.taxRate.findFirst({
+    where: { companyId, treatment: 'STANDARD' },
+  });
+  if (existing) {
+    return;
+  }
+  const [vatOut, vatIn] = await Promise.all([
+    prisma.account.findFirst({ where: { companyId, controlType: 'VAT_OUT' } }),
+    prisma.account.findFirst({ where: { companyId, controlType: 'VAT_IN' } }),
+  ]);
+  await prisma.taxRate.create({
+    data: {
+      companyId,
+      name: 'Standard VAT 11%',
+      ratePct: 11,
+      treatment: 'STANDARD',
+      effectiveDate: new Date('2020-01-01T00:00:00.000Z'),
+      vatOutAccountId: vatOut?.id ?? null,
+      vatInAccountId: vatIn?.id ?? null,
+    },
+  });
 }
 
 main()

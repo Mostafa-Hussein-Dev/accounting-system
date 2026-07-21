@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CompaniesService } from '../companies/companies.service';
 import { AccountsService } from '../accounts/accounts.service';
+import { TaxesService } from '../taxes/taxes.service';
 import { MailerService } from '../../common/mailer/mailer.service';
 import { EnvConfig } from '../../config/env.schema';
 import { LoginDto } from './dto/login.dto';
@@ -66,6 +67,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly companiesService: CompaniesService,
     private readonly accountsService: AccountsService,
+    private readonly taxesService: TaxesService,
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<EnvConfig, true>,
@@ -95,6 +97,10 @@ export class AuthService {
       // a working chart of accounts (FR-104), in the same transaction as the
       // company/user — either the whole company is set up or none of it is.
       await this.accountsService.applyDefaultChart(company.id, tx);
+
+      // Seed the default standard VAT rate (FR-105), wired to the VAT control
+      // accounts just created above — a fresh company can invoice with VAT.
+      await this.taxesService.applyDefaultVatRate(company.id, tx);
 
       return createdUser;
     });

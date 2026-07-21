@@ -3044,6 +3044,349 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Taxes",
+      "item": [
+        {
+          "name": "Create a tax rate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tax rate created', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) { pm.environment.set('taxRateId', pm.response.json().data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Standard VAT 11%\",\n  \"ratePct\": 11,\n  \"treatment\": \"STANDARD\",\n  \"effectiveDate\": \"2026-01-01\",\n  \"vatOutAccountId\": \"{{vatOutAccountId}}\",\n  \"vatInAccountId\": \"{{vatInAccountId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tax-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tax-rates"
+              ]
+            },
+            "description": "Requires tax.create (Company Admin). Company-scoped caller is forced into their own company; a platform admin targets one via body companyId. STANDARD requires ratePct>0 and both VAT accounts (class 44 control accounts VAT_OUT/VAT_IN — get ids via GET /accounts?search=4427 and 4426). ZERO/EXEMPT require ratePct 0 and NO VAT accounts. New companies are auto-seeded a Standard VAT 11% at registration. Test script saves taxRateId."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"7982ef32-db63-4c98-a80d-1534b10e35cc\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"name\": \"Standard VAT 11%\",\n    \"ratePct\": 11,\n    \"treatment\": \"STANDARD\",\n    \"effectiveDate\": \"2026-01-01T00:00:00.000Z\",\n    \"vatOutAccountId\": \"a1b2c3d4-0000-4a5b-9c8d-1234567890ab\",\n    \"vatInAccountId\": \"b2c3d4e5-0000-4a5b-9c8d-1234567890ab\",\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-21T15:39:00.000Z\",\n    \"updatedAt\": \"2026-07-21T15:39:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "400 VAT accounts required",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"VAT_ACCOUNTS_REQUIRED\",\n    \"message\": \"A standard tax rate must map both an output-VAT and an input-VAT account.\",\n    \"field\": \"vatOutAccountId\"\n  }\n}"
+            },
+            {
+              "name": "400 Wrong account type",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"VAT_ACCOUNT_WRONG_TYPE\",\n    \"message\": \"Account 600 must be a VAT_OUT control account.\",\n    \"field\": \"vatOutAccountId\"\n  }\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List tax rates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tax-rates?treatment=STANDARD&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tax-rates"
+              ],
+              "query": [
+                {
+                  "key": "treatment",
+                  "value": "STANDARD"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Requires tax.read (both seeded roles). Filterable by treatment. Company-scoped caller sees only their own company's rates."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"7982ef32-db63-4c98-a80d-1534b10e35cc\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"name\": \"Standard VAT 11%\",\n      \"ratePct\": 11,\n      \"treatment\": \"STANDARD\",\n      \"effectiveDate\": \"2026-01-01T00:00:00.000Z\",\n      \"vatOutAccountId\": \"a1b2c3d4-0000-4a5b-9c8d-1234567890ab\",\n      \"vatInAccountId\": \"b2c3d4e5-0000-4a5b-9c8d-1234567890ab\",\n      \"isActive\": true,\n      \"createdAt\": \"2026-07-21T15:39:00.000Z\",\n      \"updatedAt\": \"2026-07-21T15:39:00.000Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get current tax rate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tax-rates/current?treatment=STANDARD&date=2026-07-21",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tax-rates",
+                "current"
+              ],
+              "query": [
+                {
+                  "key": "treatment",
+                  "value": "STANDARD"
+                },
+                {
+                  "key": "date",
+                  "value": "2026-07-21"
+                }
+              ]
+            },
+            "description": "The VAT rate in force on a date (default today) for a treatment — the newest rate whose effectiveDate is on or before that date. This is the default a document uses to compute VAT."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"7982ef32-db63-4c98-a80d-1534b10e35cc\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"name\": \"Standard VAT 11%\",\n    \"ratePct\": 11,\n    \"treatment\": \"STANDARD\",\n    \"effectiveDate\": \"2026-01-01T00:00:00.000Z\",\n    \"vatOutAccountId\": \"a1b2c3d4-0000-4a5b-9c8d-1234567890ab\",\n    \"vatInAccountId\": \"b2c3d4e5-0000-4a5b-9c8d-1234567890ab\",\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-21T15:39:00.000Z\",\n    \"updatedAt\": \"2026-07-21T15:39:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 None in force",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"TAX_RATE_NOT_FOUND\",\n    \"message\": \"No STANDARD tax rate is in force on 2000-01-01.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get a tax rate by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tax-rates/{{taxRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tax-rates",
+                "{{taxRateId}}"
+              ]
+            },
+            "description": "Requires tax.read. A company-scoped caller can only fetch a rate in their own company (404 otherwise — tenant isolation)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"7982ef32-db63-4c98-a80d-1534b10e35cc\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"name\": \"Standard VAT 11%\",\n    \"ratePct\": 11,\n    \"treatment\": \"STANDARD\",\n    \"effectiveDate\": \"2026-01-01T00:00:00.000Z\",\n    \"vatOutAccountId\": \"a1b2c3d4-0000-4a5b-9c8d-1234567890ab\",\n    \"vatInAccountId\": \"b2c3d4e5-0000-4a5b-9c8d-1234567890ab\",\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-21T15:39:00.000Z\",\n    \"updatedAt\": \"2026-07-21T15:39:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"TAX_RATE_NOT_FOUND\",\n    \"message\": \"Tax rate with id 7982ef32-db63-4c98-a80d-1534b10e35cc was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update a tax rate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Standard VAT 12%\",\n  \"ratePct\": 12\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tax-rates/{{taxRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tax-rates",
+                "{{taxRateId}}"
+              ]
+            },
+            "description": "Requires tax.update. The resulting (merged) state is re-validated against the treatment rules, so a partial update can't leave an inconsistent rate/treatment/account combo. Also used to deactivate via isActive."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"7982ef32-db63-4c98-a80d-1534b10e35cc\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"name\": \"Standard VAT 12%\",\n    \"ratePct\": 12,\n    \"treatment\": \"STANDARD\",\n    \"effectiveDate\": \"2026-01-01T00:00:00.000Z\",\n    \"vatOutAccountId\": \"a1b2c3d4-0000-4a5b-9c8d-1234567890ab\",\n    \"vatInAccountId\": \"b2c3d4e5-0000-4a5b-9c8d-1234567890ab\",\n    \"isActive\": true,\n    \"createdAt\": \"2026-07-21T15:39:00.000Z\",\n    \"updatedAt\": \"2026-07-21T15:39:00.000Z\"\n  },\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete a tax rate",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tax-rates/{{taxRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tax-rates",
+                "{{taxRateId}}"
+              ]
+            },
+            "description": "Requires tax.delete. Hard delete (configuration data, per docs/MODELS.md) — removing a rate never touches already-posted amounts."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": ""
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"TAX_RATE_NOT_FOUND\",\n    \"message\": \"Tax rate with id 7982ef32-db63-4c98-a80d-1534b10e35cc was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

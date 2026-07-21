@@ -10,6 +10,7 @@ import { BranchesModule } from './modules/branches/branches.module';
 import { CurrenciesModule } from './modules/currencies/currencies.module';
 import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
+import { TaxesModule } from './modules/taxes/taxes.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AccountsModule } from './modules/accounts/accounts.module';
     CurrenciesModule,
     ExchangeRatesModule,
     AccountsModule,
+    TaxesModule,
   ],
   controllers: [],
   providers: [],

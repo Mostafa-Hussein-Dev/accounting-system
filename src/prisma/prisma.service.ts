@@ -10,6 +10,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'Branch',
   'ExchangeRate',
   'Account',
+  'TaxRate',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

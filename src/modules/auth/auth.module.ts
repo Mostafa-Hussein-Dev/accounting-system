@@ -9,6 +9,7 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { UsersModule } from '../users/users.module';
 import { CompaniesModule } from '../companies/companies.module';
 import { AccountsModule } from '../accounts/accounts.module';
+import { TaxesModule } from '../taxes/taxes.module';
 import { MailerModule } from '../../common/mailer/mailer.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { MailerModule } from '../../common/mailer/mailer.module';
     UsersModule,
     CompaniesModule,
     AccountsModule,
+    TaxesModule,
     MailerModule,
   ],
   controllers: [AuthController],

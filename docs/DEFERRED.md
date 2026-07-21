@@ -12,6 +12,23 @@ forget. Keep this list updated as modules land.
 
 ## Larger deferred features (need a design pass)
 
+### FR-1102 — Audit trail (deferred, to be built before financial modules write heavily)
+Not yet implemented. CONVENTIONS.md ("Audit log pattern") already specifies it,
+but there is no `audit_log` table or interceptor. Scope when picked up:
+
+- An `AuditLog` model: `user_id, company_id, action (CREATE/UPDATE/DELETE/
+  CONFIRM/VOID/REVERSE), entity, entity_id, before (JSON), after (JSON), ip,
+  timestamp`.
+- A global **`AuditInterceptor`** that logs every mutating request (POST/PATCH/
+  DELETE) on financial entities, plus sensitive actions (login, void, price
+  override, period unlock).
+- `GET /audit-log` (admin, filterable).
+
+**Best landed before/alongside the GL + document modules** so every financial
+mutation is captured from the start rather than retrofitted. It is cross-cutting
+and does not block the GL engine, so building GL first is fine — but wire the
+interceptor in before invoicing/payments go live.
+
 ### FR-107 — Languages & translations (left for further exploration)
 Deliberately **not implemented** — parked to decide *how* it should work before
 building. Open questions and scope:

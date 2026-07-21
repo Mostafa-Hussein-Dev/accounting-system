@@ -1,10 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
+  IsInt,
   IsOptional,
   IsString,
   IsUrl,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 export class CreateCompanyDto {
@@ -49,4 +52,26 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsUrl()
   logo?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Currency the books are kept in (Currency.code). Defaults to USD (FR-108).',
+    example: 'USD',
+    default: 'USD',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(3)
+  baseCurrencyCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'Month the fiscal year starts, 1–12 (Lebanon = January).',
+    example: 1,
+    default: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  fiscalYearStartMonth?: number;
 }

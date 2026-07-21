@@ -85,6 +85,16 @@ model Company {
   // every company already starts with the common subset at registration.
   officialChartImportedAt DateTime? @map("official_chart_imported_at")
 
+  // Per-company settings (FR-108). baseCurrencyCode is the currency the books
+  // are kept in (USD for the Lebanese tenants); fiscalYearStartMonth is 1–12
+  // (Lebanon = January). `settings` is an open-ended JSON bucket for the rest:
+  // rounding rules, default templates, enabled modules, feature flags, and
+  // per-company field visibility — read/merged via /companies/:id/settings.
+  baseCurrencyCode     String   @default("USD") @map("base_currency_code")
+  baseCurrency         Currency @relation("CompanyBaseCurrency", fields: [baseCurrencyCode], references: [code])
+  fiscalYearStartMonth Int      @default(1) @map("fiscal_year_start_month")
+  settings             Json     @default("{}")
+
   users             User[]
   roles             Role[]
   branches          Branch[]
@@ -119,8 +129,9 @@ model Currency {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  exchangeRates       ExchangeRate[]
-  restrictedAccounts  Account[]
+  exchangeRates      ExchangeRate[]
+  restrictedAccounts Account[]
+  baseForCompanies   Company[]     @relation("CompanyBaseCurrency")
 
   @@map("currencies")
 }

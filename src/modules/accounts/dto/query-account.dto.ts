@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { AccountType } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
@@ -13,6 +13,19 @@ import {
   Min,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+
+// Query strings arrive as strings, and Boolean('false') === true, so
+// `@Type(() => Boolean)` would treat ?flag=false as true. Map the two literal
+// strings explicitly and leave anything else for @IsBoolean to reject.
+const toBoolean = ({ value }: { value: unknown }): unknown => {
+  if (value === true || value === 'true') {
+    return true;
+  }
+  if (value === false || value === 'false') {
+    return false;
+  }
+  return value;
+};
 
 // Filters for the flat account list. All optional — combined with AND.
 export class QueryAccountDto extends PaginationQueryDto {
@@ -37,13 +50,13 @@ export class QueryAccountDto extends PaginationQueryDto {
     example: true,
   })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(toBoolean)
   @IsBoolean()
   isControl?: boolean;
 
   @ApiPropertyOptional({ description: 'Filter by active flag', example: true })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(toBoolean)
   @IsBoolean()
   isActive?: boolean;
 

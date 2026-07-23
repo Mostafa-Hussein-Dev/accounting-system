@@ -13,48 +13,11 @@ import {
   Min,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
-
-// Query strings arrive as strings, and Boolean('false') === true, so
-// `@Type(() => Boolean)` would treat ?flag=false as true. Map the two literal
-// strings explicitly and leave anything else for @IsBoolean to reject.
-const toBoolean = ({ value }: { value: unknown }): unknown => {
-  if (value === true || value === 'true') {
-    return true;
-  }
-  if (value === false || value === 'false') {
-    return false;
-  }
-  return value;
-};
-
-// List query params arrive either repeated (?x=a&x=b -> ['a','b']) or comma-
-// joined (?x=a,b). Normalize both to a trimmed, non-empty array so a single
-// value and a list are handled the same way.
-const toStringArray = ({ value }: { value: unknown }): unknown => {
-  if (value === undefined || value === null) {
-    return value;
-  }
-  const raw: unknown[] = Array.isArray(value) ? value : [value];
-  const out: string[] = [];
-  for (const item of raw) {
-    // Only split/keep strings; any non-string is left out for @IsString to flag.
-    if (typeof item !== 'string') {
-      continue;
-    }
-    for (const part of item.split(',')) {
-      const trimmed = part.trim();
-      if (trimmed.length > 0) {
-        out.push(trimmed);
-      }
-    }
-  }
-  return out;
-};
-
-const toNumberArray = ({ value }: { value: unknown }): unknown => {
-  const arr = toStringArray({ value });
-  return Array.isArray(arr) ? arr.map((v) => Number(v)) : arr;
-};
+import {
+  toBoolean,
+  toNumberArray,
+  toStringArray,
+} from '../../../common/dto/query-transformers';
 
 // Filters for the flat account list. All optional — combined with AND.
 export class QueryAccountDto extends PaginationQueryDto {

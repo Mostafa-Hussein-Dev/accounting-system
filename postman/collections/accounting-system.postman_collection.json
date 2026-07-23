@@ -4319,6 +4319,16 @@
                   "value": "2026-12-31"
                 },
                 {
+                  "key": "numberPrefix",
+                  "value": "6,7",
+                  "disabled": true
+                },
+                {
+                  "key": "rollUp",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
                   "key": "branchId",
                   "value": "{{branchId}}",
                   "disabled": true
@@ -4330,11 +4340,11 @@
                 }
               ]
             },
-            "description": "Requires journal.read. Every account’s net balance in debit/credit columns; totals must be equal. Optional asOf and branchId. A platform admin must pass companyId."
+            "description": "Requires journal.read. Every account’s net balance in debit/credit columns; totals must be equal. Optional asOf and branchId. numberPrefix (repeat/comma-separate) scopes the report to PCL sub-trees (e.g. 6,7 for P&L). rollUp=true collapses to one summary line per group (per prefix, or per class when no prefix) — a scoped/rolled section need not balance. A platform admin must pass companyId."
           },
           "response": [
             {
-              "name": "200 OK",
+              "name": "200 OK (rolled up by class)",
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
@@ -4344,7 +4354,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"data\": {\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"asOf\": \"2026-12-31\",\n    \"currency\": \"USD\",\n    \"rows\": [\n      {\n        \"accountId\": \"5310...\",\n        \"accountNumber\": \"5310\",\n        \"accountName\": \"Cash\",\n        \"debit\": 150,\n        \"credit\": 0\n      },\n      {\n        \"accountId\": \"7000...\",\n        \"accountNumber\": \"7000\",\n        \"accountName\": \"Sales\",\n        \"debit\": 0,\n        \"credit\": 150\n      }\n    ],\n    \"totalDebit\": 150,\n    \"totalCredit\": 150,\n    \"isBalanced\": true\n  },\n  \"meta\": null\n}"
+              "body": "{\n  \"data\": {\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"asOf\": \"2026-12-31\",\n    \"currency\": \"USD\",\n    \"rolledUp\": true,\n    \"rows\": [\n      {\n        \"accountId\": \"\",\n        \"accountNumber\": \"6\",\n        \"accountName\": \"Class 6\",\n        \"debit\": 250,\n        \"credit\": 0\n      },\n      {\n        \"accountId\": \"\",\n        \"accountNumber\": \"7\",\n        \"accountName\": \"Class 7\",\n        \"debit\": 0,\n        \"credit\": 250\n      }\n    ],\n    \"totalDebit\": 250,\n    \"totalCredit\": 250,\n    \"isBalanced\": true\n  },\n  \"meta\": null\n}"
             }
           ]
         }

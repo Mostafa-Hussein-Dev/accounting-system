@@ -42,6 +42,8 @@ export class ReportsController {
       query.asOf,
       query.branchId,
       query.companyId,
+      query.numberPrefix,
+      query.rollUp,
     );
   }
 }

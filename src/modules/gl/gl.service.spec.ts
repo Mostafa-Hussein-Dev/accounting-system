@@ -402,6 +402,129 @@ describe('GL engine (FR-901/FR-906)', () => {
     await prisma.company.deleteMany({ where: { id: co.id } });
   });
 
+  it('scopes and rolls up the trial balance by numberPrefix / class', async () => {
+    const co = await prisma.company.create({
+      data: {
+        name: `TB Co ${randomUUID().slice(0, 8)}`,
+        baseCurrencyCode: 'USD',
+      },
+    });
+    const c = { userId: randomUUID(), companyId: co.id };
+    const mk = (
+      number: string,
+      type: AccountType,
+      nb: NormalBalance,
+      cls: number,
+    ) =>
+      prisma.account
+        .create({
+          data: {
+            companyId: co.id,
+            number,
+            name: `Acct ${number}`,
+            accountClass: cls,
+            type,
+            normalBalance: nb,
+          },
+        })
+        .then((a) => a.id);
+    const exp1 = await mk('6001', AccountType.EXPENSE, NormalBalance.DEBIT, 6);
+    const exp2 = await mk('6002', AccountType.EXPENSE, NormalBalance.DEBIT, 6);
+    const rev = await mk('7000', AccountType.REVENUE, NormalBalance.CREDIT, 7);
+    await prisma.documentSequence.create({
+      data: {
+        companyId: co.id,
+        docType: DocumentType.JOURNAL_ENTRY,
+        prefix: 'JE-',
+        resetPeriod: ResetPeriod.YEARLY,
+      },
+    });
+
+    const postEntry = async (debitAcct: string, amount: number) => {
+      const e = await gl.create(
+        {
+          date: '2026-07-23',
+          lines: [
+            {
+              accountId: debitAcct,
+              side: JournalSide.DEBIT,
+              amountOriginal: amount,
+              currency: 'USD',
+            },
+            {
+              accountId: rev,
+              side: JournalSide.CREDIT,
+              amountOriginal: amount,
+              currency: 'USD',
+            },
+          ],
+        },
+        c,
+      );
+      await posting.post(e.id, c);
+    };
+    await postEntry(exp1, 100);
+    await postEntry(exp2, 40);
+    // Ledger now: 6001 D100, 6002 D40, 7000 C140.
+
+    // Full TB balances, one row per account.
+    const full = await ledger.trialBalance(c);
+    expect(full.isBalanced).toBe(true);
+    expect(full.rolledUp).toBe(false);
+    expect(full.rows).toHaveLength(3);
+
+    // Prefix-scoped section (class 6 only) — debits without the offsetting
+    // credit, so it deliberately does NOT balance.
+    const section = await ledger.trialBalance(
+      c,
+      undefined,
+      undefined,
+      undefined,
+      ['60'],
+    );
+    expect(section.rows).toHaveLength(2);
+    expect(section.totalDebit).toBe(140);
+    expect(section.totalCredit).toBe(0);
+    expect(section.isBalanced).toBe(false);
+
+    // Roll up by prefix -> one summary line for the "60" subtree.
+    const rolledPrefix = await ledger.trialBalance(
+      c,
+      undefined,
+      undefined,
+      undefined,
+      ['60'],
+      true,
+    );
+    expect(rolledPrefix.rolledUp).toBe(true);
+    expect(rolledPrefix.rows).toHaveLength(1);
+    expect(rolledPrefix.rows[0].accountNumber).toBe('60');
+    expect(rolledPrefix.rows[0].debit).toBe(140);
+
+    // Roll up with no prefix -> one line per class, balances overall.
+    const rolledClass = await ledger.trialBalance(
+      c,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(rolledClass.rows).toHaveLength(2);
+    expect(rolledClass.rows.find((r) => r.accountNumber === '6')?.debit).toBe(
+      140,
+    );
+    expect(rolledClass.rows.find((r) => r.accountNumber === '7')?.credit).toBe(
+      140,
+    );
+    expect(rolledClass.isBalanced).toBe(true);
+
+    await prisma.journalEntry.deleteMany({ where: { companyId: co.id } });
+    await prisma.documentSequence.deleteMany({ where: { companyId: co.id } });
+    await prisma.account.deleteMany({ where: { companyId: co.id } });
+    await prisma.company.deleteMany({ where: { id: co.id } });
+  });
+
   it('404s on an unknown account balance', async () => {
     await expect(ledger.accountBalance(randomUUID(), caller)).rejects.toThrow(
       NotFoundException,

@@ -1,10 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TrialBalanceRowDto {
-  @ApiProperty({ example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab' })
+  @ApiProperty({
+    description: 'Account id — empty on a rolled-up (group) row.',
+    example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab',
+  })
   accountId!: string;
 
-  @ApiProperty({ example: '531' })
+  @ApiProperty({
+    description:
+      'Account number, or the group key (prefix/class) when rolled up.',
+    example: '531',
+  })
   accountNumber!: string;
 
   @ApiProperty({ example: 'Cash' })
@@ -42,6 +49,13 @@ export class TrialBalanceResponseDto {
 
   @ApiProperty({ description: 'Base currency of the amounts.', example: 'USD' })
   currency!: string;
+
+  @ApiProperty({
+    description:
+      'Whether rows are rolled-up group summaries rather than accounts.',
+    example: false,
+  })
+  rolledUp!: boolean;
 
   @ApiProperty({ type: TrialBalanceRowDto, isArray: true })
   rows!: TrialBalanceRowDto[];

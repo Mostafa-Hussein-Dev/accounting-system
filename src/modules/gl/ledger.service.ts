@@ -84,13 +84,38 @@ export class LedgerService {
     asOf?: string,
     branchId?: string,
     companyIdQuery?: string,
+    numberPrefix?: string[],
+    rollUp?: boolean,
   ): Promise<TrialBalanceResponseDto> {
     const companyId = this.resolveCompanyId(companyIdQuery, caller);
     const asOfDate = this.parseAsOf(asOf);
 
+    // When prefixes are given, resolve the matching accounts up front so the
+    // aggregation (and later the roll-up grouping) is scoped to those sub-trees.
+    let accountIds: string[] | undefined;
+    if (numberPrefix?.length) {
+      const matched = await this.prisma.account.findMany({
+        where: {
+          companyId,
+          deletedAt: null,
+          OR: numberPrefix.map((p) => ({ number: { startsWith: p } })),
+        },
+        select: { id: true },
+      });
+      accountIds = matched.map((a) => a.id);
+      if (accountIds.length === 0) {
+        return this.emptyTrialBalance(companyId, asOfDate, !!rollUp);
+      }
+    }
+
     const grouped = await this.prisma.journalLine.groupBy({
       by: ['accountId', 'side'],
-      where: this.postedLineWhere(companyId, asOfDate, {}, branchId),
+      where: this.postedLineWhere(
+        companyId,
+        asOfDate,
+        accountIds ? { accountId: { in: accountIds } } : {},
+        branchId,
+      ),
       _sum: { amountBase: true },
     });
 
@@ -109,13 +134,39 @@ export class LedgerService {
 
     const accounts = await this.prisma.account.findMany({
       where: { id: { in: [...perAccount.keys()] } },
-      select: { id: true, number: true, name: true },
+      select: { id: true, number: true, name: true, accountClass: true },
     });
     const accountById = new Map(accounts.map((a) => [a.id, a]));
 
+    const rows = rollUp
+      ? this.rollUpRows(perAccount, accountById, numberPrefix)
+      : this.perAccountRows(perAccount, accountById);
+
+    const totalDebit = round2(rows.reduce((s, r) => s + r.debit, 0));
+    const totalCredit = round2(rows.reduce((s, r) => s + r.credit, 0));
+
+    const dto = new TrialBalanceResponseDto();
+    dto.companyId = companyId;
+    dto.asOf = asOfDate.toISOString().slice(0, 10);
+    dto.currency = await this.getBaseCurrency(companyId);
+    dto.rolledUp = !!rollUp;
+    dto.rows = rows;
+    dto.totalDebit = totalDebit;
+    dto.totalCredit = totalCredit;
+    // A full trial balance always balances; a prefix-filtered section may not.
+    dto.isBalanced = totalDebit === totalCredit;
+    return dto;
+  }
+
+  /** One row per account, net placed in the debit or credit column. */
+  private perAccountRows(
+    perAccount: Map<string, { debit: number; credit: number }>,
+    accountById: Map<
+      string,
+      { number: string; name: string; accountClass: number }
+    >,
+  ): TrialBalanceRowDto[] {
     const rows: TrialBalanceRowDto[] = [];
-    let totalDebit = 0;
-    let totalCredit = 0;
     for (const [accountId, sums] of perAccount) {
       const net = round2(sums.debit - sums.credit);
       if (net === 0) {
@@ -128,20 +179,70 @@ export class LedgerService {
       row.accountName = account?.name ?? '';
       row.debit = net > 0 ? net : 0;
       row.credit = net < 0 ? round2(-net) : 0;
-      totalDebit += row.debit;
-      totalCredit += row.credit;
       rows.push(row);
     }
-    rows.sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
+    return rows.sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
+  }
 
+  /**
+   * One summary row per group: the supplied numberPrefix each account falls
+   * under, or its PCL class when no prefixes are given. Each group's net
+   * position is placed in the debit or credit column.
+   */
+  private rollUpRows(
+    perAccount: Map<string, { debit: number; credit: number }>,
+    accountById: Map<
+      string,
+      { number: string; name: string; accountClass: number }
+    >,
+    numberPrefix?: string[],
+  ): TrialBalanceRowDto[] {
+    const netByKey = new Map<string, number>();
+    for (const [accountId, sums] of perAccount) {
+      const account = accountById.get(accountId);
+      if (!account) {
+        continue;
+      }
+      const key = numberPrefix?.length
+        ? (numberPrefix.find((p) => account.number.startsWith(p)) ??
+          account.number)
+        : String(account.accountClass);
+      netByKey.set(key, (netByKey.get(key) ?? 0) + (sums.debit - sums.credit));
+    }
+
+    const rows: TrialBalanceRowDto[] = [];
+    for (const [key, rawNet] of netByKey) {
+      const net = round2(rawNet);
+      if (net === 0) {
+        continue;
+      }
+      const row = new TrialBalanceRowDto();
+      row.accountId = '';
+      row.accountNumber = key;
+      row.accountName = numberPrefix?.length
+        ? `Accounts ${key}*`
+        : `Class ${key}`;
+      row.debit = net > 0 ? net : 0;
+      row.credit = net < 0 ? round2(-net) : 0;
+      rows.push(row);
+    }
+    return rows.sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
+  }
+
+  private async emptyTrialBalance(
+    companyId: string,
+    asOfDate: Date,
+    rolledUp: boolean,
+  ): Promise<TrialBalanceResponseDto> {
     const dto = new TrialBalanceResponseDto();
     dto.companyId = companyId;
     dto.asOf = asOfDate.toISOString().slice(0, 10);
     dto.currency = await this.getBaseCurrency(companyId);
-    dto.rows = rows;
-    dto.totalDebit = round2(totalDebit);
-    dto.totalCredit = round2(totalCredit);
-    dto.isBalanced = dto.totalDebit === dto.totalCredit;
+    dto.rolledUp = rolledUp;
+    dto.rows = [];
+    dto.totalDebit = 0;
+    dto.totalCredit = 0;
+    dto.isBalanced = true;
     return dto;
   }
 

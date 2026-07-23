@@ -1,5 +1,17 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsBoolean,
+  IsDateString,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
+import {
+  toBoolean,
+  toStringArray,
+} from '../../../common/dto/query-transformers';
 
 export class QueryTrialBalanceDto {
   @ApiPropertyOptional({
@@ -18,6 +30,28 @@ export class QueryTrialBalanceDto {
   @IsOptional()
   @IsUUID()
   branchId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'One or more account-number prefixes (repeat or comma-separate). Restricts the report to those PCL sub-trees, e.g. ?numberPrefix=6,7 for the P&L accounts.',
+    example: ['6', '7'],
+    type: [String],
+  })
+  @IsOptional()
+  @Transform(toStringArray)
+  @IsString({ each: true })
+  @MaxLength(20, { each: true })
+  numberPrefix?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      'Roll the report up into one summary line per group instead of per account: per supplied numberPrefix when given, otherwise per PCL class (1–7).',
+    example: true,
+  })
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  rollUp?: boolean;
 
   @ApiPropertyOptional({
     description:

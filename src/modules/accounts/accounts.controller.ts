@@ -25,6 +25,8 @@ import { QueryAccountDto } from './dto/query-account.dto';
 import { AccountResponseDto } from './dto/account-response.dto';
 import { AccountTreeNodeDto } from './dto/account-tree-node.dto';
 import { ImportChartResultDto } from './dto/import-chart-result.dto';
+import { LedgerService } from '../gl/ledger.service';
+import { AccountBalanceResponseDto } from '../gl/dto/account-balance-response.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -37,7 +39,10 @@ import { RequirePermissions } from '../casl/decorators/require-permissions.decor
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('accounts')
 export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) {}
+  constructor(
+    private readonly accountsService: AccountsService,
+    private readonly ledgerService: LedgerService,
+  ) {}
 
   @Post()
   @RequirePermissions({ action: 'create', subject: 'Account' })
@@ -168,6 +173,27 @@ export class AccountsController {
     @CurrentUser() caller: AuthenticatedUser,
   ): Promise<AccountResponseDto> {
     return this.accountsService.findOne(id, caller);
+  }
+
+  @Get(':id/balance')
+  @RequirePermissions({ action: 'read', subject: 'Account' })
+  @ApiOperation({
+    summary:
+      'Get an account’s balance, derived from posted journal lines (Σ debit − Σ credit). Optional asOf date.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Derived account balance',
+    type: AccountBalanceResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  @ApiResponse({ status: 404, description: 'Account not found' })
+  balance(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() caller: AuthenticatedUser,
+    @Query('asOf') asOf?: string,
+  ): Promise<AccountBalanceResponseDto> {
+    return this.ledgerService.accountBalance(id, caller, asOf);
   }
 
   @Patch(':id')

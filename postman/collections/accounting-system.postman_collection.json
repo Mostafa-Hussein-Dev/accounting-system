@@ -20,6 +20,16 @@
       "key": "baseUrl",
       "value": "http://localhost:3000/api/v1",
       "type": "string"
+    },
+    {
+      "key": "debitAccountId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "creditAccountId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -3799,6 +3809,552 @@
                 }
               ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SEQUENCE_NOT_FOUND\",\n    \"message\": \"Document sequence with id c1d2e3f4-0000-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Accounting / GL",
+      "description": "Journal entries and ledger reports (FR-901/FR-906). Draft → post → reverse; posted entries are immutable. Base amounts are computed server-side; every entry must balance (Σ debit_base = Σ credit_base). Set {{debitAccountId}} and {{creditAccountId}} to two non-control, active accounts (e.g. via GET /accounts) before creating an entry.",
+      "item": [
+        {
+          "name": "Create journal entry (draft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Draft created', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) { pm.environment.set('journalEntryId', pm.response.json().data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-07-23\",\n  \"reference\": \"ADJ-2026-07\",\n  \"description\": \"Manual cash sale\",\n  \"lines\": [\n    {\n      \"accountId\": \"{{debitAccountId}}\",\n      \"side\": \"DEBIT\",\n      \"amountOriginal\": 150,\n      \"currency\": \"USD\"\n    },\n    {\n      \"accountId\": \"{{creditAccountId}}\",\n      \"side\": \"CREDIT\",\n      \"amountOriginal\": 150,\n      \"currency\": \"USD\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/journal-entries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "journal-entries"
+              ]
+            },
+            "description": "Requires journal.create (Company Admin). Creates a DRAFT entry (no number yet). At least two lines; each is a debit OR credit with amountOriginal/currency and optional rate (defaults to the exchange rate in force on the date, or 1 for the base currency). Rejected 400 if unbalanced, if a line targets a control account, or an inactive/unknown account. Test script saves journalEntryId."
+          },
+          "response": [
+            {
+              "name": "201 Created (draft)",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"branchId\": null,\n    \"entryNumber\": null,\n    \"date\": \"2026-07-23T00:00:00.000Z\",\n    \"reference\": \"ADJ-2026-07\",\n    \"description\": \"Manual cash sale\",\n    \"status\": \"DRAFT\",\n    \"reversalOfId\": null,\n    \"totalDebitBase\": 150,\n    \"totalCreditBase\": 150,\n    \"isBalanced\": true,\n    \"lines\": [\n      {\n        \"id\": \"a1b2c3d4-0001-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 1,\n        \"accountId\": \"5310...\",\n        \"side\": \"DEBIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      },\n      {\n        \"id\": \"a1b2c3d4-0002-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 2,\n        \"accountId\": \"7000...\",\n        \"side\": \"CREDIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      }\n    ],\n    \"postedAt\": null,\n    \"createdAt\": \"2026-07-23T09:00:00.000Z\",\n    \"updatedAt\": \"2026-07-23T09:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "400 Unbalanced",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_ENTRY_UNBALANCED\",\n    \"message\": \"Journal entry is not balanced: debits (150) must equal credits (140) in the base currency.\",\n    \"field\": \"lines\"\n  }\n}"
+            },
+            {
+              "name": "400 Control account",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_CONTROL_ACCOUNT_POSTING\",\n    \"message\": \"Account 40 is a control account and cannot be posted to directly; post through its sub-ledger.\",\n    \"field\": \"lines[0].accountId\"\n  }\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List journal entries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/journal-entries?status=POSTED&dateFrom=2026-01-01&dateTo=2026-12-31&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "journal-entries"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "POSTED"
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "dateTo",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "accountId",
+                  "value": "{{debitAccountId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Requires journal.read (Company Admin or Member). Paginated; filter by status, date range, and accountId (entries touching that account)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"branchId\": null,\n      \"entryNumber\": \"JE-2026-0001\",\n      \"date\": \"2026-07-23T00:00:00.000Z\",\n      \"reference\": \"ADJ-2026-07\",\n      \"description\": \"Manual cash sale\",\n      \"status\": \"POSTED\",\n      \"reversalOfId\": null,\n      \"totalDebitBase\": 150,\n      \"totalCreditBase\": 150,\n      \"isBalanced\": true,\n      \"lines\": [\n        {\n          \"id\": \"a1b2c3d4-0001-4a5b-9c8d-1234567890ab\",\n          \"lineNo\": 1,\n          \"accountId\": \"5310...\",\n          \"side\": \"DEBIT\",\n          \"amountOriginal\": 150,\n          \"currency\": \"USD\",\n          \"rate\": 1,\n          \"amountBase\": 150,\n          \"partnerId\": null,\n          \"costCenterId\": null,\n          \"description\": null\n        },\n        {\n          \"id\": \"a1b2c3d4-0002-4a5b-9c8d-1234567890ab\",\n          \"lineNo\": 2,\n          \"accountId\": \"7000...\",\n          \"side\": \"CREDIT\",\n          \"amountOriginal\": 150,\n          \"currency\": \"USD\",\n          \"rate\": 1,\n          \"amountBase\": 150,\n          \"partnerId\": null,\n          \"costCenterId\": null,\n          \"description\": null\n        }\n      ],\n      \"postedAt\": \"2026-07-23T09:05:00.000Z\",\n      \"createdAt\": \"2026-07-23T09:00:00.000Z\",\n      \"updatedAt\": \"2026-07-23T09:00:00.000Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 1,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get journal entry by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/journal-entries/{{journalEntryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "journal-entries",
+                "{{journalEntryId}}"
+              ]
+            },
+            "description": "Requires journal.read. Returns the entry with its lines and computed totals."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"branchId\": null,\n    \"entryNumber\": null,\n    \"date\": \"2026-07-23T00:00:00.000Z\",\n    \"reference\": \"ADJ-2026-07\",\n    \"description\": \"Manual cash sale\",\n    \"status\": \"DRAFT\",\n    \"reversalOfId\": null,\n    \"totalDebitBase\": 150,\n    \"totalCreditBase\": 150,\n    \"isBalanced\": true,\n    \"lines\": [\n      {\n        \"id\": \"a1b2c3d4-0001-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 1,\n        \"accountId\": \"5310...\",\n        \"side\": \"DEBIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      },\n      {\n        \"id\": \"a1b2c3d4-0002-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 2,\n        \"accountId\": \"7000...\",\n        \"side\": \"CREDIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      }\n    ],\n    \"postedAt\": null,\n    \"createdAt\": \"2026-07-23T09:00:00.000Z\",\n    \"updatedAt\": \"2026-07-23T09:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_ENTRY_NOT_FOUND\",\n    \"message\": \"Journal entry with id ... was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update draft journal entry",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Corrected memo\",\n  \"lines\": [\n    {\n      \"accountId\": \"{{debitAccountId}}\",\n      \"side\": \"DEBIT\",\n      \"amountOriginal\": 200,\n      \"currency\": \"USD\"\n    },\n    {\n      \"accountId\": \"{{creditAccountId}}\",\n      \"side\": \"CREDIT\",\n      \"amountOriginal\": 200,\n      \"currency\": \"USD\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/journal-entries/{{journalEntryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "journal-entries",
+                "{{journalEntryId}}"
+              ]
+            },
+            "description": "Requires journal.update. DRAFT only — 409 once posted. Supplying `lines` replaces them wholesale (re-validated and re-balanced); omit it to edit only header fields."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"branchId\": null,\n    \"entryNumber\": null,\n    \"date\": \"2026-07-23T00:00:00.000Z\",\n    \"reference\": \"ADJ-2026-07\",\n    \"description\": \"Manual cash sale\",\n    \"status\": \"DRAFT\",\n    \"reversalOfId\": null,\n    \"totalDebitBase\": 150,\n    \"totalCreditBase\": 150,\n    \"isBalanced\": true,\n    \"lines\": [\n      {\n        \"id\": \"a1b2c3d4-0001-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 1,\n        \"accountId\": \"5310...\",\n        \"side\": \"DEBIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      },\n      {\n        \"id\": \"a1b2c3d4-0002-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 2,\n        \"accountId\": \"7000...\",\n        \"side\": \"CREDIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      }\n    ],\n    \"postedAt\": null,\n    \"createdAt\": \"2026-07-23T09:00:00.000Z\",\n    \"updatedAt\": \"2026-07-23T09:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Posted (immutable)",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_ENTRY_NOT_DRAFT\",\n    \"message\": \"Journal entry JE-2026-0001 is posted and cannot be edited or deleted — reverse it instead.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Post journal entry",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/journal-entries/{{journalEntryId}}/post",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "journal-entries",
+                "{{journalEntryId}}",
+                "post"
+              ]
+            },
+            "description": "Requires journal.post (a sensitive, independently-permissioned action). Assigns the gap-controlled number from the JOURNAL_ENTRY sequence and makes the entry part of the ledger — immutable thereafter."
+          },
+          "response": [
+            {
+              "name": "200 Posted",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"branchId\": null,\n    \"entryNumber\": \"JE-2026-0001\",\n    \"date\": \"2026-07-23T00:00:00.000Z\",\n    \"reference\": \"ADJ-2026-07\",\n    \"description\": \"Manual cash sale\",\n    \"status\": \"POSTED\",\n    \"reversalOfId\": null,\n    \"totalDebitBase\": 150,\n    \"totalCreditBase\": 150,\n    \"isBalanced\": true,\n    \"lines\": [\n      {\n        \"id\": \"a1b2c3d4-0001-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 1,\n        \"accountId\": \"5310...\",\n        \"side\": \"DEBIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      },\n      {\n        \"id\": \"a1b2c3d4-0002-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 2,\n        \"accountId\": \"7000...\",\n        \"side\": \"CREDIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      }\n    ],\n    \"postedAt\": \"2026-07-23T09:05:00.000Z\",\n    \"createdAt\": \"2026-07-23T09:00:00.000Z\",\n    \"updatedAt\": \"2026-07-23T09:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Already posted",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_ENTRY_ALREADY_POSTED\",\n    \"message\": \"Journal entry JE-2026-0001 is already posted.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reverse journal entry",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reversal created', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) { pm.environment.set('reversalEntryId', pm.response.json().data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Posted to the wrong period\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/journal-entries/{{journalEntryId}}/reverse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "journal-entries",
+                "{{journalEntryId}}",
+                "reverse"
+              ]
+            },
+            "description": "Requires journal.reverse. POSTED only. Creates a new POSTED entry with the same lines but swapped sides and the ORIGINAL frozen base amounts, so the two net to zero. An entry can be reversed at most once."
+          },
+          "response": [
+            {
+              "name": "201 Reversal created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"c4d5e6f7-...\",\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"branchId\": null,\n    \"entryNumber\": \"JE-2026-0002\",\n    \"date\": \"2026-07-23T00:00:00.000Z\",\n    \"reference\": \"ADJ-2026-07\",\n    \"description\": \"Posted to the wrong period\",\n    \"status\": \"POSTED\",\n    \"reversalOfId\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n    \"totalDebitBase\": 150,\n    \"totalCreditBase\": 150,\n    \"isBalanced\": true,\n    \"lines\": [\n      {\n        \"id\": \"a1b2c3d4-0001-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 1,\n        \"accountId\": \"5310...\",\n        \"side\": \"CREDIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      },\n      {\n        \"id\": \"a1b2c3d4-0002-4a5b-9c8d-1234567890ab\",\n        \"lineNo\": 2,\n        \"accountId\": \"7000...\",\n        \"side\": \"DEBIT\",\n        \"amountOriginal\": 150,\n        \"currency\": \"USD\",\n        \"rate\": 1,\n        \"amountBase\": 150,\n        \"partnerId\": null,\n        \"costCenterId\": null,\n        \"description\": null\n      }\n    ],\n    \"postedAt\": \"2026-07-23T09:05:00.000Z\",\n    \"createdAt\": \"2026-07-23T09:00:00.000Z\",\n    \"updatedAt\": \"2026-07-23T09:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "409 Draft or already reversed",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_ENTRY_ALREADY_REVERSED\",\n    \"message\": \"Journal entry JE-2026-0001 was already reversed by JE-2026-0002.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete draft journal entry",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/journal-entries/{{journalEntryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "journal-entries",
+                "{{journalEntryId}}"
+              ]
+            },
+            "description": "Requires journal.delete. DRAFT only (hard delete). A posted entry returns 409 — reverse it instead."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": ""
+            },
+            {
+              "name": "409 Posted (immutable)",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_ENTRY_NOT_DRAFT\",\n    \"message\": \"Journal entry JE-2026-0001 is posted and cannot be edited or deleted — reverse it instead.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get account balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{debitAccountId}}/balance?asOf=2026-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{debitAccountId}}",
+                "balance"
+              ],
+              "query": [
+                {
+                  "key": "asOf",
+                  "value": "2026-12-31"
+                }
+              ]
+            },
+            "description": "Requires account.read. Derived balance (Σ debit_base − Σ credit_base) over POSTED entries only; drafts are excluded. naturalBalance re-signs it to the account’s normal side. Optional asOf date."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"accountId\": \"5310...\",\n    \"accountNumber\": \"5310\",\n    \"accountName\": \"Cash\",\n    \"normalBalance\": \"DEBIT\",\n    \"totalDebitBase\": 150,\n    \"totalCreditBase\": 0,\n    \"balance\": 150,\n    \"naturalBalance\": 150,\n    \"asOf\": \"2026-12-31\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "404 Not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"ACCOUNT_NOT_FOUND\",\n    \"message\": \"Account with id ... was not found.\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get trial balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/trial-balance?asOf=2026-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "trial-balance"
+              ],
+              "query": [
+                {
+                  "key": "asOf",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "numberPrefix",
+                  "value": "6,7",
+                  "disabled": true
+                },
+                {
+                  "key": "rollUp",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "companyId",
+                  "value": "{{companyId}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Requires journal.read. Every account’s net balance in debit/credit columns; totals must be equal. Optional asOf and branchId. numberPrefix (repeat/comma-separate) scopes the report to PCL sub-trees (e.g. 6,7 for P&L). rollUp=true collapses to one summary line per group (per prefix, or per class when no prefix) — a scoped/rolled section need not balance. A platform admin must pass companyId."
+          },
+          "response": [
+            {
+              "name": "200 OK (rolled up by class)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"asOf\": \"2026-12-31\",\n    \"currency\": \"USD\",\n    \"rolledUp\": true,\n    \"rows\": [\n      {\n        \"accountId\": \"\",\n        \"accountNumber\": \"6\",\n        \"accountName\": \"Class 6\",\n        \"debit\": 250,\n        \"credit\": 0\n      },\n      {\n        \"accountId\": \"\",\n        \"accountNumber\": \"7\",\n        \"accountName\": \"Class 7\",\n        \"debit\": 0,\n        \"credit\": 250\n      }\n    ],\n    \"totalDebit\": 250,\n    \"totalCredit\": 250,\n    \"isBalanced\": true\n  },\n  \"meta\": null\n}"
             }
           ]
         }

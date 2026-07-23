@@ -114,6 +114,12 @@ const PERMISSIONS = [
   { key: 'sequence.create', subject: 'DocumentSequence', action: 'create', description: 'Create document sequences' },
   { key: 'sequence.update', subject: 'DocumentSequence', action: 'update', description: 'Update document sequences' },
   { key: 'sequence.delete', subject: 'DocumentSequence', action: 'delete', description: 'Delete document sequences' },
+  { key: 'journal.read', subject: 'JournalEntry', action: 'read', description: 'View journal entries and trial balance' },
+  { key: 'journal.create', subject: 'JournalEntry', action: 'create', description: 'Create draft journal entries' },
+  { key: 'journal.update', subject: 'JournalEntry', action: 'update', description: 'Edit draft journal entries' },
+  { key: 'journal.delete', subject: 'JournalEntry', action: 'delete', description: 'Delete draft journal entries' },
+  { key: 'journal.post', subject: 'JournalEntry', action: 'post', description: 'Post journal entries to the ledger' },
+  { key: 'journal.reverse', subject: 'JournalEntry', action: 'reverse', description: 'Reverse posted journal entries' },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -160,6 +166,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
       'account.read',
       'tax.read',
       'sequence.read',
+      'journal.read',
     ],
   },
 ];

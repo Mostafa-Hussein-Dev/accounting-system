@@ -68,6 +68,22 @@ enum DocumentType {
   JOURNAL_ENTRY
 }
 
+// Journal-entry lifecycle (FR-901/FR-906). A DRAFT entry is editable and does
+// NOT affect the ledger; posting is one-way — a POSTED entry is immutable and is
+// corrected only by a reversing entry. A reversed original stays POSTED and
+// links to its reversal (see JournalEntry.reversalOf/reversedBy).
+enum JournalStatus {
+  DRAFT
+  POSTED
+}
+
+// The side of a journal line (docs/MODELS.md): a line is a debit OR a credit,
+// never both. The amount is stored once, tagged with its side.
+enum JournalSide {
+  DEBIT
+  CREDIT
+}
+
 model Company {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
@@ -102,6 +118,8 @@ model Company {
   accounts          Account[]
   taxRates          TaxRate[]
   documentSequences DocumentSequence[]
+  journalEntries    JournalEntry[]
+  journalLines      JournalLine[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -221,6 +239,10 @@ model Account {
   vatOutForTaxRates TaxRate[] @relation("TaxRateVatOut")
   vatInForTaxRates  TaxRate[] @relation("TaxRateVatIn")
 
+  // Ledger postings against this account. An account's balance is DERIVED from
+  // these (Σ debit_base − Σ credit_base), never stored (invariant #4).
+  journalLines JournalLine[]
+
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -304,6 +326,114 @@ model DocumentSequence {
   @@map("document_sequences")
 }
 
+// A general-ledger journal entry (FR-901/FR-906) — the ledger record everything
+// posts into. Two or more lines whose base-currency debits equal credits. Manual
+// entries are created by the accountant; documents (invoices, payments, …) will
+// generate them automatically via the same posting service (FR-902).
+//
+// Tenant-scoped (listed in prisma.service.ts's TENANT_SCOPED_MODELS). Soft-delete
+// (deletedAt) like other financial records; a never-posted DRAFT may instead be
+// hard-deleted. A POSTED entry is immutable (invariant #2) — corrected only by a
+// reversing entry (reversalOf/reversedBy).
+model JournalEntry {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  // Optional branch — drives which numbering series is used (FR-106). Null = a
+  // company-wide entry using the company-wide JOURNAL_ENTRY series.
+  branchId String? @map("branch_id") @db.Uuid
+  branch   Branch? @relation(fields: [branchId], references: [id])
+
+  // The gap-controlled number, assigned from the JOURNAL_ENTRY sequence AT
+  // POSTING (a draft has no official number yet, so this is null until posted).
+  entryNumber String? @map("entry_number")
+
+  date        DateTime @db.Date
+  reference   String?
+  description String?
+
+  status JournalStatus @default(DRAFT)
+
+  // Reversal linkage (FR-901). reversalOf points to the entry this one reverses;
+  // reversedBy is the reversal generated for this entry. reversalOfId is unique,
+  // so an entry can be reversed at most once (a 1:1 self-relation).
+  reversalOfId String?       @unique @map("reversal_of_id") @db.Uuid
+  reversalOf   JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversedBy   JournalEntry? @relation("JournalReversal")
+
+  // Origin document for auto-posted entries (FR-902). Nullable with NO foreign
+  // key ON PURPOSE — the document models (invoice/payment/…) don't exist yet
+  // (see docs/DEFERRED.md). sourceDocType reuses the DocumentType enum; add the
+  // FK to sourceDocId when the document tables are built.
+  sourceDocType DocumentType? @map("source_doc_type")
+  sourceDocId   String?       @map("source_doc_id") @db.Uuid
+
+  postedAt   DateTime? @map("posted_at")
+  postedById String?   @map("posted_by_id") @db.Uuid
+  createdById String?  @map("created_by_id") @db.Uuid
+
+  lines JournalLine[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Number is unique per company; null (draft) rows are exempt (Postgres treats
+  // NULL as distinct), so many drafts coexist.
+  @@unique([companyId, entryNumber])
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, date])
+  @@index([deletedAt])
+  @@map("journal_entries")
+}
+
+// One line of a journal entry (docs/MODELS.md): a debit OR a credit against one
+// account, carrying the full 4-field Money (invariant #7). Tenant-scoped and
+// companyId-denormalized so balance/trial-balance aggregations run under
+// forTenant. Lines are deleted with their entry (onDelete: Cascade) only while
+// the entry is a draft — a posted entry is immutable.
+model JournalLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  journalEntryId String       @map("journal_entry_id") @db.Uuid
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  lineNo Int @map("line_no")
+
+  accountId String  @map("account_id") @db.Uuid
+  account   Account @relation(fields: [accountId], references: [id])
+
+  side JournalSide
+
+  // The 4-field Money. amountOriginal is in `currency`; rate is
+  // "currency units per 1 USD" (the project-wide convention); amountBase is the
+  // company base currency. amountBase is SERVER-COMPUTED (invariant #3) and
+  // frozen at posting — later rate edits never alter it (invariant #6).
+  amountOriginal Decimal @map("amount_original") @db.Decimal(20, 2)
+  currency       String
+  rate           Decimal @db.Decimal(20, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(20, 2)
+
+  // Nullable with NO foreign key ON PURPOSE — Partner (FR-301) and cost centres
+  // don't exist yet (see docs/DEFERRED.md). Sub-ledger postings will fill these
+  // once those modules land.
+  partnerId    String? @map("partner_id") @db.Uuid
+  costCenterId String? @map("cost_center_id") @db.Uuid
+
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([companyId])
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_lines")
+}
+
 // A physical location of a company (FR-102). Always tenant-scoped — unlike
 // Role, a Branch never exists without a company, so companyId is required and
 // Branch is listed in prisma.service.ts's TENANT_SCOPED_MODELS.
@@ -334,6 +464,7 @@ model Branch {
   deletedAt DateTime? @map("deleted_at")
 
   documentSequences DocumentSequence[]
+  journalEntries    JournalEntry[]
 
   @@index([companyId])
   @@index([deletedAt])

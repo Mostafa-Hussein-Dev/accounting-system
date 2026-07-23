@@ -208,6 +208,86 @@ describe('AccountsService', () => {
     expect(listB.data.map((x) => x.id)).not.toContain(acc.id);
   });
 
+  it('filters by numberPrefix (subtree and specific account)', async () => {
+    const tok = `PFX${randomUUID().slice(0, 6)}`;
+    await service.create({ ...base(`${tok}60`) }, callerB);
+    await service.create({ ...base(`${tok}600`) }, callerB);
+    await service.create({ ...base(`${tok}70`) }, callerB);
+
+    const page = {
+      page: 1,
+      limit: 50,
+      sortBy: 'number',
+      sortOrder: 'asc' as const,
+    };
+
+    // subtree: everything under the "…6" branch
+    const subtree = await service.findAll(
+      { ...page, numberPrefix: [`${tok}6`] },
+      callerB,
+    );
+    const subtreeNums = subtree.data.map((a) => a.number).sort();
+    expect(subtreeNums).toEqual([`${tok}60`, `${tok}600`]);
+
+    // specific: the full number returns that account (not its sibling "…60")
+    const one = await service.findAll(
+      { ...page, numberPrefix: [`${tok}600`] },
+      callerB,
+    );
+    expect(one.data.map((a) => a.number)).toEqual([`${tok}600`]);
+  });
+
+  it('filters by multiple classes and multiple prefixes at once', async () => {
+    const tok = `MUL${randomUUID().slice(0, 6)}`;
+    await service.create(
+      {
+        ...base(`${tok}60`),
+        accountClass: 6,
+        type: AccountType.EXPENSE,
+        normalBalance: NormalBalance.DEBIT,
+      },
+      callerB,
+    );
+    await service.create(
+      {
+        ...base(`${tok}70`),
+        accountClass: 7,
+        type: AccountType.REVENUE,
+        normalBalance: NormalBalance.CREDIT,
+      },
+      callerB,
+    );
+    await service.create({ ...base(`${tok}50`), accountClass: 5 }, callerB);
+
+    const page = {
+      page: 1,
+      limit: 50,
+      sortBy: 'number',
+      sortOrder: 'asc' as const,
+    };
+
+    // multiple classes: only 6 and 7 (the class-5 one is excluded), scoped to
+    // this test's accounts via the shared token prefix.
+    const byClass = await service.findAll(
+      { ...page, accountClass: [6, 7], numberPrefix: [tok] },
+      callerB,
+    );
+    expect(byClass.data.map((a) => a.number).sort()).toEqual([
+      `${tok}60`,
+      `${tok}70`,
+    ]);
+
+    // multiple prefixes: the "…5" and "…6" subtrees, not "…7"
+    const byPrefix = await service.findAll(
+      { ...page, numberPrefix: [`${tok}5`, `${tok}6`] },
+      callerB,
+    );
+    expect(byPrefix.data.map((a) => a.number).sort()).toEqual([
+      `${tok}50`,
+      `${tok}60`,
+    ]);
+  });
+
   it('re-parents on update and rejects cycles', async () => {
     const p = await service.create(
       base(`CY-P-${randomUUID().slice(0, 8)}`),

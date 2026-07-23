@@ -12,6 +12,7 @@ import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.mod
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { TaxesModule } from './modules/taxes/taxes.module';
 import { SequencesModule } from './modules/sequences/sequences.module';
+import { GlModule } from './modules/gl/gl.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { SequencesModule } from './modules/sequences/sequences.module';
     AccountsModule,
     TaxesModule,
     SequencesModule,
+    GlModule,
   ],
   controllers: [],
   providers: [],

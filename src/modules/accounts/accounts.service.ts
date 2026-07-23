@@ -343,8 +343,11 @@ export class AccountsService {
 
   private buildWhere(query: QueryAccountDto): Prisma.AccountWhereInput {
     const where: Prisma.AccountWhereInput = { deletedAt: null };
-    if (query.accountClass !== undefined) {
-      where.accountClass = query.accountClass;
+    // numberPrefix and search are each their own OR-group; collect them in AND
+    // so they combine correctly (and with each other) rather than overwriting.
+    const and: Prisma.AccountWhereInput[] = [];
+    if (query.accountClass?.length) {
+      where.accountClass = { in: query.accountClass };
     }
     if (query.type) {
       where.type = query.type;
@@ -358,14 +361,26 @@ export class AccountsService {
     if (query.parentId) {
       where.parentId = query.parentId;
     }
+    if (query.numberPrefix?.length) {
+      // Hierarchical PCL numbers: each prefix selects an intermediate class and
+      // its whole subtree (or a single account when given its full number).
+      and.push({
+        OR: query.numberPrefix.map((p) => ({ number: { startsWith: p } })),
+      });
+    }
     if (query.companyId) {
       where.companyId = query.companyId;
     }
     if (query.search) {
-      where.OR = [
-        { number: { contains: query.search, mode: 'insensitive' } },
-        { name: { contains: query.search, mode: 'insensitive' } },
-      ];
+      and.push({
+        OR: [
+          { number: { contains: query.search, mode: 'insensitive' } },
+          { name: { contains: query.search, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (and.length) {
+      where.AND = and;
     }
     return where;
   }

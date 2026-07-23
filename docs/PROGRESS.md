@@ -2,7 +2,7 @@
 
 Living handoff doc so context survives across sessions. Update it as modules land.
 
-## Where we are (as of 2026-07-21)
+## Where we are (as of 2026-07-23)
 
 Backend for a multi-tenant, dual-currency (USD/LBP) Lebanese ERP (NestJS 11 +
 Prisma 7 + PostgreSQL). We build **one FR module at a time**, in dependency
@@ -17,15 +17,18 @@ order, each on its own `feature/*` branch merged via PR to `main`.
 | FR-104 | Chart of accounts | **full official 759-account Plan Comptable Libanais** (AR+EN); common subset auto-seeded at register, rest via `POST /accounts/import-official` (once per company) |
 | FR-105 | Taxes / VAT | `TaxRate` (standard/zero/exempt), `/tax-rates/current`; default 11% auto-seeded, mapped to 4426/4427 |
 | FR-106 | Document numbering | `DocumentSequence`; gap-controlled `nextNumber()` (SELECT…FOR UPDATE); 8 default series auto-seeded; preview endpoint |
+| FR-901 + FR-906 | GL / Journal engine | `JournalEntry`+`JournalLine`; draft→post→reverse; server-computed 4-field Money (`common/money`); balanced-entry enforcement at service **and** DB (deferred constraint triggers); posted=immutable; derived `GET /accounts/:id/balance` + `GET /reports/trial-balance`; `journal.{read,create,update,delete,post,reverse}` perms (post/reverse independent). Reusable `PostingService` for future auto-posting. |
 | — | Auth / Users / Roles / CASL RBAC | JWT access+refresh, password reset, platform-admin, seeded roles |
 
 ### Deferred (see docs/DEFERRED.md)
+- **FR-904** Fiscal periods & period locking — GL leaves a `TODO(FR-904)` hook at the post path.
+- **FR-902** Auto-posting rules — `PostingService` core is built; the per-company mapping engine is deferred.
 - **FR-107** i18n / translations — parked (backend catalogue vs frontend-bundled — design decision needed).
 - **FR-1102** Audit trail — to build before financial modules write heavily; cross-cutting, doesn't block GL.
-- Smaller: `Branch.stockLocationId` FK, item/category default VAT, document-number consumption.
+- Smaller: `Branch.stockLocationId` FK, item/category default VAT, `JournalLine.partnerId`/`costCenterId` FKs, `JournalEntry.sourceDoc*` FK.
 
 ### Next
-- **FR-901 + FR-906 — GL / Journal engine** (the ledger core everything posts into). Then Partners (FR-301) → Items (FR-401) → Stock (FR-402) → Invoicing (FR-6xx).
+- **Partners (FR-301)** → Items (FR-401) → Stock (FR-402) → Invoicing (FR-6xx). Each new document module posts through `PostingService.post()`.
 
 ### Path to a working invoice
 GL engine → Partners → Items → Stock ledger → Invoicing.
@@ -60,11 +63,17 @@ GL engine → Partners → Items → Stock ledger → Invoicing.
   - `owner@demo.example.com` / `owner2@demo.example.com` — Company Admin (`Owner@12345`)
   - `member@demo.example.com` / `member2@demo.example.com` — Company Member (`Member@12345`)
 
-## Next module sketch — FR-901 + FR-906 GL engine
-Core accounting invariants to enforce (docs/MODELS.md): balanced entries
-(Σdebit_base == Σcredit_base), posted=immutable (reverse-only), server-computed
-money (4-field Money), derived balances (never stored). Likely shape:
-`JournalEntry` + `JournalLine` (debit **or** credit), `POST /journal-entries`
-(draft, balanced), `/:id/post`, `/:id/reverse`, `GET /accounts/:id/balance`
-(derived), `GET /reports/trial-balance`. Money value object + a posting service
-other modules will call. Plan it in detail before building.
+## GL engine — BUILT (FR-901 + FR-906)
+Module `src/modules/gl` + shared `src/common/money`. Enforces the ledger
+invariants: balanced entries (Σdebit_base == Σcredit_base) at service **and** DB
+(deferred constraint triggers in the migration), posted=immutable (reverse-only),
+server-computed 4-field Money, derived balances (never stored). Endpoints:
+`POST /journal-entries` (draft, balanced), `PATCH`/`DELETE` (draft only),
+`/:id/post`, `/:id/reverse`, `GET /accounts/:id/balance`, `GET /reports/trial-balance`.
+`PostingService.post()`/`reverse()` are the reusable core future document
+modules call. Not done here (deferred): period locking (FR-904), auto-posting
+rules (FR-902) — hooks/TODOs left in place.
+
+## Path to a working invoice (updated)
+GL engine ✅ → Partners (FR-301) → Items (FR-401) → Stock ledger (FR-402) →
+Invoicing (FR-6xx). Each document module posts via `PostingService.post()`.

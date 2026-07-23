@@ -2891,7 +2891,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/accounts?page=1&limit=50&sortBy=number&sortOrder=asc&accountClass=4&isControl=true",
+              "raw": "{{baseUrl}}/accounts?page=1&limit=50&sortBy=number&sortOrder=asc",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2917,19 +2917,26 @@
                 },
                 {
                   "key": "accountClass",
-                  "value": "4"
+                  "value": "6,7",
+                  "disabled": true
+                },
+                {
+                  "key": "numberPrefix",
+                  "value": "40",
+                  "disabled": true
                 },
                 {
                   "key": "isControl",
-                  "value": "true"
-                },
-                {
-                  "key": "type",
-                  "value": "",
+                  "value": "false",
                   "disabled": true
                 },
                 {
                   "key": "isActive",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
                   "value": "",
                   "disabled": true
                 },
@@ -2945,7 +2952,7 @@
                 }
               ]
             },
-            "description": "Requires account.read. Flat, paginated list filterable by accountClass, type, isControl, isActive, parentId, and a number/name search. Soft-deleted accounts are excluded."
+            "description": "Requires account.read. Paginated, filterable (all AND-combined). accountClass accepts one or more PCL classes 1–7 (repeat or comma-separate, e.g. 6,7). numberPrefix returns an intermediate sub-class and its whole subtree — hierarchical PCL numbers, so 40 → 40,401,4011… — and also accepts a list (40,41). isControl/isActive are true|false. search is a case-insensitive substring on number or name. A platform admin scopes with companyId."
           },
           "response": [
             {

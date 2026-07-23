@@ -208,6 +208,35 @@ describe('AccountsService', () => {
     expect(listB.data.map((x) => x.id)).not.toContain(acc.id);
   });
 
+  it('filters by numberPrefix (subtree and specific account)', async () => {
+    const tok = `PFX${randomUUID().slice(0, 6)}`;
+    await service.create({ ...base(`${tok}60`) }, callerB);
+    await service.create({ ...base(`${tok}600`) }, callerB);
+    await service.create({ ...base(`${tok}70`) }, callerB);
+
+    const page = {
+      page: 1,
+      limit: 50,
+      sortBy: 'number',
+      sortOrder: 'asc' as const,
+    };
+
+    // subtree: everything under the "…6" branch
+    const subtree = await service.findAll(
+      { ...page, numberPrefix: `${tok}6` },
+      callerB,
+    );
+    const subtreeNums = subtree.data.map((a) => a.number).sort();
+    expect(subtreeNums).toEqual([`${tok}60`, `${tok}600`]);
+
+    // specific: the full number returns that account (not its sibling "…60")
+    const one = await service.findAll(
+      { ...page, numberPrefix: `${tok}600` },
+      callerB,
+    );
+    expect(one.data.map((a) => a.number)).toEqual([`${tok}600`]);
+  });
+
   it('re-parents on update and rejects cycles', async () => {
     const p = await service.create(
       base(`CY-P-${randomUUID().slice(0, 8)}`),

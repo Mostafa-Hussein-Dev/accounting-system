@@ -358,6 +358,11 @@ export class AccountsService {
     if (query.parentId) {
       where.parentId = query.parentId;
     }
+    if (query.numberPrefix) {
+      // Hierarchical PCL numbers: a prefix selects an intermediate class and
+      // its whole subtree (or a single account when given its full number).
+      where.number = { startsWith: query.numberPrefix };
+    }
     if (query.companyId) {
       where.companyId = query.companyId;
     }

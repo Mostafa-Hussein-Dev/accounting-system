@@ -69,6 +69,16 @@ export class QueryAccountDto extends PaginationQueryDto {
   parentId?: string;
 
   @ApiPropertyOptional({
+    description:
+      'Account-number prefix. In the Plan Comptable Libanais numbers are hierarchical (a parent number is a prefix of its children), so this returns an intermediate sub-class and its whole subtree — e.g. "60" → 60, 601, 6011… A full account number returns that account (and anything nested under it).',
+    example: '60',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  numberPrefix?: string;
+
+  @ApiPropertyOptional({
     description: 'Case-insensitive match on account number or name',
     example: 'cash',
   })

@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { AccountType } from '@prisma/client';
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
@@ -27,15 +27,49 @@ const toBoolean = ({ value }: { value: unknown }): unknown => {
   return value;
 };
 
+// List query params arrive either repeated (?x=a&x=b -> ['a','b']) or comma-
+// joined (?x=a,b). Normalize both to a trimmed, non-empty array so a single
+// value and a list are handled the same way.
+const toStringArray = ({ value }: { value: unknown }): unknown => {
+  if (value === undefined || value === null) {
+    return value;
+  }
+  const raw: unknown[] = Array.isArray(value) ? value : [value];
+  const out: string[] = [];
+  for (const item of raw) {
+    // Only split/keep strings; any non-string is left out for @IsString to flag.
+    if (typeof item !== 'string') {
+      continue;
+    }
+    for (const part of item.split(',')) {
+      const trimmed = part.trim();
+      if (trimmed.length > 0) {
+        out.push(trimmed);
+      }
+    }
+  }
+  return out;
+};
+
+const toNumberArray = ({ value }: { value: unknown }): unknown => {
+  const arr = toStringArray({ value });
+  return Array.isArray(arr) ? arr.map((v) => Number(v)) : arr;
+};
+
 // Filters for the flat account list. All optional — combined with AND.
 export class QueryAccountDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ description: 'Filter by class (1–7)', example: 4 })
+  @ApiPropertyOptional({
+    description:
+      'Filter by one or more PCL classes (1–7). Repeat the param or comma-separate, e.g. ?accountClass=6,7.',
+    example: [6, 7],
+    type: [Number],
+  })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(7)
-  accountClass?: number;
+  @Transform(toNumberArray)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(7, { each: true })
+  accountClass?: number[];
 
   @ApiPropertyOptional({
     enum: AccountType,
@@ -70,13 +104,15 @@ export class QueryAccountDto extends PaginationQueryDto {
 
   @ApiPropertyOptional({
     description:
-      'Account-number prefix. In the Plan Comptable Libanais numbers are hierarchical (a parent number is a prefix of its children), so this returns an intermediate sub-class and its whole subtree — e.g. "60" → 60, 601, 6011… A full account number returns that account (and anything nested under it).',
-    example: '60',
+      'One or more account-number prefixes. PCL numbers are hierarchical (a parent number prefixes its children), so a prefix returns an intermediate sub-class and its whole subtree — e.g. "60" → 60, 601, 6011… A full account number returns that account. Repeat or comma-separate to fetch several subtrees at once, e.g. ?numberPrefix=60,70.',
+    example: ['60', '70'],
+    type: [String],
   })
   @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  numberPrefix?: string;
+  @Transform(toStringArray)
+  @IsString({ each: true })
+  @MaxLength(20, { each: true })
+  numberPrefix?: string[];
 
   @ApiPropertyOptional({
     description: 'Case-insensitive match on account number or name',

@@ -29,6 +29,7 @@ import { LedgerService } from '../gl/ledger.service';
 import { AccountBalanceResponseDto } from '../gl/dto/account-balance-response.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { PermissionsGuard } from '../casl/guards/permissions.guard';
@@ -36,7 +37,7 @@ import { RequirePermissions } from '../casl/decorators/require-permissions.decor
 
 @ApiTags('Accounts')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, CompanyMembershipGuard, PermissionsGuard)
 @Controller('accounts')
 export class AccountsController {
   constructor(

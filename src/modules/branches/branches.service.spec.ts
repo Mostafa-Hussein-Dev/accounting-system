@@ -35,9 +35,17 @@ describe('BranchesService', () => {
     companyAId = companyA.id;
     companyBId = companyB.id;
 
-    platformAdmin = { userId: 'admin', companyId: null };
-    callerA = { userId: 'caller-a', companyId: companyAId };
-    callerB = { userId: 'caller-b', companyId: companyBId };
+    platformAdmin = { userId: 'admin', companyId: null, isPlatformAdmin: true, mustChangePassword: false };
+    callerA = {
+      userId: 'caller-a',
+      companyId: companyAId,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
+    callerB = {
+      userId: 'caller-b',
+      companyId: companyBId,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
   });
 
   afterAll(async () => {

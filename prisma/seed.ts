@@ -67,10 +67,10 @@ const DEMO_TENANTS = [
   },
 ] as const;
 
-// A platform-admin/support user has NO company (companyId null) — CASL grants
-// it `manage all` and PlatformAdminGuard lets it through the admin-only routes.
-// Seeded so the admin-scoped APIs are reachable on a fresh database; override
-// the credentials via env in any non-local environment.
+// A platform-admin/support user has NO company membership and isPlatformAdmin=true
+// — CASL grants it `manage all` and PlatformAdminGuard lets it through the
+// admin-only routes. Seeded so the admin-scoped APIs are reachable on a fresh
+// database; override the credentials via env in any non-local environment.
 const PLATFORM_ADMIN = {
   email: process.env.PLATFORM_ADMIN_EMAIL ?? 'admin@example.com',
   password: process.env.PLATFORM_ADMIN_PASSWORD ?? 'Admin@12345',
@@ -79,47 +79,264 @@ const PLATFORM_ADMIN = {
 };
 
 const PERMISSIONS = [
-  { key: 'user.create', subject: 'User', action: 'create', description: 'Create users' },
-  { key: 'user.read', subject: 'User', action: 'read', description: 'View users' },
-  { key: 'user.update', subject: 'User', action: 'update', description: 'Update users' },
-  { key: 'user.delete', subject: 'User', action: 'delete', description: 'Delete users' },
-  { key: 'company.read', subject: 'Company', action: 'read', description: 'View a company' },
-  { key: 'company.update', subject: 'Company', action: 'update', description: 'Update a company' },
-  { key: 'company.delete', subject: 'Company', action: 'delete', description: 'Delete a company' },
-  { key: 'role.read', subject: 'Role', action: 'read', description: 'View roles' },
-  { key: 'role.create', subject: 'Role', action: 'create', description: 'Create roles' },
-  { key: 'role.update', subject: 'Role', action: 'update', description: 'Update roles' },
-  { key: 'role.delete', subject: 'Role', action: 'delete', description: 'Delete roles' },
-  { key: 'branch.read', subject: 'Branch', action: 'read', description: 'View branches' },
-  { key: 'branch.create', subject: 'Branch', action: 'create', description: 'Create branches' },
-  { key: 'branch.update', subject: 'Branch', action: 'update', description: 'Update branches' },
-  { key: 'branch.delete', subject: 'Branch', action: 'delete', description: 'Delete branches' },
-  { key: 'currency.read', subject: 'Currency', action: 'read', description: 'View currencies' },
-  { key: 'currency.create', subject: 'Currency', action: 'create', description: 'Create currencies' },
-  { key: 'currency.update', subject: 'Currency', action: 'update', description: 'Update currencies' },
-  { key: 'currency.delete', subject: 'Currency', action: 'delete', description: 'Delete currencies' },
-  { key: 'exchangeRate.read', subject: 'ExchangeRate', action: 'read', description: 'View exchange rates' },
-  { key: 'exchangeRate.create', subject: 'ExchangeRate', action: 'create', description: 'Create exchange rates' },
-  { key: 'exchangeRate.update', subject: 'ExchangeRate', action: 'update', description: 'Update exchange rates' },
-  { key: 'exchangeRate.delete', subject: 'ExchangeRate', action: 'delete', description: 'Delete exchange rates' },
-  { key: 'account.read', subject: 'Account', action: 'read', description: 'View chart of accounts' },
-  { key: 'account.create', subject: 'Account', action: 'create', description: 'Create accounts' },
-  { key: 'account.update', subject: 'Account', action: 'update', description: 'Update accounts' },
-  { key: 'account.delete', subject: 'Account', action: 'delete', description: 'Delete accounts' },
-  { key: 'tax.read', subject: 'TaxRate', action: 'read', description: 'View tax rates' },
-  { key: 'tax.create', subject: 'TaxRate', action: 'create', description: 'Create tax rates' },
-  { key: 'tax.update', subject: 'TaxRate', action: 'update', description: 'Update tax rates' },
-  { key: 'tax.delete', subject: 'TaxRate', action: 'delete', description: 'Delete tax rates' },
-  { key: 'sequence.read', subject: 'DocumentSequence', action: 'read', description: 'View document sequences' },
-  { key: 'sequence.create', subject: 'DocumentSequence', action: 'create', description: 'Create document sequences' },
-  { key: 'sequence.update', subject: 'DocumentSequence', action: 'update', description: 'Update document sequences' },
-  { key: 'sequence.delete', subject: 'DocumentSequence', action: 'delete', description: 'Delete document sequences' },
-  { key: 'journal.read', subject: 'JournalEntry', action: 'read', description: 'View journal entries and trial balance' },
-  { key: 'journal.create', subject: 'JournalEntry', action: 'create', description: 'Create draft journal entries' },
-  { key: 'journal.update', subject: 'JournalEntry', action: 'update', description: 'Edit draft journal entries' },
-  { key: 'journal.delete', subject: 'JournalEntry', action: 'delete', description: 'Delete draft journal entries' },
-  { key: 'journal.post', subject: 'JournalEntry', action: 'post', description: 'Post journal entries to the ledger' },
-  { key: 'journal.reverse', subject: 'JournalEntry', action: 'reverse', description: 'Reverse posted journal entries' },
+  {
+    key: 'user.create',
+    subject: 'User',
+    action: 'create',
+    description: 'Create users',
+  },
+  {
+    key: 'user.read',
+    subject: 'User',
+    action: 'read',
+    description: 'View users',
+  },
+  {
+    key: 'user.update',
+    subject: 'User',
+    action: 'update',
+    description: 'Update users',
+  },
+  {
+    key: 'user.delete',
+    subject: 'User',
+    action: 'delete',
+    description: 'Delete users',
+  },
+  {
+    key: 'company.create',
+    subject: 'Company',
+    action: 'create',
+    description: 'Create a company',
+  },
+  {
+    key: 'company.read',
+    subject: 'Company',
+    action: 'read',
+    description: 'View a company',
+  },
+  {
+    key: 'company.update',
+    subject: 'Company',
+    action: 'update',
+    description: 'Update a company',
+  },
+  {
+    key: 'company.delete',
+    subject: 'Company',
+    action: 'delete',
+    description: 'Delete a company',
+  },
+  {
+    key: 'role.read',
+    subject: 'Role',
+    action: 'read',
+    description: 'View roles',
+  },
+  {
+    key: 'role.create',
+    subject: 'Role',
+    action: 'create',
+    description: 'Create roles',
+  },
+  {
+    key: 'role.update',
+    subject: 'Role',
+    action: 'update',
+    description: 'Update roles',
+  },
+  {
+    key: 'role.delete',
+    subject: 'Role',
+    action: 'delete',
+    description: 'Delete roles',
+  },
+  {
+    key: 'permission.read',
+    subject: 'Permission',
+    action: 'read',
+    description: 'View the permission catalogue (for building custom roles)',
+  },
+  {
+    key: 'branch.read',
+    subject: 'Branch',
+    action: 'read',
+    description: 'View branches',
+  },
+  {
+    key: 'branch.create',
+    subject: 'Branch',
+    action: 'create',
+    description: 'Create branches',
+  },
+  {
+    key: 'branch.update',
+    subject: 'Branch',
+    action: 'update',
+    description: 'Update branches',
+  },
+  {
+    key: 'branch.delete',
+    subject: 'Branch',
+    action: 'delete',
+    description: 'Delete branches',
+  },
+  {
+    key: 'currency.read',
+    subject: 'Currency',
+    action: 'read',
+    description: 'View currencies',
+  },
+  {
+    key: 'currency.create',
+    subject: 'Currency',
+    action: 'create',
+    description: 'Create currencies',
+  },
+  {
+    key: 'currency.update',
+    subject: 'Currency',
+    action: 'update',
+    description: 'Update currencies',
+  },
+  {
+    key: 'currency.delete',
+    subject: 'Currency',
+    action: 'delete',
+    description: 'Delete currencies',
+  },
+  {
+    key: 'exchangeRate.read',
+    subject: 'ExchangeRate',
+    action: 'read',
+    description: 'View exchange rates',
+  },
+  {
+    key: 'exchangeRate.create',
+    subject: 'ExchangeRate',
+    action: 'create',
+    description: 'Create exchange rates',
+  },
+  {
+    key: 'exchangeRate.update',
+    subject: 'ExchangeRate',
+    action: 'update',
+    description: 'Update exchange rates',
+  },
+  {
+    key: 'exchangeRate.delete',
+    subject: 'ExchangeRate',
+    action: 'delete',
+    description: 'Delete exchange rates',
+  },
+  {
+    key: 'account.read',
+    subject: 'Account',
+    action: 'read',
+    description: 'View chart of accounts',
+  },
+  {
+    key: 'account.create',
+    subject: 'Account',
+    action: 'create',
+    description: 'Create accounts',
+  },
+  {
+    key: 'account.update',
+    subject: 'Account',
+    action: 'update',
+    description: 'Update accounts',
+  },
+  {
+    key: 'account.delete',
+    subject: 'Account',
+    action: 'delete',
+    description: 'Delete accounts',
+  },
+  {
+    key: 'tax.read',
+    subject: 'TaxRate',
+    action: 'read',
+    description: 'View tax rates',
+  },
+  {
+    key: 'tax.create',
+    subject: 'TaxRate',
+    action: 'create',
+    description: 'Create tax rates',
+  },
+  {
+    key: 'tax.update',
+    subject: 'TaxRate',
+    action: 'update',
+    description: 'Update tax rates',
+  },
+  {
+    key: 'tax.delete',
+    subject: 'TaxRate',
+    action: 'delete',
+    description: 'Delete tax rates',
+  },
+  {
+    key: 'sequence.read',
+    subject: 'DocumentSequence',
+    action: 'read',
+    description: 'View document sequences',
+  },
+  {
+    key: 'sequence.create',
+    subject: 'DocumentSequence',
+    action: 'create',
+    description: 'Create document sequences',
+  },
+  {
+    key: 'sequence.update',
+    subject: 'DocumentSequence',
+    action: 'update',
+    description: 'Update document sequences',
+  },
+  {
+    key: 'sequence.delete',
+    subject: 'DocumentSequence',
+    action: 'delete',
+    description: 'Delete document sequences',
+  },
+  {
+    key: 'journal.read',
+    subject: 'JournalEntry',
+    action: 'read',
+    description: 'View journal entries and trial balance',
+  },
+  {
+    key: 'journal.create',
+    subject: 'JournalEntry',
+    action: 'create',
+    description: 'Create draft journal entries',
+  },
+  {
+    key: 'journal.update',
+    subject: 'JournalEntry',
+    action: 'update',
+    description: 'Edit draft journal entries',
+  },
+  {
+    key: 'journal.delete',
+    subject: 'JournalEntry',
+    action: 'delete',
+    description: 'Delete draft journal entries',
+  },
+  {
+    key: 'journal.post',
+    subject: 'JournalEntry',
+    action: 'post',
+    description: 'Post journal entries to the ledger',
+  },
+  {
+    key: 'journal.reverse',
+    subject: 'JournalEntry',
+    action: 'reverse',
+    description: 'Reverse posted journal entries',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -148,28 +365,30 @@ const CURRENCIES = [
 // Both seeded roles are global (companyId: null) and isSystem (protected
 // from update/delete via the API — AuthService and UsersService look them
 // up by name and would break if they moved).
-const ROLES: { name: string; description: string; permissionKeys: string[] }[] = [
-  {
-    name: 'Company Admin',
-    description: "Full administrative access within the company's own data.",
-    permissionKeys: PERMISSIONS.map((p) => p.key),
-  },
-  {
-    name: 'Company Member',
-    description: 'Baseline access for a company teammate.',
-    permissionKeys: [
-      'company.read',
-      'role.read',
-      'branch.read',
-      'currency.read',
-      'exchangeRate.read',
-      'account.read',
-      'tax.read',
-      'sequence.read',
-      'journal.read',
-    ],
-  },
-];
+const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
+  [
+    {
+      name: 'Company Admin',
+      description: "Full administrative access within the company's own data.",
+      permissionKeys: PERMISSIONS.map((p) => p.key),
+    },
+    {
+      name: 'Company Member',
+      description: 'Baseline access for a company teammate.',
+      permissionKeys: [
+        'user.read',
+        'company.read',
+        'role.read',
+        'branch.read',
+        'currency.read',
+        'exchangeRate.read',
+        'account.read',
+        'tax.read',
+        'sequence.read',
+        'journal.read',
+      ],
+    },
+  ];
 
 async function main() {
   for (const permission of PERMISSIONS) {
@@ -227,7 +446,10 @@ async function main() {
     for (const permission of permissions) {
       await prisma.rolePermission.upsert({
         where: {
-          roleId_permissionId: { roleId: savedRole.id, permissionId: permission.id },
+          roleId_permissionId: {
+            roleId: savedRole.id,
+            permissionId: permission.id,
+          },
         },
         update: {},
         create: { roleId: savedRole.id, permissionId: permission.id },
@@ -248,12 +470,13 @@ async function main() {
           PLATFORM_ADMIN.password,
           BCRYPT_SALT_ROUNDS,
         ),
-        companyId: null,
+        isPlatformAdmin: true,
       },
     });
   }
 
   // --- Demo tenants: each = company + full chart + VAT + sequences + owner/member ---
+  const companyByTax = new Map<string, string>();
   for (const tenant of DEMO_TENANTS) {
     let company = await prisma.company.findFirst({
       where: { taxNumber: tenant.company.taxNumber },
@@ -261,6 +484,7 @@ async function main() {
     if (!company) {
       company = await prisma.company.create({ data: tenant.company });
     }
+    companyByTax.set(tenant.company.taxNumber, company.id);
 
     await seedFullChart(company.id);
     await seedDefaultVatRate(company.id);
@@ -280,21 +504,21 @@ async function main() {
               demoUser.password,
               BCRYPT_SALT_ROUNDS,
             ),
-            companyId: company.id,
           },
         });
       }
-      const role = await prisma.role.findFirst({
-        where: { name: demoUser.roleName, isSystem: true, companyId: null },
-      });
-      if (role) {
-        await prisma.userRole.upsert({
-          where: { userId_roleId: { userId: user.id, roleId: role.id } },
-          update: {},
-          create: { userId: user.id, roleId: role.id },
-        });
-      }
+      await addMembership(user.id, company.id, demoUser.roleName);
     }
+  }
+
+  // Multi-company demo: the Demo Company owner ALSO owns the Second Company, so
+  // logging in as owner@demo.example.com returns two companies to switch between.
+  const demoOwner = await prisma.user.findUnique({
+    where: { email: 'owner@demo.example.com' },
+  });
+  const secondCompanyId = companyByTax.get('DEMO-0002');
+  if (demoOwner && secondCompanyId) {
+    await addMembership(demoOwner.id, secondCompanyId, 'Company Admin');
   }
 
   const demoUserEmails = DEMO_TENANTS.flatMap((t) =>
@@ -306,6 +530,34 @@ async function main() {
   console.log(
     `Demo tenants: ${DEMO_TENANTS.map((t) => t.company.name).join(', ')} — users ${demoUserEmails.join(', ')}.`,
   );
+}
+
+/**
+ * Make a user a member of a company with the given system role. Idempotent —
+ * both the membership and the (per-company) role assignment are upserts.
+ */
+async function addMembership(
+  userId: string,
+  companyId: string,
+  roleName: string,
+): Promise<void> {
+  await prisma.userCompany.upsert({
+    where: { userId_companyId: { userId, companyId } },
+    update: {},
+    create: { userId, companyId },
+  });
+  const role = await prisma.role.findFirst({
+    where: { name: roleName, isSystem: true, companyId: null },
+  });
+  if (role) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId_companyId: { userId, roleId: role.id, companyId },
+      },
+      update: {},
+      create: { userId, roleId: role.id, companyId },
+    });
+  }
 }
 
 /**

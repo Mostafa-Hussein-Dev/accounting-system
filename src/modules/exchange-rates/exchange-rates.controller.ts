@@ -26,6 +26,7 @@ import { CurrentExchangeRateDto } from './dto/current-exchange-rate.dto';
 import { ExchangeRateResponseDto } from './dto/exchange-rate-response.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { PermissionsGuard } from '../casl/guards/permissions.guard';
@@ -33,7 +34,7 @@ import { RequirePermissions } from '../casl/decorators/require-permissions.decor
 
 @ApiTags('Exchange Rates')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, CompanyMembershipGuard, PermissionsGuard)
 @Controller('exchange-rates')
 export class ExchangeRatesController {
   constructor(private readonly exchangeRatesService: ExchangeRatesService) {}

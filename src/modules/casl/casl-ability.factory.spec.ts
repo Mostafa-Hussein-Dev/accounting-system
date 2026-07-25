@@ -38,12 +38,11 @@ describe('CaslAbilityFactory', () => {
         lastName: 'Tester',
         email: `casl-member-${suffix}@example.com`,
         passwordHash: 'irrelevant',
-        companyId,
       },
     });
     memberUserId = memberUser.id;
     await prisma.userRole.create({
-      data: { userId: memberUserId, roleId: memberRole.id },
+      data: { userId: memberUserId, roleId: memberRole.id, companyId },
     });
 
     // A second, disjoint permission/role not in the seed catalog, to prove
@@ -72,14 +71,13 @@ describe('CaslAbilityFactory', () => {
         lastName: 'Tester',
         email: `casl-union-${suffix}@example.com`,
         passwordHash: 'irrelevant',
-        companyId,
       },
     });
     unionUserId = unionUser.id;
     await prisma.userRole.createMany({
       data: [
-        { userId: unionUserId, roleId: memberRole.id },
-        { userId: unionUserId, roleId: extraRoleId },
+        { userId: unionUserId, roleId: memberRole.id, companyId },
+        { userId: unionUserId, roleId: extraRoleId, companyId },
       ],
     });
   });
@@ -98,10 +96,11 @@ describe('CaslAbilityFactory', () => {
     await prisma.$disconnect();
   });
 
-  it('grants a platform admin (companyId null) manage-all without any DB-backed role', async () => {
+  it('grants a platform admin manage-all without any DB-backed role', async () => {
     const ability = await factory.createForUser({
       userId: 'no-such-user',
       companyId: null,
+      isPlatformAdmin: true, mustChangePassword: false,
     });
     expect(ability.can('delete', 'Company')).toBe(true);
     expect(ability.can('create', 'User')).toBe(true);
@@ -111,6 +110,7 @@ describe('CaslAbilityFactory', () => {
     const ability = await factory.createForUser({
       userId: memberUserId,
       companyId,
+      isPlatformAdmin: false, mustChangePassword: false,
     });
     expect(ability.can('read', 'Company')).toBe(true);
     expect(ability.can('read', 'Role')).toBe(true);
@@ -118,10 +118,11 @@ describe('CaslAbilityFactory', () => {
     expect(ability.can('delete', 'Company')).toBe(false);
   });
 
-  it("unions permissions across all of a user's roles", async () => {
+  it("unions permissions across all of a user's roles in the active company", async () => {
     const ability = await factory.createForUser({
       userId: unionUserId,
       companyId,
+      isPlatformAdmin: false, mustChangePassword: false,
     });
     // From Company Member:
     expect(ability.can('read', 'Company')).toBe(true);
@@ -129,5 +130,15 @@ describe('CaslAbilityFactory', () => {
     expect(ability.can('update', 'User')).toBe(true);
     // Never granted to either role:
     expect(ability.can('delete', 'Company')).toBe(false);
+  });
+
+  it('grants nothing when the user has no roles in the active company', async () => {
+    // memberUser has a role in `companyId` but not in this other company.
+    const ability = await factory.createForUser({
+      userId: memberUserId,
+      companyId: randomUUID(),
+      isPlatformAdmin: false, mustChangePassword: false,
+    });
+    expect(ability.can('read', 'Company')).toBe(false);
   });
 });

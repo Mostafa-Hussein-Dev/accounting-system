@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +9,13 @@ import { Company, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Paginated } from '../../common/types/paginated.type';
+import { AccountsService } from '../accounts/accounts.service';
+import { TaxesService } from '../taxes/taxes.service';
+import { SequencesService } from '../sequences/sequences.service';
+import {
+  isPlatformAdmin,
+  type AuthenticatedUser,
+} from '../auth/interfaces/authenticated-user.interface';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CompanyResponseDto } from './dto/company-response.dto';
@@ -18,6 +26,7 @@ import {
 import { CompanySettingsResponseDto } from './dto/company-settings-response.dto';
 
 const PRISMA_UNIQUE_CONSTRAINT = 'P2002';
+const COMPANY_ADMIN_ROLE_NAME = 'Company Admin';
 const ALLOWED_SORT_FIELDS = [
   'name',
   'taxNumber',
@@ -40,31 +49,104 @@ interface StoredSettings {
 
 @Injectable()
 export class CompaniesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accountsService: AccountsService,
+    private readonly taxesService: TaxesService,
+    private readonly sequencesService: SequencesService,
+  ) {}
 
+  /**
+   * Create a company via POST /companies. A company user creates a company they
+   * own (they become a member + Company Admin); a platform admin may create one
+   * and optionally attach it to a user via `ownerUserId`. Either way the company
+   * is fully provisioned (chart/VAT/sequences) in one transaction.
+   */
   async create(
     dto: CreateCompanyDto,
-    client: Prisma.TransactionClient = this.prisma,
+    caller: AuthenticatedUser,
   ): Promise<CompanyResponseDto> {
-    if (dto.baseCurrencyCode) {
-      await this.assertCurrencyExists(dto.baseCurrencyCode);
+    if (!isPlatformAdmin(caller)) {
+      await this.assertCanCreateCompany(caller.userId);
     }
+    const ownerUserId = isPlatformAdmin(caller)
+      ? (dto.ownerUserId ?? null)
+      : caller.userId;
+    if (ownerUserId) {
+      await this.assertUserExists(ownerUserId);
+    }
+    return this.prisma.$transaction((tx) =>
+      this.provision(dto, ownerUserId, tx),
+    );
+  }
+
+  /**
+   * Create a company and (optionally) make `ownerUserId` its first member +
+   * Company Admin, then seed the default chart (FR-104), VAT (FR-105) and
+   * document sequences (FR-106). Runs inside a caller-supplied transaction so
+   * either the whole company is set up or none of it is. Shared by
+   * POST /companies and /auth/register.
+   */
+  async provision(
+    dto: CreateCompanyDto,
+    ownerUserId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<CompanyResponseDto> {
+    // ownerUserId is passed separately (not a Company column); keep it out of
+    // the create payload.
+    const companyData = { ...dto };
+    delete companyData.ownerUserId;
+    if (companyData.baseCurrencyCode) {
+      await this.assertCurrencyExists(companyData.baseCurrencyCode);
+    }
+
+    let company: Company;
     try {
-      const company = await client.company.create({ data: dto });
-      return CompanyResponseDto.fromEntity(company);
+      company = await tx.company.create({ data: companyData });
     } catch (error) {
       throw this.mapWriteError(error, dto.taxNumber);
     }
+
+    if (ownerUserId) {
+      await tx.userCompany.create({
+        data: { userId: ownerUserId, companyId: company.id },
+      });
+      const adminRole = await tx.role.findFirstOrThrow({
+        where: { name: COMPANY_ADMIN_ROLE_NAME, isSystem: true },
+      });
+      await tx.userRole.create({
+        data: {
+          userId: ownerUserId,
+          roleId: adminRole.id,
+          companyId: company.id,
+        },
+      });
+    }
+
+    await this.accountsService.applyDefaultChart(company.id, tx);
+    await this.taxesService.applyDefaultVatRate(company.id, tx);
+    await this.sequencesService.applyDefaultSequences(company.id, tx);
+
+    return CompanyResponseDto.fromEntity(company);
   }
 
+  /**
+   * Platform admin sees every company; a company user sees only the companies
+   * they belong to (their memberships) — this is how an owner lists their
+   * own companies.
+   */
   async findAll(
     query: PaginationQueryDto,
+    caller: AuthenticatedUser,
   ): Promise<Paginated<CompanyResponseDto>> {
     const { page, limit, sortOrder } = query;
     const sortBy = ALLOWED_SORT_FIELDS.includes(query.sortBy)
       ? query.sortBy
       : 'createdAt';
     const where: Prisma.CompanyWhereInput = { deletedAt: null };
+    if (!isPlatformAdmin(caller)) {
+      where.members = { some: { userId: caller.userId } };
+    }
     const orderBy = {
       [sortBy]: sortOrder,
     } as Prisma.CompanyOrderByWithRelationInput;
@@ -193,6 +275,48 @@ export class CompaniesService {
       });
     }
     return company;
+  }
+
+
+  /**
+   * A company user may create a company only if they hold the company.create
+   * permission through one of their roles — i.e. they are a Company Admin of at
+   * least one company. Checked across ALL their memberships (not just the active
+   * company), so no company switch is required to create another. Platform
+   * admins bypass this (manage-all).
+   */
+  private async assertCanCreateCompany(userId: string): Promise<void> {
+    const grant = await this.prisma.userRole.findFirst({
+      where: {
+        userId,
+        role: {
+          permissions: {
+            some: { permission: { subject: 'Company', action: 'create' } },
+          },
+        },
+      },
+      select: { userId: true },
+    });
+    if (!grant) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'You do not have permission to create a company.',
+        field: null,
+      });
+    }
+  }
+
+  private async assertUserExists(userId: string): Promise<void> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
+    if (!user) {
+      throw new NotFoundException({
+        code: 'USER_NOT_FOUND',
+        message: `User with id ${userId} was not found.`,
+        field: 'ownerUserId',
+      });
+    }
   }
 
   private async assertCurrencyExists(code: string): Promise<void> {

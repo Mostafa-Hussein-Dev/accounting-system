@@ -14,7 +14,12 @@ describe('PlatformAdminGuard', () => {
   const guard = new PlatformAdminGuard();
 
   it('allows a platform admin caller (companyId null) through', () => {
-    const context = contextWithUser({ userId: 'admin', companyId: null });
+    const context = contextWithUser({
+      userId: 'admin',
+      companyId: null,
+      isPlatformAdmin: true,
+      mustChangePassword: false,
+    });
     expect(guard.canActivate(context)).toBe(true);
   });
 
@@ -22,6 +27,8 @@ describe('PlatformAdminGuard', () => {
     const context = contextWithUser({
       userId: 'u1',
       companyId: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab',
+      isPlatformAdmin: false,
+      mustChangePassword: false,
     });
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });

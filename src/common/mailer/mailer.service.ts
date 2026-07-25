@@ -10,6 +10,15 @@ interface SendPasswordResetCodeParams {
   expiresInMinutes: number;
 }
 
+interface SendInvitationParams {
+  to: string;
+  companyName: string;
+  acceptUrl: string;
+  /** Set only for a brand-new user — their starter credentials. */
+  tempPassword?: string;
+  expiresAt: Date;
+}
+
 /**
  * Thin wrapper over nodemailer. One transporter, created once and reused —
  * nodemailer pools connections internally, no need to reconnect per send.
@@ -106,6 +115,59 @@ export class MailerService {
       `,
     });
     this.logger.log(`Password reset code sent to ${to}`);
+  }
+
+  async sendInvitation({
+    to,
+    companyName,
+    acceptUrl,
+    tempPassword,
+    expiresAt,
+  }: SendInvitationParams): Promise<void> {
+    const expiry = expiresAt.toISOString().slice(0, 10);
+    const credsText = tempPassword
+      ? [
+          '',
+          'A temporary account has been created for you. After accepting, sign in with:',
+          `  Email:    ${to}`,
+          `  Password: ${tempPassword}`,
+          '(Please change your password after your first login.)',
+        ]
+      : ['', 'Accept with your existing account and sign in as usual.'];
+
+    await this.send({
+      from: this.from,
+      to,
+      subject: `You've been invited to join ${companyName}`,
+      text: [
+        `You've been invited to join ${companyName}.`,
+        '',
+        `Accept your invitation: ${acceptUrl}`,
+        `This invitation expires on ${expiry}.`,
+        ...credsText,
+        '',
+        "If you weren't expecting this, you can ignore this email.",
+      ].join('\n'),
+      html: `
+        <div style="font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #16213a;">
+          <p>You've been invited to join <strong>${escapeHtml(companyName)}</strong>.</p>
+          <p><a href="${escapeHtml(acceptUrl)}" style="display:inline-block; background:#2f6df6; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none;">Accept invitation</a></p>
+          <p style="color:#6b7a90; font-size:13px;">This invitation expires on ${escapeHtml(expiry)}.</p>
+          ${
+            tempPassword
+              ? `<p>After accepting, sign in with:</p>
+                 <p style="background:#f3f5f7; padding:12px 16px; border-radius:8px;">
+                   Email: <strong>${escapeHtml(to)}</strong><br/>
+                   Temporary password: <strong>${escapeHtml(tempPassword)}</strong>
+                 </p>
+                 <p style="color:#6b7a90; font-size:13px;">Please change your password after your first login.</p>`
+              : `<p>Accept with your existing account and sign in as usual.</p>`
+          }
+          <p style="color:#6b7a90; font-size:13px;">If you weren't expecting this, you can ignore this email.</p>
+        </div>
+      `,
+    });
+    this.logger.log(`Invitation to ${companyName} sent to ${to}`);
   }
 }
 

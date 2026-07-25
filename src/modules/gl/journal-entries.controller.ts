@@ -27,6 +27,7 @@ import { ReverseJournalEntryDto } from './dto/reverse-journal-entry.dto';
 import { JournalEntryResponseDto } from './dto/journal-entry-response.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { PermissionsGuard } from '../casl/guards/permissions.guard';
@@ -34,7 +35,7 @@ import { RequirePermissions } from '../casl/decorators/require-permissions.decor
 
 @ApiTags('Journal Entries')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, CompanyMembershipGuard, PermissionsGuard)
 @Controller('journal-entries')
 export class JournalEntriesController {
   constructor(

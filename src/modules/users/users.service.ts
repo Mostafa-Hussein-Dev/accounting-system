@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -36,62 +37,57 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * A platform admin/support caller (no companyId of their own) gets the bare
-   * client — full flexibility, including creating another company-less admin.
-   * A company-scoped caller gets forTenant(companyId), which forces every
-   * read/write to their own company — they can invite teammates but can
-   * never see, edit, or move a user into another company, and any companyId
-   * they submit is silently overridden.
-   *
-   * forTenant() returns a Prisma Client Extension instance whose delegate
-   * methods are runtime-identical to the base client (proven by
-   * prisma-tenant.spec.ts) but carry $extends generic branding that doesn't
-   * structurally unify with Prisma.TransactionClient — the cast below bridges
-   * that TypeScript limitation, not a real behavioral difference.
-   */
-  private clientFor(caller: AuthenticatedUser): Prisma.TransactionClient {
-    if (isPlatformAdmin(caller)) {
-      return this.prisma;
-    }
-    return this.prisma.forTenant(
-      caller.companyId as string,
-    ) as unknown as Prisma.TransactionClient;
-  }
-
-  /**
-   * caller resolves the scoped client for a normal API call; client lets
-   * /auth/register pass a shared transaction client directly (no caller
-   * exists yet — the company was just created in the same transaction, and
-   * register() assigns the owner's role itself, so no default role is
-   * applied here when caller is undefined).
+   * caller resolves the target company for a normal API call; client lets
+   * /auth/register pass a shared transaction client directly. When there is no
+   * caller (register), the user is created bare — membership and the owner role
+   * are set up by CompaniesService.provision in the same transaction.
    */
   async create(
     dto: CreateUserDto,
     caller?: AuthenticatedUser,
-    client: Prisma.TransactionClient = caller
-      ? this.clientFor(caller)
-      : this.prisma,
+    client: Prisma.TransactionClient = this.prisma,
   ): Promise<UserResponseDto> {
-    const { password, roleIds, ...rest } = dto;
+    const { password, roleIds, companyId: dtoCompanyId, ...rest } = dto;
     const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+
+    // Which company the new user joins (membership + roles):
+    //  - register (no caller): none here (provision handles it)
+    //  - company caller: their active company
+    //  - platform admin: the company named in the DTO, if any
+    let targetCompanyId: string | null = null;
+    if (caller) {
+      targetCompanyId = isPlatformAdmin(caller)
+        ? (dtoCompanyId ?? null)
+        : this.requireActiveCompany(caller);
+    }
 
     try {
       const user = await client.user.create({
         data: { ...rest, passwordHash },
       });
 
-      let resolvedRoleIds = roleIds;
-      if (!resolvedRoleIds && caller && user.companyId) {
-        const defaultRole = await client.role.findFirst({
-          where: { name: DEFAULT_TEAMMATE_ROLE_NAME, isSystem: true },
+      if (targetCompanyId) {
+        await client.userCompany.create({
+          data: { userId: user.id, companyId: targetCompanyId },
         });
-        resolvedRoleIds = defaultRole ? [defaultRole.id] : [];
+        let resolvedRoleIds = roleIds;
+        if (!resolvedRoleIds) {
+          const defaultRole = await client.role.findFirst({
+            where: { name: DEFAULT_TEAMMATE_ROLE_NAME, isSystem: true },
+          });
+          resolvedRoleIds = defaultRole ? [defaultRole.id] : [];
+        }
+        await this.assignRoles(
+          client,
+          user.id,
+          targetCompanyId,
+          resolvedRoleIds,
+        );
       }
-      await this.assignRoles(client, user.id, resolvedRoleIds ?? []);
 
       return UserResponseDto.fromEntity(user);
     } catch (error) {
-      throw this.mapWriteError(error, dto.companyId);
+      throw this.mapWriteError(error, targetCompanyId ?? undefined);
     }
   }
 
@@ -99,24 +95,23 @@ export class UsersService {
     query: PaginationQueryDto,
     caller: AuthenticatedUser,
   ): Promise<Paginated<UserResponseDto>> {
-    const client = this.clientFor(caller);
     const { page, limit, sortOrder } = query;
     const sortBy = ALLOWED_SORT_FIELDS.includes(query.sortBy)
       ? query.sortBy
       : 'createdAt';
-    const where: Prisma.UserWhereInput = { deletedAt: null };
+    const where = this.scopeWhere(caller);
     const orderBy = {
       [sortBy]: sortOrder,
     } as Prisma.UserOrderByWithRelationInput;
 
     const [users, total] = await this.prisma.$transaction([
-      client.user.findMany({
+      this.prisma.user.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy,
       }),
-      client.user.count({ where }),
+      this.prisma.user.count({ where }),
     ]);
 
     return Paginated.of(
@@ -131,10 +126,14 @@ export class UsersService {
     id: string,
     caller?: AuthenticatedUser,
   ): Promise<UserResponseDto> {
-    const client = caller ? this.clientFor(caller) : this.prisma;
-    const user = await client.user.findFirst({
-      where: { id, deletedAt: null },
-    });
+    const where: Prisma.UserWhereInput = { id, deletedAt: null };
+    if (caller && !isPlatformAdmin(caller)) {
+      // A company user can only see users who share their active company.
+      where.companies = {
+        some: { companyId: this.requireActiveCompany(caller) },
+      };
+    }
+    const user = await this.prisma.user.findFirst({ where });
     if (!user) {
       throw new NotFoundException({
         code: 'USER_NOT_FOUND',
@@ -150,44 +149,60 @@ export class UsersService {
     dto: UpdateUserDto,
     caller: AuthenticatedUser,
   ): Promise<UserResponseDto> {
-    const existing = await this.findOne(id, caller);
-    const client = this.clientFor(caller);
+    await this.findOne(id, caller); // enforces visibility
+    // companyId is not a user column; drop it if present so it isn't written.
     const { roleIds, ...rest } = dto;
-
-    if (roleIds) {
-      await this.assertNotRemovingLastCompanyAdmin(
-        client,
-        id,
-        existing.companyId,
-        roleIds,
-      );
-    }
+    delete rest.companyId;
 
     try {
-      const user = await client.user.update({ where: { id }, data: rest });
-      if (roleIds) {
-        await client.userRole.deleteMany({ where: { userId: id } });
-        await this.assignRoles(client, id, roleIds);
-      }
+      const user = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.user.update({ where: { id }, data: rest });
+        if (roleIds) {
+          const companyId = this.requireActiveCompany(caller);
+          await this.assertNotRemovingLastCompanyAdmin(
+            tx,
+            id,
+            companyId,
+            roleIds,
+          );
+          await tx.userRole.deleteMany({ where: { userId: id, companyId } });
+          await this.assignRoles(tx, id, companyId, roleIds);
+        }
+        return updated;
+      });
       return UserResponseDto.fromEntity(user);
     } catch (error) {
-      throw this.mapWriteError(error, dto.companyId);
+      throw this.mapWriteError(error);
     }
   }
 
+  /**
+   * A company caller removes the user from their active company (membership +
+   * that company's roles) — the user account itself survives if they belong to
+   * other companies. A platform admin soft-deletes the user globally.
+   */
   async remove(id: string, caller: AuthenticatedUser): Promise<void> {
-    const existing = await this.findOne(id, caller);
-    const client = this.clientFor(caller);
+    await this.findOne(id, caller);
+
+    if (isPlatformAdmin(caller)) {
+      await this.prisma.user.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+      return;
+    }
+
+    const companyId = this.requireActiveCompany(caller);
     await this.assertNotRemovingLastCompanyAdmin(
-      client,
+      this.prisma,
       id,
-      existing.companyId,
+      companyId,
       [],
     );
-    await client.user.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
+    await this.prisma.$transaction([
+      this.prisma.userRole.deleteMany({ where: { userId: id, companyId } }),
+      this.prisma.userCompany.deleteMany({ where: { userId: id, companyId } }),
+    ]);
   }
 
   /** Returns the raw Prisma entity (including passwordHash) for credential checks. Auth-internal only — never expose this beyond the auth flow. */
@@ -202,9 +217,34 @@ export class UsersService {
     });
   }
 
+  // --- helpers ---
+
+  private scopeWhere(caller: AuthenticatedUser): Prisma.UserWhereInput {
+    const where: Prisma.UserWhereInput = { deletedAt: null };
+    if (!isPlatformAdmin(caller)) {
+      where.companies = {
+        some: { companyId: this.requireActiveCompany(caller) },
+      };
+    }
+    return where;
+  }
+
+  private requireActiveCompany(caller: AuthenticatedUser): string {
+    if (!caller.companyId) {
+      throw new ForbiddenException({
+        code: 'COMPANY_CONTEXT_REQUIRED',
+        message:
+          'No active company selected. Use POST /auth/switch-company to choose one.',
+        field: null,
+      });
+    }
+    return caller.companyId;
+  }
+
   private async assignRoles(
     client: Prisma.TransactionClient,
     userId: string,
+    companyId: string,
     roleIds: string[],
   ): Promise<void> {
     if (roleIds.length === 0) {
@@ -221,25 +261,22 @@ export class UsersService {
       });
     }
     await client.userRole.createMany({
-      data: roleIds.map((roleId) => ({ userId, roleId })),
+      data: roleIds.map((roleId) => ({ userId, roleId, companyId })),
       skipDuplicates: true,
     });
   }
 
   /**
-   * Guards against a company ending up with zero Company Admins. newRoleIds
-   * is the user's role set AFTER the pending operation — an empty array
-   * represents removing the user entirely (soft delete).
+   * Guards against a company ending up with zero Company Admins. newRoleIds is
+   * the user's role set (for this company) AFTER the pending operation — an
+   * empty array represents removing the user from the company entirely.
    */
   private async assertNotRemovingLastCompanyAdmin(
     client: Prisma.TransactionClient,
     userId: string,
-    companyId: string | null,
+    companyId: string,
     newRoleIds: string[],
   ): Promise<void> {
-    if (!companyId) {
-      return;
-    }
     const adminRole = await client.role.findFirst({
       where: { name: COMPANY_ADMIN_ROLE_NAME, isSystem: true },
     });
@@ -247,7 +284,9 @@ export class UsersService {
       return;
     }
     const currentlyHasAdmin = await client.userRole.findUnique({
-      where: { userId_roleId: { userId, roleId: adminRole.id } },
+      where: {
+        userId_roleId_companyId: { userId, roleId: adminRole.id, companyId },
+      },
     });
     if (!currentlyHasAdmin || newRoleIds.includes(adminRole.id)) {
       return;
@@ -256,8 +295,9 @@ export class UsersService {
     const otherAdminsCount = await client.userRole.count({
       where: {
         roleId: adminRole.id,
+        companyId,
         userId: { not: userId },
-        user: { companyId, deletedAt: null },
+        user: { deletedAt: null },
       },
     });
     if (otherAdminsCount === 0) {

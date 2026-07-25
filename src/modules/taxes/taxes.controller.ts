@@ -26,6 +26,7 @@ import { CurrentTaxRateDto } from './dto/current-tax-rate.dto';
 import { TaxRateResponseDto } from './dto/tax-rate-response.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { PermissionsGuard } from '../casl/guards/permissions.guard';
@@ -33,7 +34,7 @@ import { RequirePermissions } from '../casl/decorators/require-permissions.decor
 
 @ApiTags('Taxes')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, CompanyMembershipGuard, PermissionsGuard)
 @Controller('tax-rates')
 export class TaxesController {
   constructor(private readonly taxesService: TaxesService) {}

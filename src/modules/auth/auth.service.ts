@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -12,9 +14,6 @@ import { randomInt, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CompaniesService } from '../companies/companies.service';
-import { AccountsService } from '../accounts/accounts.service';
-import { TaxesService } from '../taxes/taxes.service';
-import { SequencesService } from '../sequences/sequences.service';
 import { MailerService } from '../../common/mailer/mailer.service';
 import { EnvConfig } from '../../config/env.schema';
 import { LoginDto } from './dto/login.dto';
@@ -22,7 +21,9 @@ import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { AuthResponseDto } from './dto/auth-response.dto';
+import { AuthCompanyDto, AuthResponseDto } from './dto/auth-response.dto';
+import { MeResponseDto } from './dto/me-response.dto';
+import type { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 import {
   JwtPayload,
   JwtRefreshPayload,
@@ -37,7 +38,6 @@ const INVALID_CREDENTIALS_ERROR = {
   message: 'Email or password is incorrect.',
   field: null,
 };
-const OWNER_ROLE_NAME = 'Company Admin';
 
 // Password-reset security parameters — see PasswordResetToken's schema
 // comment for how these three work together to make a low-entropy 6-digit
@@ -67,9 +67,6 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly companiesService: CompaniesService,
-    private readonly accountsService: AccountsService,
-    private readonly taxesService: TaxesService,
-    private readonly sequencesService: SequencesService,
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<EnvConfig, true>,
@@ -77,42 +74,31 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    const user = await this.prisma.$transaction(async (tx) => {
-      const company = await this.companiesService.create(dto.company, tx);
+    const result = await this.prisma.$transaction(async (tx) => {
+      // The user is created first (no company of their own now), then the
+      // company is provisioned FOR them: membership + Company Admin role +
+      // seeded chart/VAT/sequences — all in one transaction.
       const createdUser = await this.usersService.create(
-        { ...dto.user, companyId: company.id },
+        dto.user,
         undefined,
         tx,
       );
-
-      // The registering user is the company's owner/admin — assign the
-      // seeded Company Admin role so a fresh company is never locked out
-      // of managing itself.
-      const ownerRole = await tx.role.findFirstOrThrow({
-        where: { name: OWNER_ROLE_NAME, isSystem: true },
-      });
-      await tx.userRole.create({
-        data: { userId: createdUser.id, roleId: ownerRole.id },
-      });
-
-      // Seed the default Plan Comptable Libanais so a fresh company starts with
-      // a working chart of accounts (FR-104), in the same transaction as the
-      // company/user — either the whole company is set up or none of it is.
-      await this.accountsService.applyDefaultChart(company.id, tx);
-
-      // Seed the default standard VAT rate (FR-105), wired to the VAT control
-      // accounts just created above — a fresh company can invoice with VAT.
-      await this.taxesService.applyDefaultVatRate(company.id, tx);
-
-      // Seed the default document-numbering series (FR-106) so a fresh company
-      // can issue invoices/orders/receipts with proper numbers immediately.
-      await this.sequencesService.applyDefaultSequences(company.id, tx);
-
-      return createdUser;
+      const company = await this.companiesService.provision(
+        dto.company,
+        createdUser.id,
+        tx,
+      );
+      return { userId: createdUser.id, companyId: company.id };
     });
 
-    await this.usersService.touchLastLogin(user.id);
-    return this.issueTokenPair(user.id, user.companyId);
+    await this.usersService.touchLastLogin(result.userId);
+    const companies = await this.resolveUserCompanies(result.userId);
+    return this.issueTokenPair(
+      result.userId,
+      result.companyId,
+      false,
+      companies,
+    );
   }
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
@@ -130,17 +116,71 @@ export class AuthService {
     }
 
     await this.usersService.touchLastLogin(user.id);
-    return this.issueTokenPair(user.id, user.companyId);
+    const companies = user.isPlatformAdmin
+      ? []
+      : await this.resolveUserCompanies(user.id);
+    const active = this.pickActiveCompany(user.isPlatformAdmin, companies);
+    return this.issueTokenPair(
+      user.id,
+      active,
+      user.isPlatformAdmin,
+      companies,
+      user.mustChangePassword,
+    );
   }
 
-  async refresh(userId: string, tokenId: string): Promise<AuthResponseDto> {
+  /**
+   * Make one of the user's companies active and issue a token scoped to it.
+   * Membership is verified here (token-issue time); a per-request guard
+   * re-checks it in case the membership is revoked while a token is still live.
+   */
+  async switchCompany(
+    userId: string,
+    companyId: string,
+  ): Promise<AuthResponseDto> {
+    const membership = await this.prisma.userCompany.findFirst({
+      where: {
+        userId,
+        companyId,
+        company: { deletedAt: null, isActive: true },
+      },
+    });
+    if (!membership) {
+      throw new ForbiddenException({
+        code: 'COMPANY_MEMBERSHIP_REQUIRED',
+        message: 'You are not a member of that company.',
+        field: 'companyId',
+      });
+    }
+    const companies = await this.resolveUserCompanies(userId);
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { mustChangePassword: true },
+    });
+    return this.issueTokenPair(
+      userId,
+      companyId,
+      false,
+      companies,
+      user.mustChangePassword,
+    );
+  }
+
+  async refresh(
+    userId: string,
+    tokenId: string,
+    companyId: string | null,
+    isPlatformAdmin: boolean,
+  ): Promise<AuthResponseDto> {
     await this.prisma.refreshToken.update({
       where: { id: tokenId },
       data: { revokedAt: new Date() },
     });
 
-    const user = await this.usersService.findOne(userId);
-    if (!user.isActive) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
+    if (!user || !user.isActive) {
       throw new UnauthorizedException({
         code: 'AUTH_USER_INACTIVE',
         message: 'This account has been deactivated.',
@@ -148,7 +188,95 @@ export class AuthService {
       });
     }
 
-    return this.issueTokenPair(user.id, user.companyId);
+    const companies = isPlatformAdmin
+      ? []
+      : await this.resolveUserCompanies(userId);
+    // Keep the active company only if the user is still a member of it.
+    const active =
+      companyId && companies.some((c) => c.id === companyId) ? companyId : null;
+    return this.issueTokenPair(
+      userId,
+      active,
+      isPlatformAdmin,
+      companies,
+      user.mustChangePassword,
+    );
+  }
+
+  /**
+   * The current user + their company context (active company from the token,
+   * plus every company they belong to). Looks the user up unscoped so it works
+   * even before a multi-company user has selected an active company.
+   */
+  async me(caller: AuthenticatedUser): Promise<MeResponseDto> {
+    const user = await this.usersService.findOne(caller.userId);
+    const companies = caller.isPlatformAdmin
+      ? []
+      : await this.resolveUserCompanies(caller.userId);
+    const dto = new MeResponseDto();
+    Object.assign(dto, user);
+    dto.activeCompanyId = caller.companyId;
+    dto.companies = companies;
+    dto.mustChangePassword = caller.mustChangePassword;
+    return dto;
+  }
+
+  /**
+   * Change the caller's own password. Verifies the current password, sets the
+   * new one, clears mustChangePassword, and revokes every other session (like a
+   * reset). Issues a fresh token pair so the caller keeps working with the flag
+   * cleared. This is the only route a must-change-password user may call.
+   */
+  async changePassword(
+    caller: AuthenticatedUser,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<AuthResponseDto> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: caller.userId, deletedAt: null },
+    });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException(INVALID_CREDENTIALS_ERROR);
+    }
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new UnauthorizedException({
+        code: 'AUTH_INVALID_CURRENT_PASSWORD',
+        message: 'The current password is incorrect.',
+        field: 'currentPassword',
+      });
+    }
+    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+      throw new BadRequestException({
+        code: 'AUTH_PASSWORD_UNCHANGED',
+        message: 'The new password must be different from the current one.',
+        field: 'newPassword',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash, mustChangePassword: false },
+      }),
+      // A password change ends every existing session (same as a reset).
+      this.prisma.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    const companies = caller.isPlatformAdmin
+      ? []
+      : await this.resolveUserCompanies(user.id);
+    return this.issueTokenPair(
+      user.id,
+      caller.companyId,
+      caller.isPlatformAdmin,
+      companies,
+      false,
+    );
   }
 
   async logout(tokenId: string): Promise<void> {
@@ -310,11 +438,49 @@ export class AuthService {
     return token;
   }
 
+  /** The companies a user belongs to (active, non-deleted), for the auth response. */
+  private async resolveUserCompanies(
+    userId: string,
+  ): Promise<AuthCompanyDto[]> {
+    const memberships = await this.prisma.userCompany.findMany({
+      where: { userId, company: { deletedAt: null, isActive: true } },
+      select: { company: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return memberships.map((m) => ({
+      id: m.company.id,
+      name: m.company.name,
+    }));
+  }
+
+  /**
+   * Which company a freshly issued token is scoped to: none for a platform
+   * admin; the sole company for a single-company user (auto-selected); none for
+   * a multi-company user, who must choose via POST /auth/switch-company.
+   */
+  private pickActiveCompany(
+    isPlatformAdmin: boolean,
+    companies: AuthCompanyDto[],
+  ): string | null {
+    if (isPlatformAdmin) {
+      return null;
+    }
+    return companies.length === 1 ? companies[0].id : null;
+  }
+
   private async issueTokenPair(
     userId: string,
     companyId: string | null,
+    isPlatformAdmin: boolean,
+    companies: AuthCompanyDto[],
+    mustChangePassword = false,
   ): Promise<AuthResponseDto> {
-    const accessPayload: JwtPayload = { sub: userId, companyId };
+    const accessPayload: JwtPayload = {
+      sub: userId,
+      companyId,
+      isPlatformAdmin,
+      mustChangePassword,
+    };
     const accessToken = this.jwtService.sign(accessPayload, {
       secret: this.configService.get('JWT_ACCESS_SECRET', { infer: true }),
       expiresIn: this.configService.get('JWT_ACCESS_EXPIRES', {
@@ -326,6 +492,8 @@ export class AuthService {
     const refreshPayload: JwtRefreshPayload = {
       sub: userId,
       companyId,
+      isPlatformAdmin,
+      mustChangePassword,
       jti: tokenId,
     };
     const refreshToken = this.jwtService.sign(refreshPayload, {
@@ -356,6 +524,9 @@ export class AuthService {
     dto.refreshToken = refreshToken;
     dto.tokenType = TOKEN_TYPE;
     dto.expiresIn = accessExp - accessIat;
+    dto.companies = companies;
+    dto.activeCompanyId = companyId;
+    dto.mustChangePassword = mustChangePassword;
     return dto;
   }
 }

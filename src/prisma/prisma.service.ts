@@ -5,8 +5,10 @@ import { PrismaPg } from '@prisma/adapter-pg';
 // Add a model name here the moment it gets a companyId column (Account,
 // Branch, Partner, Item, ...). This is the only line that changes as new
 // company-owned models are added.
+// User is intentionally NOT here: a user is no longer tied to one company
+// (companyId column is gone) — access is via UserCompany membership, which
+// UsersService filters explicitly rather than through forTenant.
 const TENANT_SCOPED_MODELS = new Set([
-  'User',
   'Branch',
   'ExchangeRate',
   'Account',

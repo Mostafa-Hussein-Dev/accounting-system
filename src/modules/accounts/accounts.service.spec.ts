@@ -49,10 +49,22 @@ describe('AccountsService', () => {
     companyBId = b.id;
     companyCId = c.id;
 
-    platformAdmin = { userId: 'admin', companyId: null };
-    callerA = { userId: 'caller-a', companyId: companyAId };
-    callerB = { userId: 'caller-b', companyId: companyBId };
-    callerC = { userId: 'caller-c', companyId: companyCId };
+    platformAdmin = { userId: 'admin', companyId: null, isPlatformAdmin: true, mustChangePassword: false };
+    callerA = {
+      userId: 'caller-a',
+      companyId: companyAId,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
+    callerB = {
+      userId: 'caller-b',
+      companyId: companyBId,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
+    callerC = {
+      userId: 'caller-c',
+      companyId: companyCId,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
   });
 
   afterAll(async () => {

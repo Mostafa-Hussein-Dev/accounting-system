@@ -15,15 +15,17 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { SwitchCompanyDto } from './dto/switch-company.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { AllowPasswordChangePending } from './decorators/allow-password-change-pending.decorator';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { UserResponseDto } from '../users/dto/user-response.dto';
+import { MeResponseDto } from './dto/me-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -42,10 +44,7 @@ const RESET_THROTTLE = { default: { limit: 3, ttl: 900_000 } };
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly usersService: UsersService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -95,7 +94,36 @@ export class AuthController {
     @Body() _dto: RefreshTokenDto,
     @CurrentUser() token: AuthenticatedRefreshToken,
   ): Promise<AuthResponseDto> {
-    return this.authService.refresh(token.userId, token.tokenId);
+    return this.authService.refresh(
+      token.userId,
+      token.tokenId,
+      token.companyId,
+      token.isPlatformAdmin,
+    );
+  }
+
+  @Post('switch-company')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Switch the active company (also used to select one after login when the user belongs to several). Issues a new token pair scoped to it.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'New token pair scoped to the chosen company',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Not a member of that company',
+  })
+  switchCompany(
+    @Body() dto: SwitchCompanyDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AuthResponseDto> {
+    return this.authService.switchCompany(user.userId, dto.companyId);
   }
 
   @Post('logout')
@@ -174,15 +202,49 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @AllowPasswordChangePending()
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get the current authenticated user' })
+  @ApiOperation({
+    summary:
+      'Get the current authenticated user, plus the active company and every company they belong to',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Current user',
-    type: UserResponseDto,
+    description: 'Current user with company context',
+    type: MeResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
-  me(@CurrentUser() user: AuthenticatedUser): Promise<UserResponseDto> {
-    return this.usersService.findOne(user.userId, user);
+  me(@CurrentUser() user: AuthenticatedUser): Promise<MeResponseDto> {
+    return this.authService.me(user);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @AllowPasswordChangePending()
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Change your own password. Clears the must-change-password flag (for temp-password accounts), revokes other sessions, and returns a fresh token pair.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed; new token pair issued',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'New password same as current',
+  })
+  @ApiResponse({ status: 401, description: 'Current password incorrect' })
+  changePassword(
+    @Body() dto: ChangePasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AuthResponseDto> {
+    return this.authService.changePassword(
+      user,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 }

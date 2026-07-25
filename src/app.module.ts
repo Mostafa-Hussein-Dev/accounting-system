@@ -13,6 +13,8 @@ import { AccountsModule } from './modules/accounts/accounts.module';
 import { TaxesModule } from './modules/taxes/taxes.module';
 import { SequencesModule } from './modules/sequences/sequences.module';
 import { GlModule } from './modules/gl/gl.module';
+import { PermissionsModule } from './modules/permissions/permissions.module';
+import { InvitationsModule } from './modules/invitations/invitations.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { GlModule } from './modules/gl/gl.module';
     TaxesModule,
     SequencesModule,
     GlModule,
+    PermissionsModule,
+    InvitationsModule,
   ],
   controllers: [],
   providers: [],

@@ -25,9 +25,8 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
   /** Captures the code AuthService "emailed" via the mocked MailerService —
    * the same thing an e2e test would do by reading Mailpit instead. */
   function lastSentCode(): string {
-    const lastCall =
-      sendPasswordResetCode.mock.calls[sendPasswordResetCode.mock.calls.length - 1];
-    return lastCall[0].code;
+    const calls = sendPasswordResetCode.mock.calls as [{ code: string }][];
+    return calls[calls.length - 1][0].code;
   }
 
   beforeAll(async () => {
@@ -74,7 +73,7 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
   afterAll(async () => {
     await prisma.passwordResetToken.deleteMany({ where: { userId } });
     await prisma.refreshToken.deleteMany({ where: { userId } });
-    await prisma.user.deleteMany({ where: { companyId } });
+    await prisma.user.deleteMany({ where: { id: userId } });
     await prisma.company.delete({ where: { id: companyId } });
     await prisma.$disconnect();
   });
@@ -166,7 +165,11 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
       expect(token.attempts).toBe(0);
 
       await expect(
-        service.resetPassword({ email: userEmail, code, newPassword: 'VerifiedFlow1!' }),
+        service.resetPassword({
+          email: userEmail,
+          code,
+          newPassword: 'VerifiedFlow1!',
+        }),
       ).resolves.toBeUndefined();
     });
 
@@ -183,7 +186,9 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
 
       await expect(
         service.verifyResetCode({ email: userEmail, code: '000000' }),
-      ).rejects.toMatchObject({ response: { code: 'AUTH_INVALID_RESET_CODE' } });
+      ).rejects.toMatchObject({
+        response: { code: 'AUTH_INVALID_RESET_CODE' },
+      });
 
       const updated = await prisma.passwordResetToken.findUniqueOrThrow({
         where: { id: token.id },
@@ -220,13 +225,20 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
 
       await expect(
         service.verifyResetCode({ email: userEmail, code }),
-      ).rejects.toMatchObject({ response: { code: 'AUTH_INVALID_RESET_CODE' } });
+      ).rejects.toMatchObject({
+        response: { code: 'AUTH_INVALID_RESET_CODE' },
+      });
     });
 
     it('gives the same error as a wrong code for an email that does not exist', async () => {
       await expect(
-        service.verifyResetCode({ email: 'nobody@example.com', code: '123456' }),
-      ).rejects.toMatchObject({ response: { code: 'AUTH_INVALID_RESET_CODE' } });
+        service.verifyResetCode({
+          email: 'nobody@example.com',
+          code: '123456',
+        }),
+      ).rejects.toMatchObject({
+        response: { code: 'AUTH_INVALID_RESET_CODE' },
+      });
     });
   });
 
@@ -291,7 +303,11 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
       });
 
       await expect(
-        service.resetPassword({ email: userEmail, code, newPassword: 'Whatever1!' }),
+        service.resetPassword({
+          email: userEmail,
+          code,
+          newPassword: 'Whatever1!',
+        }),
       ).rejects.toMatchObject({
         response: { code: 'AUTH_INVALID_RESET_CODE' },
       });
@@ -317,10 +333,12 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
       const newPassword = 'BrandNewP@ssword2';
       await service.resetPassword({ email: userEmail, code, newPassword });
 
-      const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-      await expect(bcrypt.compare(newPassword, user.passwordHash)).resolves.toBe(
-        true,
-      );
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+      });
+      await expect(
+        bcrypt.compare(newPassword, user.passwordHash),
+      ).resolves.toBe(true);
 
       const token = await prisma.passwordResetToken.findFirstOrThrow({
         where: { userId },
@@ -349,6 +367,78 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
         }),
       ).rejects.toMatchObject({
         response: { code: 'AUTH_INVALID_RESET_CODE' },
+      });
+    });
+  });
+
+  describe('changePassword', () => {
+    let cpUserId: string;
+    const caller = () => ({
+      userId: cpUserId,
+      companyId: null,
+      isPlatformAdmin: false,
+      mustChangePassword: true,
+    });
+
+    beforeEach(async () => {
+      const user = await prisma.user.create({
+        data: {
+          firstName: 'Cp',
+          lastName: 'User',
+          email: `cp-${randomUUID()}@example.com`,
+          passwordHash: await bcrypt.hash('CurrentP@ss1', 12),
+          mustChangePassword: true,
+        },
+      });
+      cpUserId = user.id;
+    });
+
+    afterEach(async () => {
+      await prisma.refreshToken.deleteMany({ where: { userId: cpUserId } });
+      await prisma.user.deleteMany({ where: { id: cpUserId } });
+    });
+
+    it('changes the password, clears mustChangePassword, and returns a cleared token', async () => {
+      const res = await service.changePassword(
+        caller(),
+        'CurrentP@ss1',
+        'BrandNewP@ss2',
+      );
+      expect(res.mustChangePassword).toBe(false);
+
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id: cpUserId },
+      });
+      expect(user.mustChangePassword).toBe(false);
+      await expect(
+        bcrypt.compare('BrandNewP@ss2', user.passwordHash),
+      ).resolves.toBe(true);
+    });
+
+    it('revokes existing sessions on change', async () => {
+      const rt = await prisma.refreshToken.create({
+        data: { userId: cpUserId, expiresAt: new Date(Date.now() + 60_000) },
+      });
+      await service.changePassword(caller(), 'CurrentP@ss1', 'BrandNewP@ss2');
+      const after = await prisma.refreshToken.findUniqueOrThrow({
+        where: { id: rt.id },
+      });
+      expect(after.revokedAt).not.toBeNull();
+    });
+
+    it('rejects a wrong current password (401)', async () => {
+      await expect(
+        service.changePassword(caller(), 'WrongCurrent1', 'BrandNewP@ss2'),
+      ).rejects.toMatchObject({
+        response: { code: 'AUTH_INVALID_CURRENT_PASSWORD' },
+      });
+    });
+
+    it('rejects reusing the same password (400)', async () => {
+      await expect(
+        service.changePassword(caller(), 'CurrentP@ss1', 'CurrentP@ss1'),
+      ).rejects.toMatchObject({
+        response: { code: 'AUTH_PASSWORD_UNCHANGED' },
       });
     });
   });

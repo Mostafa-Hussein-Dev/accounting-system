@@ -45,9 +45,17 @@ describe('RolesService', () => {
     });
     permissionId = permission.id;
 
-    platformAdmin = { userId: 'admin', companyId: null };
-    callerA = { userId: 'caller-a', companyId: companyAId };
-    callerB = { userId: 'caller-b', companyId: companyBId };
+    platformAdmin = { userId: 'admin', companyId: null, isPlatformAdmin: true, mustChangePassword: false };
+    callerA = {
+      userId: 'caller-a',
+      companyId: companyAId,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
+    callerB = {
+      userId: 'caller-b',
+      companyId: companyBId,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
   });
 
   afterAll(async () => {
@@ -172,11 +180,10 @@ describe('RolesService', () => {
         lastName: 'Tester',
         email: `roles-inuse-${randomUUID()}@example.com`,
         passwordHash: 'irrelevant',
-        companyId: companyAId,
       },
     });
     await prisma.userRole.create({
-      data: { userId: user.id, roleId: role.id },
+      data: { userId: user.id, roleId: role.id, companyId: companyAId },
     });
 
     await expect(service.remove(role.id, callerA)).rejects.toThrow(

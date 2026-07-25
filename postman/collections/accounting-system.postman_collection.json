@@ -22,6 +22,11 @@
       "type": "string"
     },
     {
+      "key": "serverUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
       "key": "debitAccountId",
       "value": "",
       "type": "string"
@@ -4876,6 +4881,59 @@
                 }
               ],
               "body": "{\n  \"data\": {\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"asOf\": \"2026-12-31\",\n    \"currency\": \"USD\",\n    \"rolledUp\": true,\n    \"rows\": [\n      {\n        \"accountId\": \"\",\n        \"accountNumber\": \"6\",\n        \"accountName\": \"Class 6\",\n        \"debit\": 250,\n        \"credit\": 0\n      },\n      {\n        \"accountId\": \"\",\n        \"accountNumber\": \"7\",\n        \"accountName\": \"Class 7\",\n        \"debit\": 0,\n        \"credit\": 250\n      }\n    ],\n    \"totalDebit\": 250,\n    \"totalCredit\": 250,\n    \"isBalanced\": true\n  },\n  \"meta\": null\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{serverUrl}}/health",
+              "host": [
+                "{{serverUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness/readiness probe. Public (no auth) and mounted OUTSIDE the api/v1 prefix at {{serverUrl}}/health, so it uses serverUrl (no version) rather than baseUrl. Pings the database with SELECT 1; returns 200 when the service and DB are healthy, 503 DATABASE_UNAVAILABLE when the DB is unreachable."
+          },
+          "response": [
+            {
+              "name": "200 OK (healthy)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"status\": \"ok\",\n    \"database\": \"up\",\n    \"uptime\": 4213,\n    \"timestamp\": \"2026-07-26T12:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "503 Database unreachable",
+              "status": "Service Unavailable",
+              "code": 503,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"DATABASE_UNAVAILABLE\",\n    \"message\": \"The database is not reachable.\",\n    \"field\": null\n  }\n}"
             }
           ]
         }

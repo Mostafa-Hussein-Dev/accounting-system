@@ -15,7 +15,6 @@ import { SequencesModule } from './modules/sequences/sequences.module';
 import { GlModule } from './modules/gl/gl.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
-import { AppController } from './app.controller';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -37,7 +36,7 @@ import { HealthController } from './health/health.controller';
     PermissionsModule,
     InvitationsModule,
   ],
-  controllers: [AppController, HealthController],
+  controllers: [HealthController],
   providers: [],
 })
 export class AppModule {}

@@ -17,7 +17,11 @@ function contextWithUser(
 }
 
 describe('PermissionsGuard', () => {
-  const user: AuthenticatedUser = { userId: 'u1', companyId: 'c1' };
+  const user: AuthenticatedUser = {
+    userId: 'u1',
+    companyId: 'c1',
+    isPlatformAdmin: false, mustChangePassword: false,
+  };
 
   function makeGuard(
     required: RequiredPermission[] | undefined,

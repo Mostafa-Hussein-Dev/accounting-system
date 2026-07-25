@@ -84,6 +84,16 @@ enum JournalSide {
   CREDIT
 }
 
+// How long a company invitation stays valid — the admin picks one when sending
+// it; the concrete expiresAt is computed from this at creation time.
+enum InvitationDuration {
+  ONE_DAY
+  THREE_DAYS
+  ONE_WEEK
+  TWO_WEEKS
+  THIRTY_DAYS
+}
+
 model Company {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
@@ -111,7 +121,9 @@ model Company {
   fiscalYearStartMonth Int      @default(1) @map("fiscal_year_start_month")
   settings             Json     @default("{}")
 
-  users             User[]
+  members           UserCompany[]
+  userRoles         UserRole[]
+  invitations       Invitation[]
   roles             Role[]
   branches          Branch[]
   exchangeRates     ExchangeRate[]
@@ -471,6 +483,11 @@ model Branch {
   @@map("branches")
 }
 
+// A user is NOT tied to one company (a person can own/belong to several,
+// each fully independent). Company membership lives in UserCompany; a user's
+// roles are per-company via UserRole.companyId. `isPlatformAdmin` marks a
+// platform/support account (no memberships, sees across every tenant) — it
+// replaces the old "companyId === null means admin" overload.
 model User {
   id                String    @id @default(uuid()) @db.Uuid
   firstName         String    @map("first_name")
@@ -481,22 +498,72 @@ model User {
   avatarUrl         String?   @map("avatar_url")
   preferredLanguage Language  @default(EN) @map("preferred_language")
   isActive          Boolean   @default(true) @map("is_active")
+  isPlatformAdmin   Boolean   @default(false) @map("is_platform_admin")
+  // Set when the account is created via an invitation with a temp password: the
+  // user must change it (POST /auth/change-password) before doing anything else.
+  // A PasswordChangeGuard blocks all other routes while this is true.
+  mustChangePassword Boolean  @default(false) @map("must_change_password")
   lastLoginAt       DateTime? @map("last_login_at")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   deletedAt         DateTime? @map("deleted_at")
 
-  companyId String?  @map("company_id") @db.Uuid
-  company   Company? @relation(fields: [companyId], references: [id])
-
+  companies           UserCompany[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   roles               UserRole[]
 
-  @@index([companyId])
   @@index([email])
   @@index([deletedAt])
   @@map("users")
+}
+
+// Membership: which companies a user belongs to (many-to-many). The source of
+// truth for "this user has access to this company." A user's roles within a
+// company are separate (UserRole, scoped by companyId).
+model UserCompany {
+  userId    String  @map("user_id") @db.Uuid
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([userId, companyId])
+  @@index([companyId])
+  @@map("user_companies")
+}
+
+// A pending invitation for someone to join a company (consent-based). The
+// actual User is created only when the invite is ACCEPTED — until then this row
+// is the sole artifact, so an unaccepted/expired invite leaves no orphan user.
+// `tempPasswordHash` is set only when the email has no account yet (a new user's
+// starter credentials, emailed alongside the accept link); for an existing user
+// it's null and acceptance just grants membership. `roleIds` are the roles to
+// assign on acceptance. `token` is the secret in the accept link.
+model Invitation {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  email            String
+  firstName        String    @map("first_name")
+  lastName         String    @map("last_name")
+  roleIds          String[]  @map("role_ids") @db.Uuid
+  tempPasswordHash String?   @map("temp_password_hash")
+  token            String    @unique
+  accepted         Boolean   @default(false)
+  duration         InvitationDuration
+  expiresAt        DateTime  @map("expires_at")
+  acceptedAt       DateTime? @map("accepted_at")
+  invitedById      String?   @map("invited_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([email])
+  @@map("invitations")
 }
 
 // Global, reusable permission catalog. Not tenant-scoped — reference data,
@@ -557,17 +624,22 @@ model RolePermission {
   @@map("role_permissions")
 }
 
-// No companyId here on purpose — a user's company is already fixed via
-// User.companyId, so this only ever needs to say "this user has this role."
+// A role assignment is per company: a user can be Company Admin in one company
+// and Company Member in another, so companyId is part of the identity. The role
+// itself may be global (Role.companyId null) or company-owned; either way the
+// assignment records which company it applies to.
 model UserRole {
   userId    String   @map("user_id") @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   roleId    String   @map("role_id") @db.Uuid
   role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@id([userId, roleId])
+  @@id([userId, roleId, companyId])
   @@index([roleId])
+  @@index([companyId])
   @@map("user_roles")
 }
 

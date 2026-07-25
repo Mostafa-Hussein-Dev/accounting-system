@@ -17,6 +17,11 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   validate(payload: JwtPayload): AuthenticatedUser {
-    return { userId: payload.sub, companyId: payload.companyId };
+    return {
+      userId: payload.sub,
+      companyId: payload.companyId,
+      isPlatformAdmin: payload.isPlatformAdmin,
+      mustChangePassword: payload.mustChangePassword ?? false,
+    };
   }
 }

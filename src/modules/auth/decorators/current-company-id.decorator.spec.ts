@@ -16,14 +16,27 @@ function captureError(fn: () => unknown): unknown {
 describe('resolveCompanyId', () => {
   it("returns the caller's own companyId for a company-scoped user", () => {
     expect(
-      resolveCompanyId({ userId: 'u1', companyId: COMPANY_ID }, undefined),
+      resolveCompanyId(
+        {
+          userId: 'u1',
+          companyId: COMPANY_ID,
+          isPlatformAdmin: false,
+          mustChangePassword: false,
+        },
+        undefined,
+      ),
     ).toBe(COMPANY_ID);
   });
 
   it('ignores a query override for a company-scoped user (cannot escalate to another tenant)', () => {
     expect(
       resolveCompanyId(
-        { userId: 'u1', companyId: COMPANY_ID },
+        {
+          userId: 'u1',
+          companyId: COMPANY_ID,
+          isPlatformAdmin: false,
+          mustChangePassword: false,
+        },
         OTHER_COMPANY_ID,
       ),
     ).toBe(COMPANY_ID);
@@ -31,13 +44,29 @@ describe('resolveCompanyId', () => {
 
   it('resolves a platform admin (companyId null) to the explicitly requested company', () => {
     expect(
-      resolveCompanyId({ userId: 'admin', companyId: null }, COMPANY_ID),
+      resolveCompanyId(
+        {
+          userId: 'admin',
+          companyId: null,
+          isPlatformAdmin: true,
+          mustChangePassword: false,
+        },
+        COMPANY_ID,
+      ),
     ).toBe(COMPANY_ID);
   });
 
   it('rejects a platform admin request with no ?companyId= provided', () => {
     const error = captureError(() =>
-      resolveCompanyId({ userId: 'admin', companyId: null }, undefined),
+      resolveCompanyId(
+        {
+          userId: 'admin',
+          companyId: null,
+          isPlatformAdmin: true,
+          mustChangePassword: false,
+        },
+        undefined,
+      ),
     );
     expect(error).toBeInstanceOf(BadRequestException);
     expect((error as BadRequestException).getResponse()).toMatchObject({
@@ -47,7 +76,15 @@ describe('resolveCompanyId', () => {
 
   it('rejects a platform admin request with a malformed ?companyId=', () => {
     const error = captureError(() =>
-      resolveCompanyId({ userId: 'admin', companyId: null }, 'not-a-uuid'),
+      resolveCompanyId(
+        {
+          userId: 'admin',
+          companyId: null,
+          isPlatformAdmin: true,
+          mustChangePassword: false,
+        },
+        'not-a-uuid',
+      ),
     );
     expect(error).toBeInstanceOf(BadRequestException);
     expect((error as BadRequestException).getResponse()).toMatchObject({

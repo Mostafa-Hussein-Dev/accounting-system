@@ -8,9 +8,6 @@ import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { UsersModule } from '../users/users.module';
 import { CompaniesModule } from '../companies/companies.module';
-import { AccountsModule } from '../accounts/accounts.module';
-import { TaxesModule } from '../taxes/taxes.module';
-import { SequencesModule } from '../sequences/sequences.module';
 import { MailerModule } from '../../common/mailer/mailer.module';
 
 @Module({
@@ -22,10 +19,9 @@ import { MailerModule } from '../../common/mailer/mailer.module';
     // behavior of login/register/refresh.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 20 }]),
     UsersModule,
+    // CompaniesModule provisions a company (chart/VAT/sequences + owner
+    // membership/role) for register; the seed services live behind it now.
     CompaniesModule,
-    AccountsModule,
-    TaxesModule,
-    SequencesModule,
     MailerModule,
   ],
   controllers: [AuthController],

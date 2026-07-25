@@ -4,19 +4,23 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service';
 import {
   isPlatformAdmin,
   type AuthenticatedUser,
 } from '../../auth/interfaces/authenticated-user.interface';
 
 /**
- * Allows a platform admin to act on any company, and a company-scoped
- * caller to act only on their own company (matched against the :id route
- * param). Must run after JwtAuthGuard.
+ * Allows a platform admin to act on any company, and a company user to act on
+ * any company they are a member of (matched against the :id route param) —
+ * not just their currently-active one, so an owner can read/manage any of
+ * their companies. Must run after JwtAuthGuard.
  */
 @Injectable()
 export class CompanySelfOrAdminGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
       .getRequest<{ user?: AuthenticatedUser; params: { id: string } }>();
@@ -28,7 +32,14 @@ export class CompanySelfOrAdminGuard implements CanActivate {
         field: null,
       });
     }
-    if (isPlatformAdmin(user) || user.companyId === request.params.id) {
+    if (isPlatformAdmin(user)) {
+      return true;
+    }
+    const membership = await this.prisma.userCompany.findFirst({
+      where: { userId: user.userId, companyId: request.params.id },
+      select: { userId: true },
+    });
+    if (membership) {
       return true;
     }
     throw new ForbiddenException({

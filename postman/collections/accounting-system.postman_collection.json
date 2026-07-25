@@ -51,12 +51,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
-              }
+              },
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
@@ -68,7 +68,7 @@
                 "login"
               ]
             },
-            "description": "Authenticate with email + password. On success, the test script saves accessToken and refreshToken into the environment for use by every other request."
+            "description": "Log in with email + password. The response includes `companies` (every company the user belongs to) and `activeCompanyId`. A single-company user is auto-selected (active token straight away); a multi-company user gets activeCompanyId=null plus the companies list, then picks one via POST /auth/switch-company. Setting the active company is only ever done through switch-company. Test script saves accessToken + companyId (active) + firstCompanyId (companies[0], a convenient id to switch into)."
           },
           "event": [
             {
@@ -76,18 +76,86 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Login successful', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "if (pm.response.code === 200) {",
-                  "    const json = pm.response.json();",
-                  "    pm.environment.set('accessToken', json.data.accessToken);",
-                  "    pm.environment.set('refreshToken', json.data.refreshToken);",
+                  "const d = pm.response.json().data;",
+                  "if (d) {",
+                  "  pm.environment.set('accessToken', d.accessToken);",
+                  "  pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.activeCompanyId) pm.environment.set('companyId', d.activeCompanyId);",
+                  "  if (d.companies && d.companies.length) pm.environment.set('firstCompanyId', d.companies[0].id);",
                   "}"
                 ]
               }
             }
           ],
+          "response": [
+            {
+              "name": "200 OK (multi-company user)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJ...\",\n    \"refreshToken\": \"eyJ...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900,\n    \"companies\": [\n      {\n        \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n        \"name\": \"Demo Company\"\n      },\n      {\n        \"id\": \"c4a2d3f1-5678-4b6c-8d9e-2345678901bc\",\n        \"name\": \"Second Company\"\n      }\n    ],\n    \"activeCompanyId\": null\n  },\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Switch company",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d) { pm.environment.set('accessToken', d.accessToken); pm.environment.set('refreshToken', d.refreshToken); pm.environment.set('companyId', d.activeCompanyId); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              },
+              "raw": "{\n  \"companyId\": \"{{firstCompanyId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/switch-company",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "switch-company"
+              ]
+            },
+            "description": "Make one of the user’s companies active (also used to pick one after login). Verifies membership and returns a new token pair scoped to it. 403 COMPANY_MEMBERSHIP_REQUIRED if not a member."
+          },
           "response": [
             {
               "name": "200 OK",
@@ -100,10 +168,91 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900\n  },\n  \"meta\": null\n}"
+              "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJ...\",\n    \"refreshToken\": \"eyJ...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900,\n    \"companies\": [\n      {\n        \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n        \"name\": \"Demo Company\"\n      }\n    ],\n    \"activeCompanyId\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\"\n  },\n  \"meta\": null\n}"
             },
             {
-              "name": "401 Invalid credentials",
+              "name": "403 Not a member",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"COMPANY_MEMBERSHIP_REQUIRED\",\n    \"message\": \"You are not a member of that company.\",\n    \"field\": \"companyId\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Change password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { const d = pm.response.json().data; pm.environment.set('accessToken', d.accessToken); pm.environment.set('refreshToken', d.refreshToken); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              },
+              "raw": "{\n  \"currentPassword\": \"nomH1BoAf_LS\",\n  \"newPassword\": \"BrandNewP@ssword2\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            },
+            "description": "Change your own password. Clears mustChangePassword (temp-password accounts), revokes other sessions, and returns a fresh token pair. This is the ONLY route reachable while mustChangePassword is true — every other route returns 403 PASSWORD_CHANGE_REQUIRED. Test script saves the new tokens."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"accessToken\": \"eyJ...\",\n    \"refreshToken\": \"eyJ...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900,\n    \"companies\": [\n      {\n        \"id\": \"...\",\n        \"name\": \"Demo Company\"\n      }\n    ],\n    \"activeCompanyId\": \"...\",\n    \"mustChangePassword\": false\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "401 Wrong current password",
               "status": "Unauthorized",
               "code": 401,
               "_postman_previewlanguage": "json",
@@ -113,7 +262,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_CREDENTIALS\",\n    \"message\": \"Email or password is incorrect.\",\n    \"field\": null\n  }\n}"
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_CURRENT_PASSWORD\",\n    \"message\": \"The current password is incorrect.\",\n    \"field\": \"currentPassword\"\n  }\n}"
             }
           ]
         },
@@ -639,6 +788,17 @@
               ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"UNAUTHORIZED\",\n    \"message\": \"Unauthorized\",\n    \"field\": null\n  }\n}"
             }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { pm.environment.set('userId', pm.response.json().data.id); }"
+                ]
+              }
+            }
           ]
         }
       ]
@@ -658,12 +818,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Beirut Trading Co.\",\n  \"taxNumber\": \"LB-123456\",\n  \"phone\": \"+961 1 234 567\",\n  \"email\": \"info@beiruttrading.com\",\n  \"baseCurrencyCode\": \"USD\",\n  \"fiscalYearStartMonth\": 1\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
-              }
+              },
+              "raw": "{\n  \"name\": \"Owners Second Co\",\n  \"taxNumber\": \"LB-999999\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/companies",
@@ -674,7 +834,7 @@
                 "companies"
               ]
             },
-            "description": "Platform admin only — direct company creation is an admin provisioning action. Self-service company creation is Auth > Register."
+            "description": "Create a company. Requires the caller to hold company.create through any of their roles (i.e. be a Company Admin of at least one company) — a Member-only user gets 403; no active-company switch is needed. The JWT identifies the caller, who becomes the owner (member + Company Admin) of the new company; chart/VAT/sequences are auto-seeded. A platform admin may instead attach it to another user via \"ownerUserId\" (from POST /users or GET /users). Brand-new-user signup uses POST /auth/register."
           },
           "event": [
             {
@@ -766,7 +926,7 @@
                 }
               ]
             },
-            "description": "Platform admin only — a company-scoped user belongs to exactly one company, so listing all of them isn't meaningful for them."
+            "description": "List companies. A platform admin sees all; a company user sees only the companies they belong to (their memberships)."
           },
           "response": [
             {
@@ -1173,7 +1333,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Sales Manager\",\n  \"description\": \"Manages the sales team.\",\n  \"permissionIds\": [\"{{companyMemberRoleId}}\"]\n}",
+              "raw": "{\n  \"name\": \"Sales Manager\",\n  \"description\": \"Manages the sales team.\",\n  \"permissionIds\": [\n    \"{{permissionId}}\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1189,7 +1349,7 @@
                 "roles"
               ]
             },
-            "description": "A company-scoped caller is always forced into their own company, regardless of any companyId sent — creates a custom role private to that company. A platform admin may omit companyId for a global role, or supply one to create it on behalf of a specific company. permissionIds must reference real Permission ids, not role ids — the placeholder above is illustrative only; substitute a real permission id. Two different companies may each have a role with the same name."
+            "description": "Create a custom role in your own company. `permissionIds` takes PERMISSION ids — get them from Permissions > List permissions (run it first to populate permissionId). Company-scoped caller is forced into their own company; a platform admin may pass companyId. Test script saves customRoleId."
           },
           "event": [
             {
@@ -1405,6 +1565,59 @@
       ]
     },
     {
+      "name": "Permissions",
+      "description": "Read-only permission catalogue (seeded), for building/editing custom roles. Requires permission.read (Company Admin).",
+      "item": [
+        {
+          "name": "List permissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OK', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  const perms = pm.response.json().data;",
+                  "  if (perms && perms.length) pm.environment.set('permissionId', perms[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "permissions"
+              ]
+            },
+            "description": "Every permission (id, key, subject, action, description). Populates a permissions picker for custom roles. Test script saves permissionId (first entry) for the Create-role request."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-...\",\n      \"key\": \"account.read\",\n      \"subject\": \"Account\",\n      \"action\": \"read\",\n      \"description\": \"View chart of accounts\"\n    },\n    {\n      \"id\": \"b2c3d4e5-...\",\n      \"key\": \"journal.post\",\n      \"subject\": \"JournalEntry\",\n      \"action\": \"post\",\n      \"description\": \"Post journal entries to the ledger\"\n    }\n  ],\n  \"meta\": null\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Users",
       "item": [
         {
@@ -1419,7 +1632,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"password\": \"S3cur3P@ssword!\",\n  \"phone\": \"+961 3 123 456\",\n  \"preferredLanguage\": \"EN\",\n  \"companyId\": \"{{companyId}}\"\n}",
+              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"password\": \"S3cur3P@ssword!\",\n  \"phone\": \"+961 3 123 456\",\n  \"preferredLanguage\": \"EN\",\n  \"roleIds\": [\n    \"{{companyMemberRoleId}}\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1435,7 +1648,7 @@
                 "users"
               ]
             },
-            "description": "A company-scoped caller (e.g. the owner from Auth > Register) is always forced into their own company — the companyId above is ignored/overridden if it doesn't match. A platform admin can use companyId to target any company, or omit it to create another company-less admin. Accepts an optional roleIds array (see Roles > List roles for IDs) — a company-scoped caller creating a teammate without specifying roleIds defaults to the Company Member role, so nobody is ever role-less."
+            "description": "Create a teammate in the caller’s active company. `roleIds` assigns roles for that company — here the seeded Company Member role. Run Roles > List roles first to populate companyMemberRoleId. Omit roleIds to default to Company Member automatically. A platform admin targets a company via companyId."
           },
           "event": [
             {
@@ -1443,11 +1656,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('User created', function () {",
-                  "    pm.response.to.have.status(201);",
-                  "});",
+                  "pm.test('User created', function () { pm.response.to.have.status(201); });",
                   "if (pm.response.code === 201) {",
-                  "    pm.environment.set('userId', pm.response.json().data.id);",
+                  "  const id = pm.response.json().data.id;",
+                  "  pm.environment.set('userId', id);",
+                  "  pm.environment.set('ownerUserId', id); // use as ownerUserId when a platform admin creates a company for this user",
                   "}"
                 ]
               }
@@ -1601,7 +1814,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"+961 3 000 000\"\n}",
+              "raw": "{\n  \"phone\": \"+961 3 000 000\",\n  \"roleIds\": [\n    \"{{companyAdminRoleId}}\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1618,7 +1831,7 @@
                 "{{userId}}"
               ]
             },
-            "description": "Passing roleIds REPLACES the user's full role set (see Roles > List roles for IDs), e.g. {\"roleIds\": [\"{{companyMemberRoleId}}\"]}. Removing the Company Admin role from a company's last admin is blocked with 409 LAST_COMPANY_ADMIN."
+            "description": "Update a user. Passing roleIds REPLACES their full role set for the active company — here promoting them to Company Admin (run Roles > List roles first to populate companyAdminRoleId). Removing the Company Admin role from a company’s last admin is blocked with 409 LAST_COMPANY_ADMIN. Omit roleIds to change only profile fields."
           },
           "response": [
             {
@@ -1687,6 +1900,307 @@
                 }
               ],
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"LAST_COMPANY_ADMIN\",\n    \"message\": \"Cannot remove the company's last admin.\",\n    \"field\": \"roleIds\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Invitations",
+      "description": "Invite people to join a company (consent-based). Admin (user.create) sends an invite; the invitee accepts via the token from the email — a new user is created only on acceptance, with a temp password emailed to them. Run Roles > List roles first to populate companyMemberRoleId.",
+      "item": [
+        {
+          "name": "Create invitation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invited', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) { pm.environment.set('invitationId', pm.response.json().data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              },
+              "raw": "{\n  \"email\": \"sam@acme.com\",\n  \"firstName\": \"Sam\",\n  \"lastName\": \"Lee\",\n  \"roleIds\": [\n    \"{{companyMemberRoleId}}\"\n  ],\n  \"duration\": \"ONE_WEEK\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invitations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invitations"
+              ]
+            },
+            "description": "Requires user.create (Company Admin). duration is one of ONE_DAY, THREE_DAYS, ONE_WEEK, TWO_WEEKS, THIRTY_DAYS. Emails an accept link (+ temp password for a new email). The token is in the email (dev: server log / mailpit) — copy it into {{invitationToken}} for Accept. No user exists until acceptance."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"b3f1c2e0-...\",\n    \"companyId\": \"586b91ef-...\",\n    \"email\": \"sam@acme.com\",\n    \"firstName\": \"Sam\",\n    \"lastName\": \"Lee\",\n    \"roleIds\": [\n      \"...\"\n    ],\n    \"accepted\": false,\n    \"duration\": \"ONE_WEEK\",\n    \"expiresAt\": \"2026-08-02T00:00:00.000Z\",\n    \"acceptedAt\": null,\n    \"createdAt\": \"2026-07-26T09:00:00.000Z\"\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"PERMISSION_DENIED\",\n    \"message\": \"You do not have permission to perform this action.\",\n    \"field\": null\n  }\n}"
+            },
+            {
+              "name": "409 Already member / pending",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"USER_ALREADY_MEMBER\",\n    \"message\": \"That user is already a member of this company.\",\n    \"field\": \"email\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Accept invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              },
+              "raw": "{\n  \"token\": \"{{invitationToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invitations/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invitations",
+                "accept"
+              ]
+            },
+            "description": "Public (no auth) — the token is the credential. Creates the user if the email is new, grants membership + roles, and marks the invitation accepted. Paste the token from the invitation email into {{invitationToken}}."
+          },
+          "response": [
+            {
+              "name": "200 Accepted",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"companyId\": \"586b91ef-...\",\n    \"userId\": \"f3727c46-...\",\n    \"isNewUser\": true\n  },\n  \"meta\": null\n}"
+            },
+            {
+              "name": "400 Invalid/expired",
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"INVITATION_EXPIRED\",\n    \"message\": \"This invitation has expired.\",\n    \"field\": \"token\"\n  }\n}"
+            },
+            {
+              "name": "409 Already accepted",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"INVITATION_ALREADY_ACCEPTED\",\n    \"message\": \"This invitation has already been accepted.\",\n    \"field\": \"token\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List invitation durations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invitations/durations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invitations",
+                "durations"
+              ]
+            },
+            "description": "The selectable invitation durations (value + label + days) — for the frontend to build the duration dropdown."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"value\": \"ONE_DAY\",\n      \"label\": \"One day\",\n      \"days\": 1\n    },\n    {\n      \"value\": \"ONE_WEEK\",\n      \"label\": \"One week\",\n      \"days\": 7\n    },\n    {\n      \"value\": \"THIRTY_DAYS\",\n      \"label\": \"Thirty days\",\n      \"days\": 30\n    }\n  ],\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "List invitations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invitations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invitations"
+              ]
+            },
+            "description": "Requires user.read. Lists the active company’s invitations (pending + accepted)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-...\",\n      \"companyId\": \"586b91ef-...\",\n      \"email\": \"sam@acme.com\",\n      \"firstName\": \"Sam\",\n      \"lastName\": \"Lee\",\n      \"roleIds\": [\n        \"...\"\n      ],\n      \"accepted\": false,\n      \"duration\": \"ONE_WEEK\",\n      \"expiresAt\": \"2026-08-02T00:00:00.000Z\",\n      \"acceptedAt\": null,\n      \"createdAt\": \"2026-07-26T09:00:00.000Z\"\n    }\n  ],\n  \"meta\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Revoke invitation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invitations/{{invitationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invitations",
+                "{{invitationId}}"
+              ]
+            },
+            "description": "Requires user.delete. Cancels a pending invitation."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": ""
             }
           ]
         }

@@ -79,7 +79,7 @@ describe('GL engine (FR-901/FR-906)', () => {
       },
     });
     companyId = company.id;
-    caller = { userId: randomUUID(), companyId };
+    caller = { userId: randomUUID(), companyId, isPlatformAdmin: false, mustChangePassword: false };
 
     const mkAccount = (
       number: string,
@@ -308,7 +308,11 @@ describe('GL engine (FR-901/FR-906)', () => {
         baseCurrencyCode: 'USD',
       },
     });
-    const c = { userId: randomUUID(), companyId: co.id };
+    const c = {
+      userId: randomUUID(),
+      companyId: co.id,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
     const cash = await prisma.account.create({
       data: {
         companyId: co.id,
@@ -409,7 +413,11 @@ describe('GL engine (FR-901/FR-906)', () => {
         baseCurrencyCode: 'USD',
       },
     });
-    const c = { userId: randomUUID(), companyId: co.id };
+    const c = {
+      userId: randomUUID(),
+      companyId: co.id,
+      isPlatformAdmin: false, mustChangePassword: false,
+    };
     const mk = (
       number: string,
       type: AccountType,

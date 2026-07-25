@@ -27,7 +27,8 @@ import { CompanySettingsResponseDto } from './dto/company-settings-response.dto'
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PlatformAdminGuard } from '../auth/guards/platform-admin.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { CompanySelfOrAdminGuard } from './guards/company-self-or-admin.guard';
 import { PermissionsGuard } from '../casl/guards/permissions.guard';
 import { RequirePermissions } from '../casl/decorators/require-permissions.decorator';
@@ -40,36 +41,44 @@ export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
   @Post()
-  @UseGuards(PlatformAdminGuard)
   @ApiOperation({
     summary:
-      'Create a new company directly (platform admin only — self-service signup uses POST /auth/register)',
+      'Create a new company. Requires the caller to hold company.create through any of their roles (i.e. be a Company Admin of at least one company) — a Member-only user gets 403; no active-company selection is needed. The caller becomes the owner (member + Company Admin) of the new company; a platform admin may instead attach it to a user via ownerUserId. Chart/VAT/sequences are auto-seeded. (Brand-new-user signup uses POST /auth/register.)',
   })
   @ApiResponse({
     status: 201,
-    description: 'Company created',
+    description: 'Company created and provisioned',
     type: CompanyResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Platform admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller does not have permission to create a company',
+  })
+  @ApiResponse({ status: 404, description: 'ownerUserId not found' })
   @ApiResponse({ status: 409, description: 'Tax number already in use' })
-  create(@Body() dto: CreateCompanyDto): Promise<CompanyResponseDto> {
-    return this.companiesService.create(dto);
+  create(
+    @Body() dto: CreateCompanyDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<CompanyResponseDto> {
+    return this.companiesService.create(dto, caller);
   }
 
   @Get()
-  @UseGuards(PlatformAdminGuard)
-  @ApiOperation({ summary: 'List companies (platform admin only)' })
+  @ApiOperation({
+    summary:
+      'List companies. A platform admin sees all; a company user sees only the companies they belong to.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Paginated list of companies',
     type: CompanyResponseDto,
     isArray: true,
   })
-  @ApiResponse({ status: 403, description: 'Platform admin access required' })
   findAll(
     @Query() query: PaginationQueryDto,
+    @CurrentUser() caller: AuthenticatedUser,
   ): Promise<Paginated<CompanyResponseDto>> {
-    return this.companiesService.findAll(query);
+    return this.companiesService.findAll(query, caller);
   }
 
   @Get(':id')

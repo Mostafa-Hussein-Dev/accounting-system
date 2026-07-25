@@ -25,17 +25,21 @@ import { UserResponseDto } from './dto/user-response.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
+import { PermissionsGuard } from '../casl/guards/permissions.guard';
+import { RequirePermissions } from '../casl/decorators/require-permissions.decorator';
 
 @ApiTags('Users')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyMembershipGuard, PermissionsGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
+  @RequirePermissions({ action: 'create', subject: 'User' })
   @ApiOperation({
     summary:
       'Create a new user (platform admin: any company via body companyId or none; company-scoped caller: forced into their own company)',
@@ -55,6 +59,7 @@ export class UsersController {
   }
 
   @Get()
+  @RequirePermissions({ action: 'read', subject: 'User' })
   @ApiOperation({
     summary:
       'List users (platform admin: everyone; company-scoped caller: their own company only)',
@@ -73,6 +78,7 @@ export class UsersController {
   }
 
   @Get(':id')
+  @RequirePermissions({ action: 'read', subject: 'User' })
   @ApiOperation({ summary: 'Get a user by id' })
   @ApiResponse({
     status: 200,
@@ -88,6 +94,7 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @RequirePermissions({ action: 'update', subject: 'User' })
   @ApiOperation({ summary: 'Update a user' })
   @ApiResponse({
     status: 200,
@@ -105,6 +112,7 @@ export class UsersController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions({ action: 'delete', subject: 'User' })
   @ApiOperation({ summary: 'Soft delete a user' })
   @ApiResponse({ status: 204, description: 'User deleted' })
   @ApiResponse({ status: 404, description: 'User not found' })

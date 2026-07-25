@@ -79,9 +79,15 @@ must enforce them:
 
 - A Company has many Branches
 - A Branch has many POS Stations
-- A User belongs to exactly one Company (or none, for platform admin/support)
-  and can hold multiple Roles within it; a Role is composed of Permissions,
-  and a user's effective permissions are the union across all their roles
+- A User can belong to MANY Companies (via UserCompany membership), each fully
+  independent — an owner may run several companies from one login. A platform
+  admin/support user (`isPlatformAdmin`) has no membership and sees across
+  tenants. A user acts within ONE active company at a time (chosen at login or
+  via POST /auth/switch-company; carried in the JWT). Roles are held PER company
+  (UserRole.companyId): a user can be Company Admin in one and Company Member in
+  another. A Role is composed of Permissions; effective permissions are the
+  union across the user's roles IN THE ACTIVE COMPANY. Every company-scoped
+  request re-verifies membership (CompanyMembershipGuard)
 - A Partner (customer or supplier) is also a ledger Account in the
   chart of accounts — they are the same entity
 - A Document (invoice, purchase order, quotation, credit note) has

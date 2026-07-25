@@ -19,8 +19,15 @@ export class CaslAbilityFactory {
       return build();
     }
 
+    // Permissions are scoped to the ACTIVE company: a user who is Admin in one
+    // company and Member in another only gets the active company's grants. With
+    // no active company selected, they get nothing.
+    if (!user.companyId) {
+      return build();
+    }
+
     const userRoles = await this.prisma.userRole.findMany({
-      where: { userId: user.userId },
+      where: { userId: user.userId, companyId: user.companyId },
       include: {
         role: { include: { permissions: { include: { permission: true } } } },
       },

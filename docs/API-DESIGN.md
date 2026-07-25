@@ -88,12 +88,12 @@ Filters are passed as query params, prefixed by field name:
 self-service: it creates a company and its first user atomically (one
 transaction — either both are created or neither is), then immediately
 returns a token pair (same shape as `POST /auth/login`) so the new user is
-authenticated with no separate login step. That first user is conceptually
-the company's admin/owner, though this isn't formally modeled yet (no
-`Role`/`user_company_role` table) — it's a known, accepted gap until roles
-and permissions (CASL) are implemented. Body shape: `{ company: {...same
-fields as POST /companies}, user: {...same fields as POST /users, minus
-companyId} }`.
+authenticated with no separate login step. The new user is made a **member**
+of the company (UserCompany) and assigned the **Company Admin** role for it, and
+the company is auto-provisioned (chart/VAT/sequences). Body shape: `{ company:
+{...same fields as POST /companies, minus ownerUserId}, user: {...same fields as
+POST /users, minus companyId} }`. An existing user creates *additional*
+companies via `POST /companies` instead.
 
 ## Password reset
 A code-based flow (not a link) across three endpoints, all unauthenticated:
@@ -153,13 +153,20 @@ Any endpoint scoped to one company resolves its target company via
   alongside `JwtAuthGuard`, returning 403 `PLATFORM_ADMIN_REQUIRED` for a
   company-scoped caller.
 
-### Companies
-- `POST /companies` and `GET /companies` (list) — platform admin only
-  (`PlatformAdminGuard`). Direct company creation is an admin provisioning
-  action; self-service company creation goes through `POST /auth/register`.
-- `GET /companies/:id` — platform admin (any company), or any user whose own
-  `companyId` matches `:id` (`CompanySelfOrAdminGuard`). A company-scoped
-  user acting on another company gets 403 `COMPANY_ACCESS_DENIED`.
+### Companies (multi-company membership)
+A user can belong to many companies (see docs/MODELS.md). The JWT carries the
+**active** company; `POST /auth/switch-company` re-issues a token scoped to
+another of the user's companies (login can also pre-select via `companyId`).
+- `POST /companies` — any authenticated user. A company user becomes the
+  **owner** (member + Company Admin) of the new company, which is auto-
+  provisioned (chart/VAT/sequences); a platform admin may attach it to a user
+  via `ownerUserId`. Brand-new-user signup still uses `POST /auth/register`.
+- `GET /companies` (list) — a platform admin sees all companies; a company user
+  sees only **the companies they belong to** (their memberships). This is how an
+  owner lists their own companies.
+- `GET /companies/:id` — platform admin (any company), or any user who is a
+  **member** of `:id` (`CompanySelfOrAdminGuard`, membership-checked) — not just
+  their active one. A non-member gets 403 `COMPANY_ACCESS_DENIED`.
 - `PATCH`/`DELETE /companies/:id` — same tenancy check as above, PLUS a
   permission check (`PermissionsGuard` + `@RequirePermissions`): the caller
   must hold the `company.update`/`company.delete` permission, granted by the
@@ -167,6 +174,39 @@ Any endpoint scoped to one company resolves its target company via
   `PERMISSION_DENIED` even though `CompanySelfOrAdminGuard` would otherwise
   let them through — viewing your own company is open to any member, editing
   or deleting it requires the admin role specifically.
+
+### Invitations (adding people to a company)
+`POST /users` creates a **brand-new** account in the caller's active company. To
+add someone — especially an **existing** user (multi-company) — use invitations
+(consent-based):
+- `POST /invitations` (admin, `user.create`) — `{ email, firstName, lastName,
+  roleIds, duration }`. Creates a pending `Invitation` (no user yet) and emails
+  an **accept link** with a token; a brand-new email also gets a **temp
+  password**. `duration` (`InvitationDuration` enum) sets `expiresAt`.
+- `POST /invitations/accept` — **public**, `{ token }`. Creates the user (if the
+  email is new) or just adds membership (existing user), grants the roles, and
+  marks the invite accepted. Rejects an already-accepted (409) or expired (400)
+  token. Users are created **on acceptance**, so unaccepted/expired invites
+  leave no orphan accounts.
+- `GET /invitations` (`user.read`) lists the company's invitations;
+  `DELETE /invitations/:id` (`user.delete`) revokes a pending one.
+- `GET /invitations/durations` returns the selectable `InvitationDuration`
+  options (`value`, `label`, `days`) for the frontend's dropdown.
+
+**Temp-password one-time use.** A user created via invitation acceptance is
+flagged `mustChangePassword`. On login the flag is returned in the response
+*and* baked into the JWT; while set, **every route except `POST
+/auth/change-password`, `GET /auth/me`, and logout returns 403
+`PASSWORD_CHANGE_REQUIRED`** (enforced in `JwtAuthGuard`, not just the
+frontend). `POST /auth/change-password` (`{ currentPassword, newPassword }`)
+verifies the current password, sets the new one, clears the flag, revokes all
+other sessions, and returns a fresh token pair — so the temp password
+authenticates exactly once.
+
+### Permissions
+`GET /permissions` (`permission.read`, Company Admin) returns the full permission
+catalogue (`id, key, subject, action, description`) — for a frontend building a
+custom-role editor (roles take permission **ids** in `permissionIds`).
 
 ### Users
 - Every route requires authentication only (`JwtAuthGuard`) — there's no
@@ -268,10 +308,17 @@ JWT payload structure (this is the actual, current shape — see
 src/modules/auth/interfaces/jwt-payload.interface.ts):
 {
   "sub": "user-uuid",
-  "companyId": "company-uuid or null (null = platform admin/support)",
+  "companyId": "the ACTIVE company for this token (null = platform admin, or a
+                multi-company user who has not selected one yet)",
+  "isPlatformAdmin": true/false,
   "iat": 1234567890,
   "exp": 1234567890
 }
+
+`companyId` is the one company the token acts in, verified against membership at
+login/switch and re-verified on every company-scoped request by
+`CompanyMembershipGuard`. `isPlatformAdmin` (not "companyId === null") is what
+marks a platform/support account.
 
 Roles and permissions are deliberately NOT embedded in the token — they're
 resolved fresh from the database on every request by CaslAbilityFactory

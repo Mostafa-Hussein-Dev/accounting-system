@@ -9,6 +9,7 @@ import { LedgerService } from './ledger.service';
 import { QueryTrialBalanceDto } from './dto/query-trial-balance.dto';
 import { TrialBalanceResponseDto } from './dto/trial-balance-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { PermissionsGuard } from '../casl/guards/permissions.guard';
@@ -16,7 +17,7 @@ import { RequirePermissions } from '../casl/decorators/require-permissions.decor
 
 @ApiTags('Reports')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, CompanyMembershipGuard, PermissionsGuard)
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly ledger: LedgerService) {}

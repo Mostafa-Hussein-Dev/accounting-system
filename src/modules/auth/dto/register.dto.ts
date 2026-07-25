@@ -8,14 +8,20 @@ export class RegisterUserDto extends OmitType(CreateUserDto, [
   'companyId',
 ] as const) {}
 
+// The registrant is always the owner of the new company, so ownerUserId is not
+// accepted here.
+export class RegisterCompanyDto extends OmitType(CreateCompanyDto, [
+  'ownerUserId',
+] as const) {}
+
 export class RegisterDto {
   @ApiProperty({
     description: 'The new company to create.',
-    type: CreateCompanyDto,
+    type: RegisterCompanyDto,
   })
   @ValidateNested()
-  @Type(() => CreateCompanyDto)
-  company!: CreateCompanyDto;
+  @Type(() => RegisterCompanyDto)
+  company!: RegisterCompanyDto;
 
   @ApiProperty({
     description:

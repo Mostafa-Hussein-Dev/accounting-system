@@ -18,5 +18,6 @@ export type Subjects =
   | 'TaxRate'
   | 'DocumentSequence'
   | 'JournalEntry'
+  | 'Permission'
   | 'all';
 export type AppAbility = MongoAbility<[Action, Subjects]>;

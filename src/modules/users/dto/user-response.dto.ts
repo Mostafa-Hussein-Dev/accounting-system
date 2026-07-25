@@ -35,11 +35,12 @@ export class UserResponseDto {
   })
   lastLoginAt!: Date | null;
 
-  @ApiPropertyOptional({
-    example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab',
-    nullable: true,
+  @ApiProperty({
+    description:
+      'Platform/support account (no company membership; sees across tenants).',
+    example: false,
   })
-  companyId!: string | null;
+  isPlatformAdmin!: boolean;
 
   @ApiProperty({ example: '2025-06-03T14:30:00.000Z' })
   createdAt!: Date;
@@ -58,7 +59,7 @@ export class UserResponseDto {
     dto.preferredLanguage = user.preferredLanguage;
     dto.isActive = user.isActive;
     dto.lastLoginAt = user.lastLoginAt;
-    dto.companyId = user.companyId;
+    dto.isPlatformAdmin = user.isPlatformAdmin;
     dto.createdAt = user.createdAt;
     dto.updatedAt = user.updatedAt;
     return dto;

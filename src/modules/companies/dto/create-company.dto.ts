@@ -1,10 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsInt,
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -74,4 +76,18 @@ export class CreateCompanyDto {
   @Min(1)
   @Max(12)
   fiscalYearStartMonth?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Platform admin only: attach the new company to this user (they become a member + Company Admin). Ignored for a company user, who always becomes the owner of the company they create. Not accepted at /auth/register.',
+    example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab',
+  })
+  // Treat an empty string (e.g. an unset Postman variable, or a company user
+  // who doesn't supply one) as "not provided" so it doesn't fail UUID validation.
+  @Transform(({ value }: { value: unknown }) =>
+    value === '' ? undefined : value,
+  )
+  @IsOptional()
+  @IsUUID()
+  ownerUserId?: string;
 }

@@ -36,6 +36,11 @@ export class JwtRefreshStrategy extends PassportStrategy(
         field: null,
       });
     }
-    return { userId: payload.sub, tokenId: payload.jti };
+    return {
+      userId: payload.sub,
+      tokenId: payload.jti,
+      companyId: payload.companyId,
+      isPlatformAdmin: payload.isPlatformAdmin,
+    };
   }
 }

@@ -11,7 +11,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService<EnvConfig, true>);
 
-  app.setGlobalPrefix('api/v1');
+  // `/health` is excluded from the prefix so infra can probe it at a stable,
+  // unversioned path; everything else is under `api/v1`.
+  app.setGlobalPrefix('api/v1', { exclude: ['health'] });
 
   // Without this, the API has no CORS policy at all — every browser-based
   // request (from the frontend or anywhere else) is blocked by the

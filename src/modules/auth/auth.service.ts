@@ -11,9 +11,11 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { randomInt, randomUUID } from 'crypto';
+import { AuditAction } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CompaniesService } from '../companies/companies.service';
+import { AuditService } from '../audit/audit.service';
 import { MailerService } from '../../common/mailer/mailer.service';
 import { EnvConfig } from '../../config/env.schema';
 import { LoginDto } from './dto/login.dto';
@@ -71,6 +73,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly mailerService: MailerService,
+    private readonly auditService: AuditService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -101,7 +104,7 @@ export class AuthService {
     );
   }
 
-  async login(dto: LoginDto): Promise<AuthResponseDto> {
+  async login(dto: LoginDto, ip?: string | null): Promise<AuthResponseDto> {
     const user = await this.usersService.findAuthUserByEmail(dto.email);
     if (!user || !user.isActive) {
       throw new UnauthorizedException(INVALID_CREDENTIALS_ERROR);
@@ -120,6 +123,20 @@ export class AuthService {
       ? []
       : await this.resolveUserCompanies(user.id);
     const active = this.pickActiveCompany(user.isPlatformAdmin, companies);
+
+    // Best-effort audit of the successful login (a sensitive action per
+    // CONVENTIONS.md). Never blocks or fails the login.
+    await this.auditService.record({
+      action: AuditAction.LOGIN,
+      entity: 'User',
+      entityId: user.id,
+      companyId: active,
+      userId: user.id,
+      ip: ip ?? null,
+      method: 'POST',
+      path: '/api/v1/auth/login',
+    });
+
     return this.issueTokenPair(
       user.id,
       active,

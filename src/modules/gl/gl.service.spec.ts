@@ -19,6 +19,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SequencesService } from '../sequences/sequences.service';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
+import { AuditService } from '../audit/audit.service';
 import { GlService } from './gl.service';
 import { PostingService } from './posting.service';
 import { LedgerService } from './ledger.service';
@@ -47,7 +48,13 @@ describe('GL engine (FR-901/FR-906)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ConfigModule, PrismaModule],
-      providers: [GlService, PostingService, LedgerService, SequencesService],
+      providers: [
+        GlService,
+        PostingService,
+        LedgerService,
+        SequencesService,
+        AuditService,
+      ],
     }).compile();
 
     prisma = moduleRef.get(PrismaService);
@@ -79,7 +86,12 @@ describe('GL engine (FR-901/FR-906)', () => {
       },
     });
     companyId = company.id;
-    caller = { userId: randomUUID(), companyId, isPlatformAdmin: false, mustChangePassword: false };
+    caller = {
+      userId: randomUUID(),
+      companyId,
+      isPlatformAdmin: false,
+      mustChangePassword: false,
+    };
 
     const mkAccount = (
       number: string,
@@ -311,7 +323,8 @@ describe('GL engine (FR-901/FR-906)', () => {
     const c = {
       userId: randomUUID(),
       companyId: co.id,
-      isPlatformAdmin: false, mustChangePassword: false,
+      isPlatformAdmin: false,
+      mustChangePassword: false,
     };
     const cash = await prisma.account.create({
       data: {
@@ -416,7 +429,8 @@ describe('GL engine (FR-901/FR-906)', () => {
     const c = {
       userId: randomUUID(),
       companyId: co.id,
-      isPlatformAdmin: false, mustChangePassword: false,
+      isPlatformAdmin: false,
+      mustChangePassword: false,
     };
     const mk = (
       number: string,

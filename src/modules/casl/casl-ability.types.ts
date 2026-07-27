@@ -19,5 +19,6 @@ export type Subjects =
   | 'DocumentSequence'
   | 'JournalEntry'
   | 'Permission'
+  | 'AuditLog'
   | 'all';
 export type AppAbility = MongoAbility<[Action, Subjects]>;

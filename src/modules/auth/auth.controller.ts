@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -21,6 +22,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { SwitchCompanyDto } from './dto/switch-company.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AllowPasswordChangePending } from './decorators/allow-password-change-pending.decorator';
+import { NoAudit } from '../audit/decorators/audit.decorator';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -48,6 +50,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @NoAudit() // AuthService.login records an explicit LOGIN event with the IP
   @ApiOperation({ summary: 'Log in with email and password' })
   @ApiResponse({
     status: 200,
@@ -55,8 +58,8 @@ export class AuthController {
     type: AuthResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
-    return this.authService.login(dto);
+  login(@Body() dto: LoginDto, @Ip() ip: string): Promise<AuthResponseDto> {
+    return this.authService.login(dto, ip);
   }
 
   @Post('register')

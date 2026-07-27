@@ -32,6 +32,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { PermissionsGuard } from '../casl/guards/permissions.guard';
 import { RequirePermissions } from '../casl/decorators/require-permissions.decorator';
+import { NoAudit } from '../audit/decorators/audit.decorator';
 
 @ApiTags('Journal Entries')
 @ApiBearerAuth()
@@ -148,6 +149,7 @@ export class JournalEntriesController {
   }
 
   @Post(':id/post')
+  @NoAudit() // PostingService.post records a richer POST event with before/after
   @RequirePermissions({ action: 'post', subject: 'JournalEntry' })
   @ApiOperation({
     summary:
@@ -169,6 +171,7 @@ export class JournalEntriesController {
   }
 
   @Post(':id/reverse')
+  @NoAudit() // PostingService.reverse records a richer REVERSE event with before/after
   @RequirePermissions({ action: 'reverse', subject: 'JournalEntry' })
   @ApiOperation({
     summary:

@@ -36,22 +36,30 @@ calls `PostingService.post()` inside the document's transaction, stamping
 `sourceDocType`/`sourceDocId` (deferred item #6).
 
 
-### FR-1102 — Audit trail (deferred, to be built before financial modules write heavily)
-Not yet implemented. CONVENTIONS.md ("Audit log pattern") already specifies it,
-but there is no `audit_log` table or interceptor. Scope when picked up:
+### FR-1102 — Audit trail — BUILT (migration `20260727120000_add_audit_logs`)
+Implemented as a hybrid (src/modules/audit): an `AuditLog` append-only model +
+`AuditAction` enum; a global `AuditInterceptor` (APP_INTERCEPTOR) that best-
+effort logs every authenticated mutating request (actor, action, entity, id,
+after-state, IP, status — `before` null); and `AuditService.record()` for rich
+before/after domain events, wired into `PostingService.post()`/`reverse()`
+(and login, as an explicit LOGIN event). `GET /audit-logs` (paginated,
+filterable) gated by the new `audit.read` perm (Company Admin only). Secrets
+are redacted before write; `@Audit()`/`@NoAudit()` override or opt routes out.
 
-- An `AuditLog` model: `user_id, company_id, action (CREATE/UPDATE/DELETE/
-  CONFIRM/VOID/REVERSE), entity, entity_id, before (JSON), after (JSON), ip,
-  timestamp`.
-- A global **`AuditInterceptor`** that logs every mutating request (POST/PATCH/
-  DELETE) on financial entities, plus sensitive actions (login, void, price
-  override, period unlock).
-- `GET /audit-log` (admin, filterable).
-
-**Best landed before/alongside the GL + document modules** so every financial
-mutation is captured from the start rather than retrofitted. It is cross-cutting
-and does not block the GL engine, so building GL first is fine — but wire the
-interceptor in before invoicing/payments go live.
+**Remaining audit follow-ups (deferred):**
+- **Public-route auditing** — the interceptor only logs *authenticated*
+  mutations, so self-service `register` (creates a company + owner) and other
+  public routes aren't captured. Add an explicit AuditService call in
+  `AuthService.register` (like the LOGIN event) when wanted.
+- **Rich before/after on non-financial modules** — they're covered coarsely by
+  the interceptor (after-state only). Adopt `AuditService.record()` with
+  before/after in each service's update/delete as those modules are next
+  touched (companies, accounts, taxes, …).
+- **Document domain events** — future invoicing/payments/void flows should emit
+  CONFIRM/VOID via `AuditService.record()` inside their transactions, mirroring
+  the GL post/reverse pattern, and carry `@NoAudit()` on the route.
+- **Retention / archival policy** for the (unbounded, append-only) `audit_logs`
+  table.
 
 ### FR-107 — Languages & translations (left for further exploration)
 Deliberately **not implemented** — parked to decide *how* it should work before
@@ -99,6 +107,59 @@ hardening auth for production:
   toggles it. Add an admin-gated activate/deactivate on the Users module so an
   account can be disabled without deletion (and have login/JWT validation reject
   inactive users).
+
+### FR-301 — Partners (customers/suppliers) master — PLANNED (not blocking anything)
+Full plan drafted and parked to build later. Next in the roadmap after this:
+Items (FR-401) → Stock (FR-402) → Invoicing (FR-6xx).
+
+**Key design decision (unresolved):** how a partner links to the ledger.
+- **Option A — subsidiary ledger (recommended):** all customers post to the
+  shared AR control account (41), all suppliers to AP (40); each journal line
+  carries `partnerId`. Partner balance is **derived** = `Σ(debit−credit) where
+  partnerId = X`. `Partner.ledgerAccountId` records *which* control account
+  governs them (default by kind, overridable). Consistent with the built GL
+  (control accounts are non-postable, balances derived — invariant #4) and it
+  activates deferred item #4. **Adopt this unless there's a reason not to.**
+- **Option B — account-per-partner (legacy HISAB literal):** each partner gets
+  its own postable child account; balance = that account's balance. Contradicts
+  the non-postable-control-account GL design and makes deferred #4 pointless.
+  Not recommended.
+
+**Also undecided:** (1) partner `code` — auto via Sequences (new PARTNER doc
+type) vs user-supplied-unique vs optional-user-code-auto-if-blank; (2) whether
+to include `PartnerAddress` in the first round or defer it.
+
+**Scope when built (assuming Option A):**
+- **Schema:** `Partner` (`id, companyId, code, name, nameAr/Fr/En, kind
+  [CUSTOMER/SUPPLIER/BOTH], category, tin, contactName, phone, phone2, email,
+  vip, creditLimit, creditCurrency, ledgerAccountId→account, isActive,
+  timestamps, deletedAt` — soft-delete per MODELS.md). `PartnerAddress` (`id,
+  partnerId, type [BILLING/SHIPPING/BRANCH], line1, city, country, region,
+  phone, isDefault`). New enums `PartnerKind`, `AddressType`. **Add the FK on
+  `JournalLine.partnerId → partners` → resolves deferred item #4.** Keep
+  `regionId`/`salesmanId` as nullable no-FK columns (see deferred notes below).
+- **Migration:** hand-written SQL per the Prisma-7 shadow-DB workflow, then
+  `migrate deploy`.
+- **Module** (`src/modules/partners/`, mirror the accounts module):
+  controller/service/module/dto/index/spec. CRUD gated by new
+  `partner.{create,read,update,delete}` perms (CASL `Partner` subject). On
+  create, default `ledgerAccountId` from `kind` (customer→41, supplier→40),
+  overridable. Addresses managed inline with one-default enforcement.
+- **Ledger-derived reads (FR-303 foundation):** `GET /partners/:id/balance`
+  (USD+LBP) and `GET /partners/:id/transactions` — aggregate `journal_lines` by
+  `partnerId` (reuse `LedgerService` patterns).
+- **Seed:** add `partner.*` to Company Admin, `partner.read` to Member.
+- **Postman + Swagger + tests** in the same change.
+
+**Deferred within/around FR-301 (record as their own rows/notes when built):**
+- **Statement export** (PDF/Excel/email/WhatsApp — FR-303 AC) → needs a
+  reporting/export layer.
+- **Credit control enforcement** (FR-302 warn/block on invoice) → belongs to
+  Invoicing; only **store** `creditLimit`/`creditCurrency` in FR-301.
+- **Opening balances** → belong in the data-migration / GL opening-balance flow,
+  not master-data CRUD.
+- **`Partner.regionId`** → no `Region` model exists yet; nullable no-FK column.
+- **`Partner.salesmanId`** → likely a future `User` FK; nullable no-FK column.
 
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist

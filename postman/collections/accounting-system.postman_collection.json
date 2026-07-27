@@ -1092,6 +1092,101 @@
       ]
     },
     {
+      "name": "Audit",
+      "item": [
+        {
+          "name": "List audit logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-logs?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "entity",
+                  "value": "JournalEntry",
+                  "disabled": true
+                },
+                {
+                  "key": "entityId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "userId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "action",
+                  "value": "POST",
+                  "disabled": true
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "dateTo",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "companyId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Append-only audit trail (FR-1102). Requires audit.read (Company Admin). Filter by entity, entityId, userId, action, and date range. A company caller only sees their active company; a platform admin sees across tenants and can narrow with companyId. Every mutating request is auto-logged by the AuditInterceptor (action from the HTTP verb, entity from the route, after-state from the result); financial domain events (POST/REVERSE) are logged by services with true before/after. Login is recorded as an explicit LOGIN event with the client IP."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"b3f1c2e0-1234-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"userId\": \"2c2eca76-0b75-4398-a3cb-9a7a78458b8b\",\n      \"action\": \"POST\",\n      \"entity\": \"JournalEntry\",\n      \"entityId\": \"a3216ece-8500-4d50-8f2b-24116c6cb7f2\",\n      \"before\": {\n        \"status\": \"DRAFT\",\n        \"entryNumber\": null\n      },\n      \"after\": {\n        \"status\": \"POSTED\",\n        \"entryNumber\": \"JE-2026-0002\",\n        \"postedAt\": \"2026-07-27T17:45:13.010Z\",\n        \"postedById\": \"2c2eca76-0b75-4398-a3cb-9a7a78458b8b\"\n      },\n      \"ip\": null,\n      \"method\": null,\n      \"path\": null,\n      \"statusCode\": null,\n      \"createdAt\": \"2026-07-27T17:45:13.010Z\"\n    },\n    {\n      \"id\": \"c1d2e3f4-5678-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"userId\": \"2c2eca76-0b75-4398-a3cb-9a7a78458b8b\",\n      \"action\": \"CREATE\",\n      \"entity\": \"Branches\",\n      \"entityId\": \"af4aa67f-e593-45f1-b5fc-e154698637d3\",\n      \"before\": null,\n      \"after\": {\n        \"id\": \"af4aa67f-e593-45f1-b5fc-e154698637d3\",\n        \"name\": \"Beirut Branch\"\n      },\n      \"ip\": \"::1\",\n      \"method\": \"POST\",\n      \"path\": \"/api/v1/branches\",\n      \"statusCode\": 201,\n      \"createdAt\": \"2026-07-27T17:44:05.120Z\"\n    },\n    {\n      \"id\": \"d4e5f6a7-8901-4a5b-9c8d-1234567890ab\",\n      \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n      \"userId\": \"2c2eca76-0b75-4398-a3cb-9a7a78458b8b\",\n      \"action\": \"LOGIN\",\n      \"entity\": \"User\",\n      \"entityId\": \"2c2eca76-0b75-4398-a3cb-9a7a78458b8b\",\n      \"before\": null,\n      \"after\": null,\n      \"ip\": \"::1\",\n      \"method\": \"POST\",\n      \"path\": \"/api/v1/auth/login\",\n      \"statusCode\": null,\n      \"createdAt\": \"2026-07-27T17:44:04.000Z\"\n    }\n  ],\n  \"meta\": {\n    \"total\": 3,\n    \"page\": 1,\n    \"limit\": 20,\n    \"totalPages\": 1\n  }\n}"
+            },
+            {
+              "name": "403 Permission denied",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"FORBIDDEN\",\n    \"message\": \"Insufficient permissions\",\n    \"field\": null\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Auth",
       "item": [
         {

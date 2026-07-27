@@ -1,7 +1,13 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { DocumentType, JournalSide, JournalStatus } from '@prisma/client';
+import {
+  AuditAction,
+  DocumentType,
+  JournalSide,
+  JournalStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SequencesService } from '../sequences/sequences.service';
+import { AuditService } from '../audit/audit.service';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { GlService } from './gl.service';
 import { ReverseJournalEntryDto } from './dto/reverse-journal-entry.dto';
@@ -19,6 +25,7 @@ export class PostingService {
     private readonly prisma: PrismaService,
     private readonly sequences: SequencesService,
     private readonly gl: GlService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -50,7 +57,7 @@ export class PostingService {
         entry.date,
         tx,
       );
-      await tx.journalEntry.update({
+      const posted = await tx.journalEntry.update({
         where: { id: entry.id },
         data: {
           status: JournalStatus.POSTED,
@@ -59,6 +66,26 @@ export class PostingService {
           postedById: caller.userId,
         },
       });
+
+      // Recorded in the same transaction so the audit row commits atomically
+      // with the posting (and rolls back if the balance trigger rejects it).
+      await this.audit.record(
+        {
+          action: AuditAction.POST,
+          entity: 'JournalEntry',
+          entityId: entry.id,
+          companyId: entry.companyId,
+          userId: caller.userId,
+          before: { status: entry.status, entryNumber: entry.entryNumber },
+          after: {
+            status: posted.status,
+            entryNumber: posted.entryNumber,
+            postedAt: posted.postedAt,
+            postedById: posted.postedById,
+          },
+        },
+        tx,
+      );
     });
 
     return this.gl.findOne(id, caller);
@@ -107,7 +134,7 @@ export class PostingService {
         reversalDate,
         tx,
       );
-      return tx.journalEntry.create({
+      const created = await tx.journalEntry.create({
         data: {
           companyId: entry.companyId,
           branchId: entry.branchId,
@@ -140,6 +167,28 @@ export class PostingService {
           },
         },
       });
+
+      await this.audit.record(
+        {
+          action: AuditAction.REVERSE,
+          entity: 'JournalEntry',
+          entityId: entry.id,
+          companyId: entry.companyId,
+          userId: caller.userId,
+          before: {
+            status: entry.status,
+            entryNumber: entry.entryNumber,
+          },
+          after: {
+            reversalId: created.id,
+            reversalEntryNumber: created.entryNumber,
+            reason: description,
+          },
+        },
+        tx,
+      );
+
+      return created;
     });
 
     return this.gl.findOne(reversal.id, caller);

@@ -337,6 +337,12 @@ const PERMISSIONS = [
     action: 'reverse',
     description: 'Reverse posted journal entries',
   },
+  {
+    key: 'audit.read',
+    subject: 'AuditLog',
+    action: 'read',
+    description: 'View the audit trail',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the

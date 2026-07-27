@@ -15,6 +15,7 @@ import { SequencesModule } from './modules/sequences/sequences.module';
 import { GlModule } from './modules/gl/gl.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -35,6 +36,7 @@ import { HealthController } from './health/health.controller';
     GlModule,
     PermissionsModule,
     InvitationsModule,
+    AuditModule,
   ],
   controllers: [HealthController],
   providers: [],

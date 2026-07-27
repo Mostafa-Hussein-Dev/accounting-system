@@ -94,6 +94,21 @@ enum InvitationDuration {
   THIRTY_DAYS
 }
 
+// What kind of mutation an audit row records (FR-1102 / CONVENTIONS.md). The
+// generic HTTP verbs (CREATE/UPDATE/DELETE) come from the AuditInterceptor;
+// the domain actions (POST/REVERSE/CONFIRM/VOID) and LOGIN are emitted
+// explicitly by services via AuditService so they carry true before/after.
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  POST
+  REVERSE
+  CONFIRM
+  VOID
+  LOGIN
+}
+
 model Company {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
@@ -161,7 +176,7 @@ model Currency {
 
   exchangeRates      ExchangeRate[]
   restrictedAccounts Account[]
-  baseForCompanies   Company[]     @relation("CompanyBaseCurrency")
+  baseForCompanies   Company[]      @relation("CompanyBaseCurrency")
 
   @@map("currencies")
 }
@@ -381,9 +396,9 @@ model JournalEntry {
   sourceDocType DocumentType? @map("source_doc_type")
   sourceDocId   String?       @map("source_doc_id") @db.Uuid
 
-  postedAt   DateTime? @map("posted_at")
-  postedById String?   @map("posted_by_id") @db.Uuid
-  createdById String?  @map("created_by_id") @db.Uuid
+  postedAt    DateTime? @map("posted_at")
+  postedById  String?   @map("posted_by_id") @db.Uuid
+  createdById String?   @map("created_by_id") @db.Uuid
 
   lines JournalLine[]
 
@@ -489,24 +504,24 @@ model Branch {
 // platform/support account (no memberships, sees across every tenant) — it
 // replaces the old "companyId === null means admin" overload.
 model User {
-  id                String    @id @default(uuid()) @db.Uuid
-  firstName         String    @map("first_name")
-  lastName          String    @map("last_name")
-  email             String    @unique
-  passwordHash      String    @map("password_hash")
-  phone             String?
-  avatarUrl         String?   @map("avatar_url")
-  preferredLanguage Language  @default(EN) @map("preferred_language")
-  isActive          Boolean   @default(true) @map("is_active")
-  isPlatformAdmin   Boolean   @default(false) @map("is_platform_admin")
+  id                 String    @id @default(uuid()) @db.Uuid
+  firstName          String    @map("first_name")
+  lastName           String    @map("last_name")
+  email              String    @unique
+  passwordHash       String    @map("password_hash")
+  phone              String?
+  avatarUrl          String?   @map("avatar_url")
+  preferredLanguage  Language  @default(EN) @map("preferred_language")
+  isActive           Boolean   @default(true) @map("is_active")
+  isPlatformAdmin    Boolean   @default(false) @map("is_platform_admin")
   // Set when the account is created via an invitation with a temp password: the
   // user must change it (POST /auth/change-password) before doing anything else.
   // A PasswordChangeGuard blocks all other routes while this is true.
-  mustChangePassword Boolean  @default(false) @map("must_change_password")
-  lastLoginAt       DateTime? @map("last_login_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
+  mustChangePassword Boolean   @default(false) @map("must_change_password")
+  lastLoginAt        DateTime? @map("last_login_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
 
   companies           UserCompany[]
   refreshTokens       RefreshToken[]
@@ -547,16 +562,16 @@ model Invitation {
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   email            String
-  firstName        String    @map("first_name")
-  lastName         String    @map("last_name")
-  roleIds          String[]  @map("role_ids") @db.Uuid
-  tempPasswordHash String?   @map("temp_password_hash")
-  token            String    @unique
-  accepted         Boolean   @default(false)
+  firstName        String             @map("first_name")
+  lastName         String             @map("last_name")
+  roleIds          String[]           @map("role_ids") @db.Uuid
+  tempPasswordHash String?            @map("temp_password_hash")
+  token            String             @unique
+  accepted         Boolean            @default(false)
   duration         InvitationDuration
-  expiresAt        DateTime  @map("expires_at")
-  acceptedAt       DateTime? @map("accepted_at")
-  invitedById      String?   @map("invited_by_id") @db.Uuid
+  expiresAt        DateTime           @map("expires_at")
+  acceptedAt       DateTime?          @map("accepted_at")
+  invitedById      String?            @map("invited_by_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -678,4 +693,41 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+// Append-only audit trail (FR-1102 / CONVENTIONS.md → "Audit log pattern").
+// Every mutating request is logged coarsely by the AuditInterceptor; financial
+// domain actions (post/reverse, later void/confirm) are logged with true
+// before/after by services via AuditService. Rows are NEVER updated or deleted.
+//
+// userId/companyId are plain columns with NO foreign key ON PURPOSE: an audit
+// sink must outlive the rows it references (a deleted user's actions still need
+// to be attributable) and must never be blocked or cascaded by an FK. companyId
+// and userId are nullable because some audited actions have no company context
+// yet or no authenticated actor (e.g. LOGIN resolves the user, but a failed
+// public action may not).
+model AuditLog {
+  id         String      @id @default(uuid()) @db.Uuid
+  companyId  String?     @map("company_id") @db.Uuid
+  userId     String?     @map("user_id") @db.Uuid
+  action     AuditAction
+  entity     String
+  entityId   String?     @map("entity_id")
+  // Before/after snapshots (secrets redacted before write). `before` is only
+  // populated on the explicit AuditService path; the interceptor sets `after`
+  // from the handler's result and leaves `before` null.
+  before     Json?
+  after      Json?
+  // HTTP context, when the row came from the interceptor (null for service-
+  // emitted domain events that aren't tied to one request).
+  ip         String?
+  method     String?
+  path       String?
+  statusCode Int?        @map("status_code")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  @@index([companyId, createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
+  @@map("audit_logs")
 }

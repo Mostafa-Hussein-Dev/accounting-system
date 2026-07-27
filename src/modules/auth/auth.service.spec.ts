@@ -13,6 +13,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { TaxesService } from '../taxes/taxes.service';
 import { SequencesService } from '../sequences/sequences.service';
 import { MailerService } from '../../common/mailer/mailer.service';
+import { AuditService } from '../audit/audit.service';
 
 describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () => {
   let prisma: PrismaService;
@@ -41,6 +42,7 @@ describe('AuthService — forgotPassword / verifyResetCode / resetPassword', () 
         AccountsService,
         TaxesService,
         SequencesService,
+        AuditService,
         { provide: MailerService, useValue: { sendPasswordResetCode } },
       ],
     }).compile();

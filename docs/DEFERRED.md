@@ -9,7 +9,7 @@ forget. Keep this list updated as modules land.
 | 1 | `Branch.stockLocationId` is a nullable UUID with **no foreign key** | `prisma/schema.prisma` (Branch), `src/modules/branches/` | Inventory `Location` model (FR-401 / FR-404) | Add the FK to `locations`, backfill, and change the column from nullable to **NOT NULL** in the same migration. |
 | 2 | **Default VAT treatment per item / category** (FR-105 acceptance criterion #2) is not implemented | Taxes module (FR-105) | Item master (FR-401) | Add a `defaultTaxRateId` / VAT-treatment field to `Item` (and/or category) referencing `tax_rates`, and default a sales/purchase line's VAT from it. |
 | 3 | ~~**Document numbers are not yet consumed**~~ — **RESOLVED (FR-901)**: the GL posting path now calls `SequencesService.nextNumber(...)` for `JOURNAL_ENTRY`. Still applies to invoicing/purchasing/payments when those are built. | Sequences module (FR-106) | Invoicing / Purchasing / Payments (FR-5xx/6xx/8xx) | When creating each document, call `nextNumber(companyId, branchId, docType, documentDate, tx)` inside its transaction (see `PostingService.post` for the reference pattern). |
-| 4 | **`JournalLine.partnerId`** is a nullable UUID with **no foreign key** | `prisma/schema.prisma` (JournalLine) | Partner model (FR-301) | Add the FK to `partners`; sub-ledger postings (AR/AP) will populate it so partner statements can be derived from the ledger. |
+| 4 | ~~**`JournalLine.partnerId`** has no FK~~ — **RESOLVED (FR-301)**: FK to `partners` added (migration `20260727130000_add_partners`). Partner balances/statements derive from `journalLine.partnerId`. **Still open:** no path yet WRITES partnerId onto a line (see "Partner postings" note below). | `prisma/schema.prisma` (JournalLine) | — | — |
 | 5 | **`JournalLine.costCenterId`** is a nullable UUID with **no foreign key** | `prisma/schema.prisma` (JournalLine) | Cost-centre / analytic dimension model (not yet planned) | Add the FK once cost centres exist; expose it on the manual-JE line DTO then. |
 | 6 | **`JournalEntry.sourceDocType` / `sourceDocId`** carry no FK — auto-posted entries can't yet link back to their source document | `prisma/schema.prisma` (JournalEntry) | Document models (FR-5xx/6xx/8xx) + posting rules (FR-902) | Add the FK to `documents` (or per-type) and set these when `PostingService.post` is invoked from a document's confirm flow. |
 
@@ -160,6 +160,21 @@ to include `PartnerAddress` in the first round or defer it.
   not master-data CRUD.
 - **`Partner.regionId`** → no `Region` model exists yet; nullable no-FK column.
 - **`Partner.salesmanId`** → likely a future `User` FK; nullable no-FK column.
+
+### Partner postings — how `partnerId` gets onto a journal line — RESOLVED (FR-301)
+The manual journal-entry line now accepts an optional `partnerId` (validated: the
+partner exists in the company), and the GL control-account rule changed from
+"never postable" to **"a control-account (AR/AP/…) line MUST carry a partnerId"**
+(a sub-ledger posting; error `CONTROL_ACCOUNT_REQUIRES_PARTNER`). Non-control lines
+may optionally carry a partnerId. This is Odoo-aligned (receivable/payable move
+lines always carry a partner) and makes `GET /partners/:id/balance` and
+`/transactions` derive real balances. `PostingService.reverse` already copies
+partnerId, so reversals stay attributed. Future documents/invoicing (FR-6xx) will
+set partnerId automatically via `PostingService`.
+
+### FR-303 — Partner statement (relevé) — partial
+`GET /partners/:id/transactions` returns the posted lines (paginated). Deferred:
+running balance across the statement, and PDF/Excel/email/WhatsApp export.
 
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist

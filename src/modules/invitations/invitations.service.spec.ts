@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { InvitationDuration } from '@prisma/client';
 import { ConfigModule } from '../../config/config.module';
 import { PrismaModule } from '../../prisma/prisma.module';
@@ -185,5 +185,44 @@ describe('InvitationsService (FR — company invitations)', () => {
         admin,
       ),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('invites an existing (non-member) user with no names, reusing their stored name', async () => {
+    const email = inviteEmail();
+    const user = await prisma.user.create({
+      data: {
+        firstName: 'Reuse',
+        lastName: 'Name',
+        email,
+        passwordHash: 'irrelevant',
+      },
+    });
+    cleanupUserIds.push(user.id);
+
+    // No firstName/lastName in the invite — allowed for an existing user.
+    const inv = await service.create(
+      { email, roleIds: [memberRoleId], duration: InvitationDuration.ONE_DAY },
+      admin,
+    );
+    expect(inv.accepted).toBe(false);
+
+    const row = await prisma.invitation.findFirstOrThrow({ where: { email } });
+    expect(row.firstName).toBe('Reuse');
+    expect(row.lastName).toBe('Name');
+    // Existing account → no temp password issued.
+    expect(row.tempPasswordHash).toBeNull();
+  });
+
+  it('rejects a new-email invite that omits firstName/lastName', async () => {
+    await expect(
+      service.create(
+        {
+          email: inviteEmail(),
+          roleIds: [memberRoleId],
+          duration: InvitationDuration.ONE_DAY,
+        },
+        admin,
+      ),
+    ).rejects.toThrow(BadRequestException);
   });
 });

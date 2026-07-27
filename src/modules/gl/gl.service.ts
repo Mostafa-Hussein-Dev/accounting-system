@@ -36,6 +36,7 @@ interface PreparedLine {
   currency: string;
   rate: number;
   amountBase: number;
+  partnerId: string | null;
   description: string | null;
 }
 
@@ -264,12 +265,19 @@ export class GlService {
           field: `lines[${i}].accountId`,
         });
       }
-      if (account.isControl) {
+      // Subsidiary-ledger rule (Odoo-aligned): a control account (AR/AP/…) holds
+      // per-partner balances, so a line posting to it MUST carry a partnerId.
+      // Non-control lines may optionally carry one too. This replaces the old
+      // blanket "control accounts are never postable" rule.
+      if (account.isControl && !line.partnerId) {
         throw new BadRequestException({
-          code: 'JOURNAL_CONTROL_ACCOUNT_POSTING',
-          message: `Account ${account.number} is a control account and cannot be posted to directly; post through its sub-ledger.`,
-          field: `lines[${i}].accountId`,
+          code: 'CONTROL_ACCOUNT_REQUIRES_PARTNER',
+          message: `Account ${account.number} is a control account; a line posting to it must specify a partnerId (sub-ledger posting).`,
+          field: `lines[${i}].partnerId`,
         });
+      }
+      if (line.partnerId) {
+        await this.assertPartnerExists(line.partnerId, companyId, i);
       }
       if (
         account.currencyRestriction &&
@@ -306,6 +314,7 @@ export class GlService {
         currency: money.currency,
         rate: money.rate,
         amountBase: money.amountBase,
+        partnerId: line.partnerId ?? null,
         description: line.description ?? null,
       });
     }
@@ -420,6 +429,24 @@ export class GlService {
         code: 'BRANCH_NOT_FOUND',
         message: `Branch ${branchId} was not found in this company.`,
         field: 'branchId',
+      });
+    }
+  }
+
+  private async assertPartnerExists(
+    partnerId: string,
+    companyId: string,
+    lineIndex: number,
+  ): Promise<void> {
+    const partner = await this.prisma.partner.findFirst({
+      where: { id: partnerId, companyId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!partner) {
+      throw new NotFoundException({
+        code: 'PARTNER_NOT_FOUND',
+        message: `Partner ${partnerId} was not found in this company.`,
+        field: `lines[${lineIndex}].partnerId`,
       });
     }
   }

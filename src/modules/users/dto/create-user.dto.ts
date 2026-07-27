@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Language } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsArray,
   IsEmail,
@@ -61,10 +62,13 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     description:
-      'Company this user belongs to. Omit for a system-level user (admin/support).',
+      'Platform admin: which company the user joins (and which company the roleIds apply to); omit for a system-level user (admin/support). A company-scoped caller ALWAYS creates in their active company (from the JWT) and this field is ignored — an empty value is treated as omitted.',
     example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab',
   })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === '' ? undefined : value,
+  )
   @IsUUID()
   companyId?: string;
 

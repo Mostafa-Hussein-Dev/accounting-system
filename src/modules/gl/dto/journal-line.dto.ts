@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   Length,
   MaxLength,
 } from 'class-validator';
@@ -20,7 +21,7 @@ export class JournalLineDto {
     description: 'Account to post to (must belong to the entry’s company).',
     example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab',
   })
-  @IsString()
+  @IsUUID()
   accountId!: string;
 
   @ApiProperty({ enum: JournalSide, example: JournalSide.DEBIT })

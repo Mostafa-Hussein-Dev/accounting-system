@@ -73,6 +73,33 @@ building. Open questions and scope:
 Decision needed: backend catalogue vs frontend-bundled strings. Revisit as its
 own task.
 
+### Auth enhancements (deferred by decision, not blocked on a module)
+Reviewed during an auth pass and intentionally postponed — the current auth
+module (login, register, refresh, switch-company, logout, forgot/verify/reset
+password, me, change-password, temp-password gate, multi-company) is considered
+complete for now. A `/validate` endpoint was **declined** (GET `/auth/me`
+already validates the token and returns the user + company context). Email
+verification on self-service `register` was **declined**. Revisit these when
+hardening auth for production:
+
+- **Login OTP / 2FA (MFA):** a second factor on `/auth/login`. Large scope —
+  TOTP secret storage, backup codes, "remember this device", enrolment/disenrol
+  flows. Deferred; decide whether MFA is a product requirement first.
+- **Rate-limit `/auth/login`:** the password-reset endpoints are throttled but
+  login itself is not, leaving password brute-force unblunted. Apply a
+  `ThrottlerGuard` + `@Throttle` per-route (mirror `RESET_THROTTLE` in
+  `auth.controller.ts`), ideally keyed per email/account as well as per IP.
+- **Session management:** no "list active sessions" or "logout everywhere"
+  endpoint. `change-password` revokes other sessions, but there's no standalone
+  revoke-all or session listing. Add `GET /auth/sessions` + `POST
+  /auth/logout-all` over the existing refresh-token store.
+- **Resend endpoints:** no resend-invitation / resend-verification. Add when
+  the corresponding flows need it (e.g. an invitation email that got lost).
+- **Admin disable user:** `User.isActive` exists on the model but no endpoint
+  toggles it. Add an admin-gated activate/deactivate on the Users module so an
+  account can be disabled without deletion (and have login/JWT validation reject
+  inactive users).
+
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist
   yet, add a row here **and** a `NOTE`/`TODO(FR-xxx)` comment at the code site.

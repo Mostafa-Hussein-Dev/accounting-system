@@ -15,38 +15,7 @@
       }
     ]
   },
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:3000/api/v1",
-      "type": "string"
-    },
-    {
-      "key": "serverUrl",
-      "value": "http://localhost:3000",
-      "type": "string"
-    },
-    {
-      "key": "debitAccountId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "creditAccountId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "companyId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "partnerId",
-      "value": "",
-      "type": "string"
-    }
-  ],
+  "variable": [],
   "item": [
     {
       "name": "Accounting / GL",

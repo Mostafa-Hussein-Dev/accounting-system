@@ -109,6 +109,14 @@ enum AuditAction {
   LOGIN
 }
 
+// Address roles on a partner (FR-301, legacy ADDRESS/PADDRESS/AddressBranch;
+// Odoo child-address types invoice/delivery collapsed here to BILLING/SHIPPING).
+enum PartnerAddressType {
+  BILLING
+  SHIPPING
+  BRANCH
+}
+
 model Company {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
@@ -147,6 +155,7 @@ model Company {
   documentSequences DocumentSequence[]
   journalEntries    JournalEntry[]
   journalLines      JournalLine[]
+  partners          Partner[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -177,6 +186,7 @@ model Currency {
   exchangeRates      ExchangeRate[]
   restrictedAccounts Account[]
   baseForCompanies   Company[]      @relation("CompanyBaseCurrency")
+  creditPartners     Partner[]      @relation("PartnerCreditCurrency")
 
   @@map("currencies")
 }
@@ -269,6 +279,10 @@ model Account {
   // Ledger postings against this account. An account's balance is DERIVED from
   // these (Σ debit_base − Σ credit_base), never stored (invariant #4).
   journalLines JournalLine[]
+
+  // Partners whose AR/AP sub-ledger balance rolls into this (control) account.
+  receivablePartners Partner[] @relation("PartnerReceivableAccount")
+  payablePartners    Partner[] @relation("PartnerPayableAccount")
 
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -445,11 +459,13 @@ model JournalLine {
   rate           Decimal @db.Decimal(20, 6)
   amountBase     Decimal @map("amount_base") @db.Decimal(20, 2)
 
-  // Nullable with NO foreign key ON PURPOSE — Partner (FR-301) and cost centres
-  // don't exist yet (see docs/DEFERRED.md). Sub-ledger postings will fill these
-  // once those modules land.
-  partnerId    String? @map("partner_id") @db.Uuid
-  costCenterId String? @map("cost_center_id") @db.Uuid
+  // partnerId now has a Partner FK (FR-301). costCenterId stays a bare nullable
+  // column — the cost-centre model doesn't exist yet (see docs/DEFERRED.md).
+  // Sub-ledger (AR/AP) postings set partnerId so partner balances/statements are
+  // derived from the ledger.
+  partnerId    String?  @map("partner_id") @db.Uuid
+  partner      Partner? @relation(fields: [partnerId], references: [id])
+  costCenterId String?  @map("cost_center_id") @db.Uuid
 
   description String?
 
@@ -730,4 +746,102 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([userId])
   @@map("audit_logs")
+}
+
+// A customer/supplier master record (FR-301), modelled after Odoo's res.partner.
+// Tenant-scoped (listed in prisma.service.ts's TENANT_SCOPED_MODELS) and
+// soft-deleted like other financial master data (docs/MODELS.md). Subsidiary
+// ledger (docs/DEFERRED.md FR-301, Option A): partners share the AR/AP control
+// accounts and a partner's balance is DERIVED from journal lines carrying its
+// partnerId. Like Odoo, a partner can be a customer AND a supplier (isCustomer /
+// isSupplier), and carries BOTH a receivable and a payable account (Odoo's
+// property_account_receivable_id / property_account_payable_id), each defaulting
+// to the company's AR (41) / AP (40) control account and overridable.
+model Partner {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  // Odoo-style reference (res.partner.ref): a human-facing identifier, unique
+  // per company. Free-form and overridable; when left blank on create it is
+  // auto-generated as <control-account-number><zero-padded counter> — e.g. a
+  // customer under AR account 41 gets 410001, 410002, … (PartnersService).
+  ref String
+
+  // Trilingual names (FR-107); `name` is the always-present fallback.
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  // Roles (Odoo customer_rank/supplier_rank as booleans); a partner may be both.
+  isCustomer Boolean @default(false) @map("is_customer")
+  isSupplier Boolean @default(false) @map("is_supplier")
+
+  // Free-form classification/category (legacy grouping); no lookup table yet.
+  category    String?
+  // Tax identification number (Lebanese MOF).
+  tin         String?
+  contactName String? @map("contact_name")
+  phone       String?
+  phone2      String? @map("phone_2")
+  email       String?
+  vip         Boolean @default(false)
+
+  // Credit control fields (FR-302) — STORED here; enforcement (warn/block on a
+  // sale) belongs to invoicing and is deferred (docs/DEFERRED.md).
+  creditLimit       Decimal?  @map("credit_limit") @db.Decimal(20, 2)
+  creditCurrency    String?   @map("credit_currency")
+  creditCurrencyRef Currency? @relation("PartnerCreditCurrency", fields: [creditCurrency], references: [code])
+
+  // The AR/AP control accounts this partner's sub-ledger balance rolls into
+  // (Odoo's receivable/payable account properties). Default to the company's AR
+  // (41) / AP (40) control accounts by role; overridable.
+  receivableAccountId String?  @map("receivable_account_id") @db.Uuid
+  receivableAccount   Account? @relation("PartnerReceivableAccount", fields: [receivableAccountId], references: [id])
+  payableAccountId    String?  @map("payable_account_id") @db.Uuid
+  payableAccount      Account? @relation("PartnerPayableAccount", fields: [payableAccountId], references: [id])
+
+  // Nullable with NO foreign key ON PURPOSE (docs/DEFERRED.md FR-301): no Region
+  // model exists, and salesman will likely become a User FK. Add the FKs when
+  // those land.
+  regionId   String? @map("region_id") @db.Uuid
+  salesmanId String? @map("salesman_id") @db.Uuid
+
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  addresses    PartnerAddress[]
+  journalLines JournalLine[]
+
+  @@unique([companyId, ref])
+  @@index([companyId])
+  @@index([companyId, isCustomer])
+  @@index([companyId, isSupplier])
+  @@index([deletedAt])
+  @@map("partners")
+}
+
+// One address of a partner (FR-301). Deleted with its partner (Cascade); at most
+// one row per partner may be the default (enforced in PartnersService).
+model PartnerAddress {
+  id        String  @id @default(uuid()) @db.Uuid
+  partnerId String  @map("partner_id") @db.Uuid
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  type      PartnerAddressType
+  line1     String
+  city      String?
+  country   String?
+  region    String?
+  phone     String?
+  isDefault Boolean            @default(false) @map("is_default")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([partnerId])
+  @@map("partner_addresses")
 }

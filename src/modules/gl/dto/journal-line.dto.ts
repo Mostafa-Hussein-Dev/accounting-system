@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { JournalSide } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsEnum,
   IsNumber,
@@ -27,6 +28,18 @@ export class JournalLineDto {
   @ApiProperty({ enum: JournalSide, example: JournalSide.DEBIT })
   @IsEnum(JournalSide)
   side!: JournalSide;
+
+  @ApiPropertyOptional({
+    description:
+      'Partner (customer/supplier) this line is posted against — the sub-ledger key (Odoo move-line partner). REQUIRED on a control account (AR/AP) line so its balance is attributable to a partner; optional on any other line.',
+    example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === '' ? undefined : value,
+  )
+  @IsUUID()
+  partnerId?: string;
 
   @ApiProperty({
     description: 'Amount in the original currency (> 0).',

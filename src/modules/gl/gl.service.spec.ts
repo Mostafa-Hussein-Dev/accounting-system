@@ -162,6 +162,7 @@ describe('GL engine (FR-901/FR-906)', () => {
     // Delete entries (lines cascade); the balance triggers skip a vanished entry.
     await prisma.journalEntry.deleteMany({ where: { companyId } });
     await prisma.documentSequence.deleteMany({ where: { companyId } });
+    await prisma.partner.deleteMany({ where: { companyId } });
     await prisma.account.deleteMany({ where: { companyId } });
     await prisma.company.deleteMany({ where: { id: companyId } });
     await prisma.$disconnect();
@@ -227,7 +228,7 @@ describe('GL engine (FR-901/FR-906)', () => {
     expect(entry.isBalanced).toBe(true);
   });
 
-  it('rejects posting to a control account', async () => {
+  it('rejects a control-account line with no partnerId', async () => {
     await expect(
       gl.create(
         {
@@ -240,6 +241,29 @@ describe('GL engine (FR-901/FR-906)', () => {
         caller,
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('allows a control-account line that carries a partnerId (sub-ledger posting)', async () => {
+    const partner = await prisma.partner.create({
+      data: {
+        companyId,
+        ref: `P-${randomUUID().slice(0, 6)}`,
+        name: 'Sub-ledger Cust',
+        isCustomer: true,
+      },
+    });
+    const entry = await gl.create(
+      {
+        date: '2026-07-23',
+        lines: [
+          { ...usd(controlId, JournalSide.DEBIT, 50), partnerId: partner.id },
+          usd(salesId, JournalSide.CREDIT, 50),
+        ],
+      },
+      caller,
+    );
+    const controlLine = entry.lines.find((l) => l.accountId === controlId);
+    expect(controlLine?.partnerId).toBe(partner.id);
   });
 
   it('posts a draft: assigns a number and freezes it immutable', async () => {

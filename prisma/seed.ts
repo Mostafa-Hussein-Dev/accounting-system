@@ -343,6 +343,30 @@ const PERMISSIONS = [
     action: 'read',
     description: 'View the audit trail',
   },
+  {
+    key: 'partner.read',
+    subject: 'Partner',
+    action: 'read',
+    description: 'View customers/suppliers and their balances',
+  },
+  {
+    key: 'partner.create',
+    subject: 'Partner',
+    action: 'create',
+    description: 'Create customers/suppliers',
+  },
+  {
+    key: 'partner.update',
+    subject: 'Partner',
+    action: 'update',
+    description: 'Edit customers/suppliers',
+  },
+  {
+    key: 'partner.delete',
+    subject: 'Partner',
+    action: 'delete',
+    description: 'Delete customers/suppliers',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -392,6 +416,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'tax.read',
         'sequence.read',
         'journal.read',
+        'partner.read',
       ],
     },
   ];

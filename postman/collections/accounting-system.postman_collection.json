@@ -35,6 +35,16 @@
       "key": "creditAccountId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "companyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partnerId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -66,7 +76,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"date\": \"2026-07-23\",\n  \"reference\": \"ADJ-2026-07\",\n  \"description\": \"Manual cash sale\",\n  \"lines\": [\n    {\n      \"accountId\": \"{{debitAccountId}}\",\n      \"side\": \"DEBIT\",\n      \"amountOriginal\": 150,\n      \"currency\": \"USD\"\n    },\n    {\n      \"accountId\": \"{{creditAccountId}}\",\n      \"side\": \"CREDIT\",\n      \"amountOriginal\": 150,\n      \"currency\": \"USD\"\n    }\n  ]\n}",
+              "raw": "{\n  \"date\": \"2026-07-23\",\n  \"reference\": \"INV-1001\",\n  \"description\": \"Sale on credit\",\n  \"lines\": [\n    {\n      \"accountId\": \"{{debitAccountId}}\",\n      \"side\": \"DEBIT\",\n      \"amountOriginal\": 100,\n      \"currency\": \"USD\",\n      \"partnerId\": \"{{partnerId}}\"\n    },\n    {\n      \"accountId\": \"{{creditAccountId}}\",\n      \"side\": \"CREDIT\",\n      \"amountOriginal\": 100,\n      \"currency\": \"USD\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -82,7 +92,7 @@
                 "journal-entries"
               ]
             },
-            "description": "Requires journal.create (Company Admin). Creates a DRAFT entry (no number yet). At least two lines; each is a debit OR credit with amountOriginal/currency and optional rate (defaults to the exchange rate in force on the date, or 1 for the base currency). Rejected 400 if unbalanced, if a line targets a control account, or an inactive/unknown account. Test script saves journalEntryId."
+            "description": "Requires journal.create (Company Admin). Creates a DRAFT entry (no number yet). At least two lines; each is a debit OR credit with amountOriginal/currency and optional rate (defaults to the exchange rate in force on the date, or 1 for the base currency). Rejected 400 if unbalanced, if a line targets a control account, or an inactive/unknown account. Test script saves journalEntryId. A line may carry partnerId (sub-ledger key). A control account (AR 41 / AP 40) line REQUIRES partnerId; other lines may omit it. Set debitAccountId to a control account and partnerId to a partner to post to the sub-ledger."
           },
           "response": [
             {
@@ -112,7 +122,7 @@
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_ENTRY_UNBALANCED\",\n    \"message\": \"Journal entry is not balanced: debits (150) must equal credits (140) in the base currency.\",\n    \"field\": \"lines\"\n  }\n}"
             },
             {
-              "name": "400 Control account",
+              "name": "400 Control account without partnerId",
               "status": "Bad Request",
               "code": 400,
               "_postman_previewlanguage": "json",
@@ -122,7 +132,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"JOURNAL_CONTROL_ACCOUNT_POSTING\",\n    \"message\": \"Account 40 is a control account and cannot be posted to directly; post through its sub-ledger.\",\n    \"field\": \"lines[0].accountId\"\n  }\n}"
+              "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"CONTROL_ACCOUNT_REQUIRES_PARTNER\",\n    \"message\": \"Account 41 is a control account; a line posting to it must specify a partnerId (sub-ledger posting).\",\n    \"field\": \"lines[0].partnerId\"\n  }\n}"
             },
             {
               "name": "403 Permission denied",
@@ -3420,7 +3430,7 @@
                   "language": "json"
                 }
               },
-              "raw": "{\n  \"email\": \"sam@acme.com\",\n  \"firstName\": \"Sam\",\n  \"lastName\": \"Lee\",\n  \"roleIds\": [\n    \"{{companyMemberRoleId}}\"\n  ],\n  \"duration\": \"ONE_WEEK\"\n}"
+              "raw": "{\n  \"email\": \"sam@acme.com\",\n  \"firstName\": \"Sam\",\n  \"lastName\": \"Lee\",\n  \"companyId\": \"{{companyId}}\",\n  \"roleIds\": [\n    \"{{companyMemberRoleId}}\"\n  ],\n  \"duration\": \"ONE_WEEK\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/invitations",
@@ -3431,7 +3441,7 @@
                 "invitations"
               ]
             },
-            "description": "Requires user.create (Company Admin). duration is one of ONE_DAY, THREE_DAYS, ONE_WEEK, TWO_WEEKS, THIRTY_DAYS. Emails an accept link (+ temp password for a new email). The token is in the email (dev: server log / mailpit) — copy it into {{invitationToken}} for Accept. No user exists until acceptance."
+            "description": "Invite someone to a company. firstName/lastName are REQUIRED only for a NEW email (used to create the account on acceptance); for an EXISTING user they can be omitted — the invite reuses their stored name (this example keeps them for the new-user case). Requires user.create (Company Admin). Emails an accept link (+ temp password for a new email). No user is created until accepted. companyId (body): platform admin ONLY — a company-scoped caller is forced into their JWT active company and it is ignored (empty {{companyId}} is safe)."
           },
           "response": [
             {
@@ -3675,6 +3685,274 @@
               "body": ""
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Partners",
+      "item": [
+        {
+          "name": "Create partner (customer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code===201){pm.collectionVariables.set('partnerId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ACME Trading SARL\",\n  \"isCustomer\": true,\n  \"tin\": \"1234567\",\n  \"email\": \"billing@acme.com\",\n  \"addresses\": [\n    {\n      \"type\": \"BILLING\",\n      \"line1\": \"Rue Hamra, Bldg 12\",\n      \"city\": \"Beirut\",\n      \"country\": \"Lebanon\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Create a customer. ref auto-generates as <AR account number><counter> (e.g. 410001) when omitted; receivableAccount defaults to the company AR (41) control account. At least one of isCustomer/isSupplier is required. Saves partnerId."
+          },
+          "response": []
+        },
+        {
+          "name": "Create partner (supplier)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Supplier One\",\n  \"isSupplier\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Supplier: ref auto <AP number><counter> (400001); payableAccount defaults to AP (40)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create partner (customer + supplier)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dual Partner\",\n  \"isCustomer\": true,\n  \"isSupplier\": true,\n  \"ref\": \"\",\n  \"receivableAccountId\": \"\",\n  \"payableAccountId\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "A partner can be both (Odoo). Uses the 41 (AR) prefix and carries BOTH receivable and payable accounts. Empty ref/account ids are treated as omitted (auto/default)."
+          },
+          "response": []
+        },
+        {
+          "name": "List partners",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners?page=1&limit=20&isCustomer=true&isSupplier=true&isActive=true&q=acme",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "isCustomer",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
+                  "key": "isSupplier",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
+                  "key": "isActive",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
+                  "key": "q",
+                  "value": "acme",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List/search partners. Filter by isCustomer/isSupplier/isActive and q (ref/name/tin)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get partner by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners/{{partnerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}"
+              ]
+            },
+            "description": "Partner with its addresses."
+          },
+          "response": []
+        },
+        {
+          "name": "Get partner balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners/{{partnerId}}/balance?asOf=2026-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}",
+                "balance"
+              ],
+              "query": [
+                {
+                  "key": "asOf",
+                  "value": "2026-12-31",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Balance derived from posted journal lines carrying this partnerId (subsidiary ledger). Base (USD) net + per-currency breakdown. Empty until partner-tagged lines are posted."
+          },
+          "response": []
+        },
+        {
+          "name": "Get partner transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners/{{partnerId}}/transactions?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Posted ledger lines for this partner (statement foundation, FR-303)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update partner",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners/{{partnerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contactName\": \"Sami Haddad\",\n  \"vip\": true,\n  \"addresses\": [\n    {\n      \"type\": \"BILLING\",\n      \"line1\": \"New address\",\n      \"isDefault\": true\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Partial update. Supplying addresses replaces the whole set (at most one default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete partner",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners/{{partnerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}"
+              ]
+            },
+            "description": "Soft delete."
+          },
+          "response": []
         }
       ]
     },
@@ -4761,7 +5039,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"password\": \"S3cur3P@ssword!\",\n  \"phone\": \"+961 3 123 456\",\n  \"preferredLanguage\": \"EN\",\n  \"roleIds\": [\n    \"{{companyMemberRoleId}}\"\n  ]\n}",
+              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"password\": \"S3cur3P@ssword!\",\n  \"phone\": \"+961 3 123 456\",\n  \"preferredLanguage\": \"EN\",\n  \"companyId\": \"{{companyId}}\",\n  \"roleIds\": [\n    \"{{companyMemberRoleId}}\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4777,7 +5055,7 @@
                 "users"
               ]
             },
-            "description": "Create a teammate in the caller’s active company. `roleIds` assigns roles for that company — here the seeded Company Member role. Run Roles > List roles first to populate companyMemberRoleId. Omit roleIds to default to Company Member automatically. A platform admin targets a company via companyId."
+            "description": "Create a teammate in the caller’s active company. `roleIds` assigns roles for that company — here the seeded Company Member role. Run Roles > List roles first to populate companyMemberRoleId. Omit roleIds to default to Company Member automatically. A platform admin targets a company via companyId. companyId (body): platform admin ONLY — targets which company the user joins and which company the roleIds apply to. A company-scoped caller (Company Admin) is always forced into their JWT active company and this field is ignored; leaving {{companyId}} empty is safe (treated as omitted)."
           },
           "event": [
             {

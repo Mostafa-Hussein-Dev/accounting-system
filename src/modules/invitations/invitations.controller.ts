@@ -77,7 +77,7 @@ export class InvitationsController {
   @RequirePermissions({ action: 'create', subject: 'User' })
   @ApiOperation({
     summary:
-      'Invite someone to join the active company (reuses user.create — Company Admin). Emails an accept link; a new email also gets temporary login credentials. No user is created until the invite is accepted.',
+      'Invite someone to join a company (reuses user.create — Company Admin). The target company comes from the JWT active company for a company-scoped caller (body companyId is ignored for them); a platform admin sets it via body companyId. Emails an accept link; a new email also gets temporary login credentials. No user is created until the invite is accepted.',
   })
   @ApiResponse({
     status: 201,

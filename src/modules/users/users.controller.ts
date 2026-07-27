@@ -42,7 +42,7 @@ export class UsersController {
   @RequirePermissions({ action: 'create', subject: 'User' })
   @ApiOperation({
     summary:
-      'Create a new user (platform admin: any company via body companyId or none; company-scoped caller: forced into their own company)',
+      'Create a new user. The target company (membership + which company the roleIds apply to) comes from the JWT active company for a company-scoped caller (body companyId is ignored for them); a platform admin sets it via body companyId (or omits it for a system-level user). Requires user.create (Company Admin).',
   })
   @ApiResponse({
     status: 201,

@@ -94,6 +94,21 @@ export class InvitationsService {
       }
     }
 
+    // firstName/lastName create the account on acceptance, so they are required
+    // only for a NEW email. For an existing user we reuse their stored name (a
+    // user always has one), so this guard can only trip on a new email — letting
+    // the caller invite an existing user with just email + roles + duration.
+    const firstName = dto.firstName ?? existingUser?.firstName;
+    const lastName = dto.lastName ?? existingUser?.lastName;
+    if (!firstName || !lastName) {
+      throw new BadRequestException({
+        code: 'INVITATION_NAME_REQUIRED',
+        message:
+          'firstName and lastName are required when inviting a new email (no existing account).',
+        field: !firstName ? 'firstName' : 'lastName',
+      });
+    }
+
     const livePending = await this.prisma.invitation.findFirst({
       where: {
         companyId,
@@ -125,8 +140,8 @@ export class InvitationsService {
       data: {
         companyId,
         email: dto.email,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
+        firstName,
+        lastName,
         roleIds: dto.roleIds,
         tempPasswordHash,
         token,

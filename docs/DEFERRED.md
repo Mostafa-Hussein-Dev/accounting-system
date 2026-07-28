@@ -172,9 +172,17 @@ lines always carry a partner) and makes `GET /partners/:id/balance` and
 partnerId, so reversals stay attributed. Future documents/invoicing (FR-6xx) will
 set partnerId automatically via `PostingService`.
 
-### FR-303 — Partner statement (relevé) — partial
-`GET /partners/:id/transactions` returns the posted lines (paginated). Deferred:
-running balance across the statement, and PDF/Excel/email/WhatsApp export.
+### FR-303 — Partner statement (relevé) — mostly BUILT
+`GET /partners/:id/statement?from&to` returns the full relevé: opening balance,
+each posted transaction with a **role-oriented running balance**, closing balance
+and totals — in **base USD and converted to LBP** (rate in force on `to`,
+rateType default Official; null columns when no rate). `GET
+/partners/:id/statement/export?format=pdf|excel` downloads it (pdfkit / exceljs).
+`GET /partners/:id/transactions` still returns the raw paginated lines.
+**Deferred (tied to other foundations):** emailing the statement (no mail server
+yet — MailerService logs in dev; nodemailer already supports attachments),
+WhatsApp delivery (needs a provider e.g. Twilio), and translated statement labels
+(AR/FR/EN — tied to FR-107 i18n).
 
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist

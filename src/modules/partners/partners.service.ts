@@ -27,6 +27,11 @@ import {
   PartnerCurrencyBalanceDto,
 } from './dto/partner-balance-response.dto';
 import { PartnerTransactionRowDto } from './dto/partner-transaction-response.dto';
+import { QueryStatementDto } from './dto/query-statement.dto';
+import {
+  PartnerStatementResponseDto,
+  StatementRowDto,
+} from './dto/partner-statement-response.dto';
 
 const PRISMA_UNIQUE_CONSTRAINT = 'P2002';
 const PRISMA_FOREIGN_KEY_CONSTRAINT = 'P2003';
@@ -38,6 +43,10 @@ const PARTNER_WITH_ADDRESSES = {
 } as const;
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+// LBP carries 0 decimals (FR-103), so converted amounts are whole pounds.
+const round0 = (n: number): number => Math.round(n);
+const DEFAULT_RATE_TYPE = 'Official';
+const DISPLAY_CURRENCY = 'LBP';
 
 @Injectable()
 export class PartnersService {
@@ -401,7 +410,164 @@ export class PartnersService {
     );
   }
 
+  /**
+   * The partner statement / relevé (FR-303): opening balance, each posted
+   * transaction over [from, to] with a role-oriented running balance, and a
+   * closing balance — in base currency (USD) and converted to LBP at the rate in
+   * force on `to`. All derived from posted journal lines carrying the partnerId.
+   */
+  async statement(
+    id: string,
+    caller: AuthenticatedUser,
+    query: QueryStatementDto,
+  ): Promise<PartnerStatementResponseDto> {
+    const partner = await this.getOwned(id, caller);
+    const from = this.parseAsOf(query.from);
+    const to = query.to ? this.parseAsOf(query.to) : new Date();
+    if (from > to) {
+      throw new BadRequestException({
+        code: 'INVALID_DATE_RANGE',
+        message: '`from` must be on or before `to`.',
+        field: 'from',
+      });
+    }
+    const rateType = query.rateType ?? DEFAULT_RATE_TYPE;
+
+    // Orientation: a customer (or both) reads as a receivable — positive means
+    // they owe us (debit − credit). A supplier-only partner reads as a payable —
+    // positive means we owe them (credit − debit).
+    const receivable = partner.isCustomer || !partner.isSupplier;
+    const sign = receivable ? 1 : -1;
+
+    const postedBefore = {
+      status: JournalStatus.POSTED,
+      deletedAt: null,
+      date: { lt: from },
+    };
+    const postedWithin = {
+      status: JournalStatus.POSTED,
+      deletedAt: null,
+      date: { gte: from, lte: to },
+    };
+
+    const [openingAgg, lines] = await this.prisma.$transaction([
+      this.prisma.journalLine.groupBy({
+        by: ['side'],
+        where: {
+          partnerId: id,
+          companyId: partner.companyId,
+          journalEntry: postedBefore,
+        },
+        _sum: { amountBase: true },
+      }),
+      this.prisma.journalLine.findMany({
+        where: {
+          partnerId: id,
+          companyId: partner.companyId,
+          journalEntry: postedWithin,
+        },
+        include: { journalEntry: true },
+        orderBy: [{ journalEntry: { date: 'asc' } }, { lineNo: 'asc' }],
+      }),
+    ]);
+
+    let openingDebit = 0;
+    let openingCredit = 0;
+    for (const g of openingAgg) {
+      const amt = Number(g._sum.amountBase ?? 0);
+      if (g.side === JournalSide.DEBIT) openingDebit += amt;
+      else openingCredit += amt;
+    }
+    const openingBalanceBase = round2(sign * (openingDebit - openingCredit));
+
+    const rate = await this.rateInForce(
+      partner.companyId,
+      DISPLAY_CURRENCY,
+      rateType,
+      to,
+    );
+    const toDisplay = (usd: number): number | null =>
+      rate === null ? null : round0(usd * rate.rate);
+
+    let running = openingBalanceBase;
+    let totalDebitBase = 0;
+    let totalCreditBase = 0;
+    const rows: StatementRowDto[] = lines.map((l) => {
+      const debit = l.side === JournalSide.DEBIT ? Number(l.amountBase) : 0;
+      const credit = l.side === JournalSide.CREDIT ? Number(l.amountBase) : 0;
+      totalDebitBase += debit;
+      totalCreditBase += credit;
+      running = round2(running + sign * (debit - credit));
+      return {
+        date: l.journalEntry.date.toISOString().slice(0, 10),
+        entryNumber: l.journalEntry.entryNumber,
+        journalEntryId: l.journalEntryId,
+        reference: l.journalEntry.reference,
+        description: l.description,
+        debitBase: round2(debit),
+        creditBase: round2(credit),
+        runningBalanceBase: running,
+        amountOriginal: Number(l.amountOriginal),
+        currency: l.currency,
+        debitDisplay: toDisplay(debit),
+        creditDisplay: toDisplay(credit),
+        runningBalanceDisplay: toDisplay(running),
+      };
+    });
+
+    const dto = new PartnerStatementResponseDto();
+    dto.partnerId = partner.id;
+    dto.ref = partner.ref;
+    dto.name = partner.name;
+    dto.from = from.toISOString().slice(0, 10);
+    dto.to = to.toISOString().slice(0, 10);
+    dto.baseCurrency = 'USD';
+    dto.displayCurrency = DISPLAY_CURRENCY;
+    dto.orientation = receivable ? 'receivable' : 'payable';
+    dto.conversion =
+      rate === null
+        ? null
+        : {
+            currency: DISPLAY_CURRENCY,
+            rateType,
+            rate: rate.rate,
+            rateDate: rate.effectiveDate.toISOString().slice(0, 10),
+          };
+    dto.openingBalanceBase = openingBalanceBase;
+    dto.openingBalanceDisplay = toDisplay(openingBalanceBase);
+    dto.rows = rows;
+    dto.totalDebitBase = round2(totalDebitBase);
+    dto.totalCreditBase = round2(totalCreditBase);
+    dto.totalDebitDisplay = toDisplay(round2(totalDebitBase));
+    dto.totalCreditDisplay = toDisplay(round2(totalCreditBase));
+    dto.closingBalanceBase = running;
+    dto.closingBalanceDisplay = toDisplay(running);
+    return dto;
+  }
+
   // --- helpers -------------------------------------------------------------
+
+  /** The exchange rate in force on a date (LBP per 1 USD), or null if none. */
+  private async rateInForce(
+    companyId: string,
+    currencyCode: string,
+    rateType: string,
+    onDate: Date,
+  ): Promise<{ rate: number; effectiveDate: Date } | null> {
+    const row = await this.prisma.exchangeRate.findFirst({
+      where: {
+        companyId,
+        currencyCode,
+        rateType,
+        effectiveDate: { lte: onDate },
+      },
+      orderBy: { effectiveDate: 'desc' },
+      select: { rate: true, effectiveDate: true },
+    });
+    return row
+      ? { rate: Number(row.rate), effectiveDate: row.effectiveDate }
+      : null;
+  }
 
   private async getOwned(id: string, caller: AuthenticatedUser) {
     const partner = await this.clientFor(caller).partner.findFirst({

@@ -109,10 +109,57 @@ describe('PartnersService (FR-301)', () => {
       where: { partner: { companyId } },
     });
     await prisma.partner.deleteMany({ where: { companyId } });
+    await prisma.exchangeRate.deleteMany({ where: { companyId } });
     await prisma.account.deleteMany({ where: { companyId } });
     await prisma.company.delete({ where: { id: companyId } });
     await prisma.$disconnect();
   });
+
+  // Post a balanced entry with the AR line (carrying partnerId) on `arSide`.
+  const postAr = async (
+    partnerId: string,
+    date: string,
+    arSide: JournalSide,
+    amount: number,
+  ): Promise<void> => {
+    const otherSide =
+      arSide === JournalSide.DEBIT ? JournalSide.CREDIT : JournalSide.DEBIT;
+    await prisma.journalEntry.create({
+      data: {
+        companyId,
+        entryNumber: `JE-${randomUUID().slice(0, 6)}`,
+        date: new Date(date),
+        status: JournalStatus.POSTED,
+        postedAt: new Date(),
+        createdById: caller.userId,
+        lines: {
+          create: [
+            {
+              companyId,
+              lineNo: 1,
+              accountId: arId,
+              side: arSide,
+              amountOriginal: amount,
+              currency: 'USD',
+              rate: 1,
+              amountBase: amount,
+              partnerId,
+            },
+            {
+              companyId,
+              lineNo: 2,
+              accountId: revenueId,
+              side: otherSide,
+              amountOriginal: amount,
+              currency: 'USD',
+              rate: 1,
+              amountBase: amount,
+            },
+          ],
+        },
+      },
+    });
+  };
 
   it('auto-numbers a customer ref as <AR number><counter> and defaults the receivable account', async () => {
     const a = await partners.create(
@@ -307,5 +354,61 @@ describe('PartnersService (FR-301)', () => {
     expect(tx.meta.total).toBe(1);
     expect(tx.data[0].amountBase).toBe(100);
     expect(tx.data[0].side).toBe(JournalSide.DEBIT);
+  });
+
+  it('produces a statement with opening balance, running balance, totals, and LBP conversion', async () => {
+    const cust = await partners.create(
+      { name: 'Statement Cust', isCustomer: true },
+      caller,
+    );
+    await prisma.exchangeRate.create({
+      data: {
+        companyId,
+        currencyCode: 'LBP',
+        rateType: 'Official',
+        effectiveDate: new Date('2026-01-01'),
+        rate: 89500,
+      },
+    });
+    // Before the window (opening): a 100 sale on 2026-01-15.
+    await postAr(cust.id, '2026-01-15', JournalSide.DEBIT, 100);
+    // In the window: a 250 sale, then a 50 payment (AR credit).
+    await postAr(cust.id, '2026-03-01', JournalSide.DEBIT, 250);
+    await postAr(cust.id, '2026-03-10', JournalSide.CREDIT, 50);
+
+    const st = await partners.statement(cust.id, caller, {
+      from: '2026-02-01',
+      to: '2026-03-31',
+    });
+
+    expect(st.orientation).toBe('receivable');
+    expect(st.openingBalanceBase).toBe(100);
+    expect(st.rows).toHaveLength(2);
+    expect(st.rows[0].runningBalanceBase).toBe(350); // 100 + 250
+    expect(st.rows[1].runningBalanceBase).toBe(300); // 350 - 50
+    expect(st.totalDebitBase).toBe(250);
+    expect(st.totalCreditBase).toBe(50);
+    expect(st.closingBalanceBase).toBe(300);
+    // LBP conversion at 89500/USD.
+    expect(st.conversion?.rate).toBe(89500);
+    expect(st.openingBalanceDisplay).toBe(100 * 89500);
+    expect(st.closingBalanceDisplay).toBe(300 * 89500);
+  });
+
+  it('returns null LBP columns when no exchange rate is on file', async () => {
+    const cust = await partners.create(
+      { name: 'No-Rate Cust', isCustomer: true },
+      caller,
+    );
+    await postAr(cust.id, '2026-05-02', JournalSide.DEBIT, 40);
+    const st = await partners.statement(cust.id, caller, {
+      from: '2026-05-01',
+      to: '2026-05-31',
+      rateType: 'NonExistentType',
+    });
+    expect(st.conversion).toBeNull();
+    expect(st.closingBalanceBase).toBe(40);
+    expect(st.closingBalanceDisplay).toBeNull();
+    expect(st.rows[0].runningBalanceDisplay).toBeNull();
   });
 });

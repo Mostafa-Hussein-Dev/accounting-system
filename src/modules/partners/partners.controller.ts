@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -10,8 +12,10 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -25,6 +29,9 @@ import { QueryPartnersDto } from './dto/query-partners.dto';
 import { PartnerResponseDto } from './dto/partner-response.dto';
 import { PartnerBalanceResponseDto } from './dto/partner-balance-response.dto';
 import { PartnerTransactionRowDto } from './dto/partner-transaction-response.dto';
+import { QueryStatementDto } from './dto/query-statement.dto';
+import { PartnerStatementResponseDto } from './dto/partner-statement-response.dto';
+import { StatementExportService } from './statement-export.service';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -39,7 +46,10 @@ import { RequirePermissions } from '../casl/decorators/require-permissions.decor
 @UseGuards(JwtAuthGuard, CompanyMembershipGuard, PermissionsGuard)
 @Controller('partners')
 export class PartnersController {
-  constructor(private readonly partnersService: PartnersService) {}
+  constructor(
+    private readonly partnersService: PartnersService,
+    private readonly statementExport: StatementExportService,
+  ) {}
 
   @Post()
   @RequirePermissions({ action: 'create', subject: 'Partner' })
@@ -150,6 +160,77 @@ export class PartnersController {
     @CurrentUser() caller: AuthenticatedUser,
   ): Promise<Paginated<PartnerTransactionRowDto>> {
     return this.partnersService.transactions(id, caller, query);
+  }
+
+  @Get(':id/statement')
+  @RequirePermissions({ action: 'read', subject: 'Partner' })
+  @ApiOperation({
+    summary:
+      'The partner statement (relevé, FR-303) over [from, to]: opening balance, each posted transaction with a role-oriented running balance, and a closing balance — in base USD and converted to LBP at the rate in force on `to`.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Partner statement',
+    type: PartnerStatementResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid date range' })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  @ApiResponse({ status: 404, description: 'Partner not found' })
+  statement(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: QueryStatementDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<PartnerStatementResponseDto> {
+    return this.partnersService.statement(id, caller, query);
+  }
+
+  @Get(':id/statement/export')
+  @RequirePermissions({ action: 'read', subject: 'Partner' })
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({
+    summary:
+      'Download the partner statement as a PDF or Excel file. Same data as GET /statement; ?format=pdf (default) or excel.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Statement file (application/pdf or spreadsheet)',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid format or date range' })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  @ApiResponse({ status: 404, description: 'Partner not found' })
+  async exportStatement(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: QueryStatementDto,
+    @Query('format') format = 'pdf',
+    @CurrentUser() caller: AuthenticatedUser,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (format !== 'pdf' && format !== 'excel') {
+      throw new BadRequestException({
+        code: 'INVALID_EXPORT_FORMAT',
+        message: "format must be 'pdf' or 'excel'.",
+        field: 'format',
+      });
+    }
+    const statement = await this.partnersService.statement(id, caller, query);
+    const base = `statement-${statement.ref}-${statement.from}-${statement.to}`;
+    if (format === 'excel') {
+      const buffer = await this.statementExport.toExcel(statement);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${base}.xlsx"`,
+      );
+      res.end(buffer);
+      return;
+    }
+    const buffer = await this.statementExport.toPdf(statement);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${base}.pdf"`);
+    res.end(buffer);
   }
 
   @Patch(':id')

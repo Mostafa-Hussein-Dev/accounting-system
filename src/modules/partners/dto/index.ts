@@ -5,3 +5,5 @@ export * from './query-partners.dto';
 export * from './partner-response.dto';
 export * from './partner-balance-response.dto';
 export * from './partner-transaction-response.dto';
+export * from './query-statement.dto';
+export * from './partner-statement-response.dto';

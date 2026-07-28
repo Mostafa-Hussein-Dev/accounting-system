@@ -3877,6 +3877,81 @@
           "response": []
         },
         {
+          "name": "Get partner statement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners/{{partnerId}}/statement?from=2026-01-01&to=2026-12-31&rateType=Official",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}",
+                "statement"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "rateType",
+                  "value": "Official",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Partner statement / relevé (FR-303) over [from,to]: opening balance, each posted transaction with a role-oriented running balance, and closing balance — in base USD and converted to LBP at the rate in force on 'to' (rateType default Official). Empty LBP columns if no rate on file."
+          },
+          "response": []
+        },
+        {
+          "name": "Download partner statement (PDF/Excel)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners/{{partnerId}}/statement/export?from=2026-01-01&to=2026-12-31&rateType=Official&format=pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}",
+                "statement",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "rateType",
+                  "value": "Official",
+                  "disabled": true
+                },
+                {
+                  "key": "format",
+                  "value": "pdf"
+                }
+              ]
+            },
+            "description": "Same data as the statement, as a downloadable file. format=pdf (default) or excel. In Postman use \"Send and Download\" to save the file."
+          },
+          "response": []
+        },
+        {
           "name": "Update partner",
           "request": {
             "method": "PATCH",

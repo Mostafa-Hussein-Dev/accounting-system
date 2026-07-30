@@ -26,6 +26,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'Colour',
   'Item',
   'ItemVariant',
+  'ItemBarcode',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

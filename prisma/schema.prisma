@@ -156,6 +156,18 @@ model Company {
   journalEntries    JournalEntry[]
   journalLines      JournalLine[]
   partners          Partner[]
+  uomCategories     UomCategory[]
+  uoms              Uom[]
+  itemCategories    ItemCategory[]
+  brands            Brand[]
+  families          Family[]
+  sizes             Size[]
+  colours           Colour[]
+  items             Item[]
+  itemVariants      ItemVariant[]
+  itemBarcodes      ItemBarcode[]
+  pricelists        Pricelist[]
+  pricelistLines    PricelistLine[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -187,6 +199,8 @@ model Currency {
   restrictedAccounts Account[]
   baseForCompanies   Company[]      @relation("CompanyBaseCurrency")
   creditPartners     Partner[]      @relation("PartnerCreditCurrency")
+  pricedItems        Item[]         @relation("ItemPriceCurrency")
+  pricelists         Pricelist[]    @relation("PricelistCurrency")
 
   @@map("currencies")
 }
@@ -321,6 +335,8 @@ model TaxRate {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  defaultForItems Item[] @relation("ItemDefaultTax")
 
   @@index([companyId])
   @@index([companyId, treatment, effectiveDate])
@@ -844,4 +860,346 @@ model PartnerAddress {
 
   @@index([partnerId])
   @@map("partner_addresses")
+}
+
+// Units of measure (FR-401), modelled after Odoo uom.category + uom.uom. Units
+// only convert WITHIN a category. `factor` = how many REFERENCE units make one
+// of this unit (reference = 1; a dozen = 12; a gram against a kg reference =
+// 0.001), so converting qty A→B in the same category is qty × factorA ÷ factorB.
+enum UomType {
+  REFERENCE
+  BIGGER
+  SMALLER
+}
+
+model UomCategory {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  units Uom[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("uom_categories")
+}
+
+model Uom {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  categoryId String      @map("category_id") @db.Uuid
+  category   UomCategory @relation(fields: [categoryId], references: [id])
+
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  type     UomType
+  // Reference units per one of this unit (reference = 1).
+  factor   Decimal @default(1) @db.Decimal(20, 6)
+  rounding Decimal @default(0.01) @db.Decimal(20, 6)
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  baseItems     Item[] @relation("ItemBaseUom")
+  salesItems    Item[] @relation("ItemSalesUom")
+  purchaseItems Item[] @relation("ItemPurchaseUom")
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([categoryId])
+  @@map("uoms")
+}
+
+// Catalogue lookups (FR-401): simple tenant-scoped reference lists used by items
+// (category/brand/family) and variants (size/colour). Hard-deletable config data.
+model ItemCategory {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  // Self-nesting hierarchy (a parent is always in the same company).
+  parentId String?        @map("parent_id") @db.Uuid
+  parent   ItemCategory?  @relation("ItemCategoryTree", fields: [parentId], references: [id])
+  children ItemCategory[] @relation("ItemCategoryTree")
+
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items Item[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([parentId])
+  @@map("item_categories")
+}
+
+model Brand {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  nameAr    String?  @map("name_ar")
+  nameFr    String?  @map("name_fr")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items Item[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("brands")
+}
+
+model Family {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  nameAr    String?  @map("name_ar")
+  nameFr    String?  @map("name_fr")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items Item[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("families")
+}
+
+model Size {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  nameAr    String?  @map("name_ar")
+  nameFr    String?  @map("name_fr")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  variants ItemVariant[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("sizes")
+}
+
+model Colour {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  nameAr    String?  @map("name_ar")
+  nameFr    String?  @map("name_fr")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  variants ItemVariant[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("colours")
+}
+
+// Item master / product catalogue (FR-401, legacy GOODS), modelled after Odoo
+// product.template. Tenant-scoped, soft-deleted (docs/MODELS.md). Prices are a
+// base cost + sale in `priceCurrency` (company base); pricelists (FR-401) layer
+// currency-specific sale prices on top. `vatTreatment` reuses the tax enum and
+// `defaultTaxRateId` sets the item's default VAT rate (resolves the FR-105
+// deferred "item default VAT"). Sales/purchase UoMs must share the base UoM's
+// category (enforced in ItemsService). Variants/barcodes hang off this.
+model Item {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  code        String
+  name        String
+  nameAr      String? @map("name_ar")
+  nameFr      String? @map("name_fr")
+  nameEn      String? @map("name_en")
+  description String?
+
+  categoryId String?       @map("category_id") @db.Uuid
+  category   ItemCategory? @relation(fields: [categoryId], references: [id])
+  brandId    String?       @map("brand_id") @db.Uuid
+  brand      Brand?        @relation(fields: [brandId], references: [id])
+  familyId   String?       @map("family_id") @db.Uuid
+  family     Family?       @relation(fields: [familyId], references: [id])
+
+  baseUomId     String  @map("base_uom_id") @db.Uuid
+  baseUom       Uom     @relation("ItemBaseUom", fields: [baseUomId], references: [id])
+  salesUomId    String? @map("sales_uom_id") @db.Uuid
+  salesUom      Uom?    @relation("ItemSalesUom", fields: [salesUomId], references: [id])
+  purchaseUomId String? @map("purchase_uom_id") @db.Uuid
+  purchaseUom   Uom?    @relation("ItemPurchaseUom", fields: [purchaseUomId], references: [id])
+
+  costPrice     Decimal  @default(0) @map("cost_price") @db.Decimal(20, 4)
+  salePrice     Decimal  @default(0) @map("sale_price") @db.Decimal(20, 4)
+  priceCurrency String   @map("price_currency")
+  currency      Currency @relation("ItemPriceCurrency", fields: [priceCurrency], references: [code])
+
+  vatTreatment     TaxTreatment @default(STANDARD) @map("vat_treatment")
+  defaultTaxRateId String?      @map("default_tax_rate_id") @db.Uuid
+  defaultTaxRate   TaxRate?     @relation("ItemDefaultTax", fields: [defaultTaxRateId], references: [id])
+
+  hasSize     Boolean @default(false) @map("has_size")
+  hasColour   Boolean @default(false) @map("has_colour")
+  trackSerial Boolean @default(false) @map("track_serial")
+  trackExpiry Boolean @default(false) @map("track_expiry")
+
+  imageUrls String[] @default([]) @map("image_urls")
+
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  variants       ItemVariant[]
+  barcodes       ItemBarcode[]
+  pricelistLines PricelistLine[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([categoryId])
+  @@index([deletedAt])
+  @@map("items")
+}
+
+// A concrete size × colour variant of an item (FR-401, legacy GoodsSizeBar/
+// GOODSCOLOR). Tenant-scoped (companyId denormalized). At most one variant per
+// (item, size, colour) combination; sku is optional and unique per company.
+model ItemVariant {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  itemId String @map("item_id") @db.Uuid
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  sizeId   String? @map("size_id") @db.Uuid
+  size     Size?   @relation(fields: [sizeId], references: [id])
+  colourId String? @map("colour_id") @db.Uuid
+  colour   Colour? @relation(fields: [colourId], references: [id])
+
+  sku      String?
+  isActive Boolean @default(true) @map("is_active")
+
+  barcodes ItemBarcode[]
+
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  pricelistLines PricelistLine[]
+
+  @@unique([itemId, sizeId, colourId])
+  @@unique([companyId, sku])
+  @@index([itemId])
+  @@index([companyId])
+  @@map("item_variants")
+}
+
+// One of possibly many barcodes for an item or a specific variant (FR-401,
+// legacy GoodsBarCode/barcodes). Tenant-scoped; the barcode string is unique per
+// company. At most one primary per item (enforced in BarcodesService).
+model ItemBarcode {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  itemId String @map("item_id") @db.Uuid
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  barcode   String
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, barcode])
+  @@index([itemId])
+  @@index([variantId])
+  @@index([companyId])
+  @@map("item_barcodes")
+}
+
+// A price list (FR-401, Odoo product.pricelist), each tied to a currency, giving
+// items/variants a fixed sale price in that currency. Multiple lists per company;
+// one may be the default. Fixed prices only — formula/percentage rules deferred.
+model Pricelist {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  name         String
+  currencyCode String   @map("currency_code")
+  currency     Currency @relation("PricelistCurrency", fields: [currencyCode], references: [code])
+  isDefault    Boolean  @default(false) @map("is_default")
+  isActive     Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lines PricelistLine[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("pricelists")
+}
+
+// One fixed price in a list: for an item (or a specific variant) at/above a
+// minimum quantity (a quantity break). Odoo product.pricelist.item, fixed form.
+model PricelistLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  pricelistId String    @map("pricelist_id") @db.Uuid
+  pricelist   Pricelist @relation(fields: [pricelistId], references: [id], onDelete: Cascade)
+
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  price  Decimal @db.Decimal(20, 4)
+  minQty Decimal @default(1) @map("min_qty") @db.Decimal(20, 3)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([pricelistId, itemId, variantId, minQty])
+  @@index([pricelistId])
+  @@index([itemId])
+  @@map("pricelist_lines")
 }

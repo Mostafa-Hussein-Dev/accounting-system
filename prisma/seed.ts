@@ -367,6 +367,78 @@ const PERMISSIONS = [
     action: 'delete',
     description: 'Delete customers/suppliers',
   },
+  {
+    key: 'uom.read',
+    subject: 'Uom',
+    action: 'read',
+    description: 'View units of measure',
+  },
+  {
+    key: 'uom.create',
+    subject: 'Uom',
+    action: 'create',
+    description: 'Create units of measure',
+  },
+  {
+    key: 'uom.update',
+    subject: 'Uom',
+    action: 'update',
+    description: 'Edit units of measure',
+  },
+  {
+    key: 'uom.delete',
+    subject: 'Uom',
+    action: 'delete',
+    description: 'Delete units of measure',
+  },
+  {
+    key: 'item.read',
+    subject: 'Item',
+    action: 'read',
+    description: 'View items and catalogue lookups',
+  },
+  {
+    key: 'item.create',
+    subject: 'Item',
+    action: 'create',
+    description: 'Create items and catalogue lookups',
+  },
+  {
+    key: 'item.update',
+    subject: 'Item',
+    action: 'update',
+    description: 'Edit items and catalogue lookups',
+  },
+  {
+    key: 'item.delete',
+    subject: 'Item',
+    action: 'delete',
+    description: 'Delete items and catalogue lookups',
+  },
+  {
+    key: 'pricelist.read',
+    subject: 'Pricelist',
+    action: 'read',
+    description: 'View price lists and resolve prices',
+  },
+  {
+    key: 'pricelist.create',
+    subject: 'Pricelist',
+    action: 'create',
+    description: 'Create price lists',
+  },
+  {
+    key: 'pricelist.update',
+    subject: 'Pricelist',
+    action: 'update',
+    description: 'Edit price lists and their lines',
+  },
+  {
+    key: 'pricelist.delete',
+    subject: 'Pricelist',
+    action: 'delete',
+    description: 'Delete price lists',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -417,6 +489,9 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'sequence.read',
         'journal.read',
         'partner.read',
+        'uom.read',
+        'item.read',
+        'pricelist.read',
       ],
     },
   ];

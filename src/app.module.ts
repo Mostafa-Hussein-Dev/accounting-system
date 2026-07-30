@@ -18,6 +18,7 @@ import { InvitationsModule } from './modules/invitations/invitations.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { PartnersModule } from './modules/partners/partners.module';
 import { UomModule } from './modules/uom/uom.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -41,6 +42,7 @@ import { HealthController } from './health/health.controller';
     AuditModule,
     PartnersModule,
     UomModule,
+    CatalogModule,
   ],
   controllers: [HealthController],
   providers: [],

@@ -158,6 +158,11 @@ model Company {
   partners          Partner[]
   uomCategories     UomCategory[]
   uoms              Uom[]
+  itemCategories    ItemCategory[]
+  brands            Brand[]
+  families          Family[]
+  sizes             Size[]
+  colours           Colour[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -904,4 +909,99 @@ model Uom {
   @@index([companyId])
   @@index([categoryId])
   @@map("uoms")
+}
+
+// Catalogue lookups (FR-401): simple tenant-scoped reference lists used by items
+// (category/brand/family) and variants (size/colour). Hard-deletable config data.
+model ItemCategory {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  // Self-nesting hierarchy (a parent is always in the same company).
+  parentId String?        @map("parent_id") @db.Uuid
+  parent   ItemCategory?  @relation("ItemCategoryTree", fields: [parentId], references: [id])
+  children ItemCategory[] @relation("ItemCategoryTree")
+
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([parentId])
+  @@map("item_categories")
+}
+
+model Brand {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  nameAr    String?  @map("name_ar")
+  nameFr    String?  @map("name_fr")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("brands")
+}
+
+model Family {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  nameAr    String?  @map("name_ar")
+  nameFr    String?  @map("name_fr")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("families")
+}
+
+model Size {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  nameAr    String?  @map("name_ar")
+  nameFr    String?  @map("name_fr")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("sizes")
+}
+
+model Colour {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  nameAr    String?  @map("name_ar")
+  nameFr    String?  @map("name_fr")
+  nameEn    String?  @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("colours")
 }

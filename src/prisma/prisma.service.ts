@@ -19,6 +19,11 @@ const TENANT_SCOPED_MODELS = new Set([
   'Partner',
   'UomCategory',
   'Uom',
+  'ItemCategory',
+  'Brand',
+  'Family',
+  'Size',
+  'Colour',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

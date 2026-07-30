@@ -27,6 +27,8 @@ const TENANT_SCOPED_MODELS = new Set([
   'Item',
   'ItemVariant',
   'ItemBarcode',
+  'Pricelist',
+  'PricelistLine',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

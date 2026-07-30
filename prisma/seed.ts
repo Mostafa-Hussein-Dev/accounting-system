@@ -415,6 +415,30 @@ const PERMISSIONS = [
     action: 'delete',
     description: 'Delete items and catalogue lookups',
   },
+  {
+    key: 'pricelist.read',
+    subject: 'Pricelist',
+    action: 'read',
+    description: 'View price lists and resolve prices',
+  },
+  {
+    key: 'pricelist.create',
+    subject: 'Pricelist',
+    action: 'create',
+    description: 'Create price lists',
+  },
+  {
+    key: 'pricelist.update',
+    subject: 'Pricelist',
+    action: 'update',
+    description: 'Edit price lists and their lines',
+  },
+  {
+    key: 'pricelist.delete',
+    subject: 'Pricelist',
+    action: 'delete',
+    description: 'Delete price lists',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -467,6 +491,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'partner.read',
         'uom.read',
         'item.read',
+        'pricelist.read',
       ],
     },
   ];

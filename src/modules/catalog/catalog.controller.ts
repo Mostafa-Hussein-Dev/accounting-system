@@ -88,6 +88,11 @@ abstract class SimpleLookupController {
 @Controller('brands')
 export class BrandsController extends SimpleLookupController {
   protected kind: LookupKind = 'brand';
+  // Explicit constructor so Nest emits DI metadata (a subclass without its own
+  // constructor gets no design:paramtypes and the service resolves to undefined).
+  constructor(svc: CatalogService) {
+    super(svc);
+  }
 }
 
 @ApiTags('Catalog')
@@ -96,6 +101,9 @@ export class BrandsController extends SimpleLookupController {
 @Controller('families')
 export class FamiliesController extends SimpleLookupController {
   protected kind: LookupKind = 'family';
+  constructor(svc: CatalogService) {
+    super(svc);
+  }
 }
 
 @ApiTags('Catalog')
@@ -104,6 +112,9 @@ export class FamiliesController extends SimpleLookupController {
 @Controller('sizes')
 export class SizesController extends SimpleLookupController {
   protected kind: LookupKind = 'size';
+  constructor(svc: CatalogService) {
+    super(svc);
+  }
 }
 
 @ApiTags('Catalog')
@@ -112,6 +123,9 @@ export class SizesController extends SimpleLookupController {
 @Controller('colours')
 export class ColoursController extends SimpleLookupController {
   protected kind: LookupKind = 'colour';
+  constructor(svc: CatalogService) {
+    super(svc);
+  }
 }
 
 // Item categories carry a parentId, so they use the category DTOs (otherwise

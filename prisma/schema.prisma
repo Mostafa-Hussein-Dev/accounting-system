@@ -163,6 +163,7 @@ model Company {
   families          Family[]
   sizes             Size[]
   colours           Colour[]
+  items             Item[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -194,6 +195,7 @@ model Currency {
   restrictedAccounts Account[]
   baseForCompanies   Company[]      @relation("CompanyBaseCurrency")
   creditPartners     Partner[]      @relation("PartnerCreditCurrency")
+  pricedItems        Item[]         @relation("ItemPriceCurrency")
 
   @@map("currencies")
 }
@@ -328,6 +330,8 @@ model TaxRate {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  defaultForItems Item[] @relation("ItemDefaultTax")
 
   @@index([companyId])
   @@index([companyId, treatment, effectiveDate])
@@ -905,6 +909,10 @@ model Uom {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  baseItems     Item[] @relation("ItemBaseUom")
+  salesItems    Item[] @relation("ItemSalesUom")
+  purchaseItems Item[] @relation("ItemPurchaseUom")
+
   @@unique([companyId, name])
   @@index([companyId])
   @@index([categoryId])
@@ -932,6 +940,8 @@ model ItemCategory {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  items Item[]
+
   @@unique([companyId, name])
   @@index([companyId])
   @@index([parentId])
@@ -950,6 +960,8 @@ model Brand {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  items Item[]
+
   @@unique([companyId, name])
   @@index([companyId])
   @@map("brands")
@@ -966,6 +978,8 @@ model Family {
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  items Item[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -1004,4 +1018,65 @@ model Colour {
   @@unique([companyId, name])
   @@index([companyId])
   @@map("colours")
+}
+
+// Item master / product catalogue (FR-401, legacy GOODS), modelled after Odoo
+// product.template. Tenant-scoped, soft-deleted (docs/MODELS.md). Prices are a
+// base cost + sale in `priceCurrency` (company base); pricelists (FR-401) layer
+// currency-specific sale prices on top. `vatTreatment` reuses the tax enum and
+// `defaultTaxRateId` sets the item's default VAT rate (resolves the FR-105
+// deferred "item default VAT"). Sales/purchase UoMs must share the base UoM's
+// category (enforced in ItemsService). Variants/barcodes hang off this.
+model Item {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  code        String
+  name        String
+  nameAr      String? @map("name_ar")
+  nameFr      String? @map("name_fr")
+  nameEn      String? @map("name_en")
+  description String?
+
+  categoryId String?       @map("category_id") @db.Uuid
+  category   ItemCategory? @relation(fields: [categoryId], references: [id])
+  brandId    String?       @map("brand_id") @db.Uuid
+  brand      Brand?        @relation(fields: [brandId], references: [id])
+  familyId   String?       @map("family_id") @db.Uuid
+  family     Family?       @relation(fields: [familyId], references: [id])
+
+  baseUomId     String  @map("base_uom_id") @db.Uuid
+  baseUom       Uom     @relation("ItemBaseUom", fields: [baseUomId], references: [id])
+  salesUomId    String? @map("sales_uom_id") @db.Uuid
+  salesUom      Uom?    @relation("ItemSalesUom", fields: [salesUomId], references: [id])
+  purchaseUomId String? @map("purchase_uom_id") @db.Uuid
+  purchaseUom   Uom?    @relation("ItemPurchaseUom", fields: [purchaseUomId], references: [id])
+
+  costPrice     Decimal  @default(0) @map("cost_price") @db.Decimal(20, 4)
+  salePrice     Decimal  @default(0) @map("sale_price") @db.Decimal(20, 4)
+  priceCurrency String   @map("price_currency")
+  currency      Currency @relation("ItemPriceCurrency", fields: [priceCurrency], references: [code])
+
+  vatTreatment     TaxTreatment @default(STANDARD) @map("vat_treatment")
+  defaultTaxRateId String?      @map("default_tax_rate_id") @db.Uuid
+  defaultTaxRate   TaxRate?     @relation("ItemDefaultTax", fields: [defaultTaxRateId], references: [id])
+
+  hasSize     Boolean @default(false) @map("has_size")
+  hasColour   Boolean @default(false) @map("has_colour")
+  trackSerial Boolean @default(false) @map("track_serial")
+  trackExpiry Boolean @default(false) @map("track_expiry")
+
+  imageUrls String[] @default([]) @map("image_urls")
+
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([categoryId])
+  @@index([deletedAt])
+  @@map("items")
 }

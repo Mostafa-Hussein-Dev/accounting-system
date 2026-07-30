@@ -24,6 +24,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'Family',
   'Size',
   'Colour',
+  'Item',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

@@ -19,6 +19,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { PartnersModule } from './modules/partners/partners.module';
 import { UomModule } from './modules/uom/uom.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { ItemsModule } from './modules/items/items.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -43,6 +44,7 @@ import { HealthController } from './health/health.controller';
     PartnersModule,
     UomModule,
     CatalogModule,
+    ItemsModule,
   ],
   controllers: [HealthController],
   providers: [],

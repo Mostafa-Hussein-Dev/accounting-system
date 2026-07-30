@@ -7,7 +7,7 @@ forget. Keep this list updated as modules land.
 | # | Deferred item | Where | Blocked on | What to do when unblocked |
 |---|---|---|---|---|
 | 1 | `Branch.stockLocationId` is a nullable UUID with **no foreign key** | `prisma/schema.prisma` (Branch), `src/modules/branches/` | Inventory `Location` model (FR-401 / FR-404) | Add the FK to `locations`, backfill, and change the column from nullable to **NOT NULL** in the same migration. |
-| 2 | **Default VAT treatment per item / category** (FR-105 acceptance criterion #2) is not implemented | Taxes module (FR-105) | Item master (FR-401) | Add a `defaultTaxRateId` / VAT-treatment field to `Item` (and/or category) referencing `tax_rates`, and default a sales/purchase line's VAT from it. |
+| 2 | ~~**Default VAT treatment per item**~~ — **RESOLVED (FR-401)**: `Item.vatTreatment` (STANDARD/ZERO/EXEMPT) + `Item.defaultTaxRateId` FK to `tax_rates` (migration `20260730140000_add_items`). Invoicing will default a sale/purchase line's VAT from these. | `prisma/schema.prisma` (Item) | — | — |
 | 3 | ~~**Document numbers are not yet consumed**~~ — **RESOLVED (FR-901)**: the GL posting path now calls `SequencesService.nextNumber(...)` for `JOURNAL_ENTRY`. Still applies to invoicing/purchasing/payments when those are built. | Sequences module (FR-106) | Invoicing / Purchasing / Payments (FR-5xx/6xx/8xx) | When creating each document, call `nextNumber(companyId, branchId, docType, documentDate, tx)` inside its transaction (see `PostingService.post` for the reference pattern). |
 | 4 | ~~**`JournalLine.partnerId`** has no FK~~ — **RESOLVED (FR-301)**: FK to `partners` added (migration `20260727130000_add_partners`). Partner balances/statements derive from `journalLine.partnerId`. **Still open:** no path yet WRITES partnerId onto a line (see "Partner postings" note below). | `prisma/schema.prisma` (JournalLine) | — | — |
 | 5 | **`JournalLine.costCenterId`** is a nullable UUID with **no foreign key** | `prisma/schema.prisma` (JournalLine) | Cost-centre / analytic dimension model (not yet planned) | Add the FK once cost centres exist; expose it on the manual-JE line DTO then. |
@@ -183,6 +183,29 @@ rateType default Official; null columns when no rate). `GET
 yet — MailerService logs in dev; nodemailer already supports attachments),
 WhatsApp delivery (needs a provider e.g. Twilio), and translated statement labels
 (AR/FR/EN — tied to FR-107 i18n).
+
+### FR-401 — Item master / catalogue — BUILT
+Delivered across `src/modules/uom`, `src/modules/catalog`, `src/modules/items`,
+`src/modules/pricing` (migrations `20260730120000`–`20260730170000`):
+- **UoM** (uom_categories + uoms) with category-scoped conversion (Odoo uom).
+- **Lookups**: item categories (self-nesting), brands, families, sizes, colours.
+- **Item** master: code, trilingual names, category/brand/family, base + sales/
+  purchase UoM (same-category enforced), cost/sale price in a priceCurrency,
+  `vatTreatment` + `defaultTaxRateId` (resolves deferred #2), the size/colour/
+  serial/expiry flags, image URLs; tenant-scoped, soft-deleted.
+- **Variants** (size×colour, matrix generation), **barcodes** (multiple, primary,
+  scanner lookup), **multi-currency pricelists** + a price resolver.
+
+**Deferred (agreed with the user, tied to other foundations):**
+- **FR-402 stock ledger** — `location` + `stock_movement`, on-hand/valuation, and
+  the `Branch.stockLocationId` FK (deferred #1) — the next module.
+- **Image upload/cloud storage** — items store image **URLs** only; actual
+  upload/object storage is out of scope.
+- **FR-406 barcode/label printing** — design + print templates.
+- **Serial/expiry tracking DATA** — the item flags (`trackSerial`/`trackExpiry`)
+  are stored; capturing actual serials/expiries happens at stock/invoice time.
+- **Pricelist formula/percentage rules** — pricelists do FIXED prices only
+  (Odoo's discount/formula rule types are not built).
 
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist

@@ -2226,6 +2226,220 @@
       ]
     },
     {
+      "name": "Catalog",
+      "item": [
+        {
+          "name": "Create brand",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('brandId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/brands",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "brands"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List brands",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/brands",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "brands"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create item category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('itemCategoryId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/item-categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "item-categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Electronics\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Self-nesting; pass parentId to nest."
+          },
+          "response": []
+        },
+        {
+          "name": "List item categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/item-categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "item-categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create size",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('sizeId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sizes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sizes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"M\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create colour",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('colourId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/colours",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "colours"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Red\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create family",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/families",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "families"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"General\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Companies",
       "item": [
         {
@@ -3658,6 +3872,344 @@
       ]
     },
     {
+      "name": "Items",
+      "item": [
+        {
+          "name": "Create item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('itemId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SKU-1001\",\n  \"name\": \"Wireless Mouse\",\n  \"baseUomId\": \"{{baseUomId}}\",\n  \"brandId\": \"{{brandId}}\",\n  \"categoryId\": \"{{itemCategoryId}}\",\n  \"salePrice\": 9.99,\n  \"costPrice\": 5,\n  \"vatTreatment\": \"STANDARD\",\n  \"hasSize\": true,\n  \"hasColour\": true,\n  \"imageUrls\": [\n    \"https://cdn/x.png\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "baseUomId required; sales/purchase UoM must share its category; priceCurrency defaults to company base."
+          },
+          "response": []
+        },
+        {
+          "name": "List items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items?page=1&limit=20&brandId={{brandId}}&q=mouse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "brandId",
+                  "value": "{{brandId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "q",
+                  "value": "mouse",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get item",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update item",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"salePrice\": 11.5,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add variant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('variantId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}/variants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}",
+                "variants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sizeId\": \"{{sizeId}}\",\n  \"colourId\": \"{{colourId}}\",\n  \"sku\": \"SKU-1001-M-RED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate variant matrix",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}/variants/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}",
+                "variants",
+                "generate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sizeIds\": [\n    \"{{sizeId}}\"\n  ],\n  \"colourIds\": [\n    \"{{colourId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Cartesian size×colour, skipping existing."
+          },
+          "response": []
+        },
+        {
+          "name": "List variants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}/variants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}",
+                "variants"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add barcode",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}/barcodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}",
+                "barcodes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"barcode\": \"6291041500213\",\n  \"isPrimary\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List barcodes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}/barcodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}",
+                "barcodes"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Lookup barcode",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/barcodes?barcode=6291041500213",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "barcodes"
+              ],
+              "query": [
+                {
+                  "key": "barcode",
+                  "value": "6291041500213"
+                }
+              ]
+            },
+            "description": "Resolve a scanned barcode to its item/variant."
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve item price",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}/price?qty=1&pricelistId={{pricelistId}}&variantId={{variantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}",
+                "price"
+              ],
+              "query": [
+                {
+                  "key": "qty",
+                  "value": "1"
+                },
+                {
+                  "key": "pricelistId",
+                  "value": "{{pricelistId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "variantId",
+                  "value": "{{variantId}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Pricelist line (default list, variant/qty aware) or base sale price."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete item",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Partners",
       "item": [
         {
@@ -4050,6 +4602,113 @@
               "body": "{\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-...\",\n      \"key\": \"account.read\",\n      \"subject\": \"Account\",\n      \"action\": \"read\",\n      \"description\": \"View chart of accounts\"\n    },\n    {\n      \"id\": \"b2c3d4e5-...\",\n      \"key\": \"journal.post\",\n      \"subject\": \"JournalEntry\",\n      \"action\": \"post\",\n      \"description\": \"Post journal entries to the ledger\"\n    }\n  ],\n  \"meta\": null\n}"
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Pricing",
+      "item": [
+        {
+          "name": "Create pricelist",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('pricelistId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/pricelists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pricelists"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"LBP Retail\",\n  \"currencyCode\": \"LBP\",\n  \"isDefault\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List pricelists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/pricelists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pricelists"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add pricelist line",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/pricelists/{{pricelistId}}/lines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pricelists",
+                "{{pricelistId}}",
+                "lines"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"{{itemId}}\",\n  \"price\": 895000,\n  \"minQty\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Fixed price; add another with a higher minQty for a quantity break."
+          },
+          "response": []
+        },
+        {
+          "name": "List pricelist lines",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/pricelists/{{pricelistId}}/lines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pricelists",
+                "{{pricelistId}}",
+                "lines"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -5065,6 +5724,186 @@
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"TAX_RATE_NOT_FOUND\",\n    \"message\": \"Tax rate with id 7982ef32-db63-4c98-a80d-1534b10e35cc was not found.\",\n    \"field\": null\n  }\n}"
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Units of Measure",
+      "item": [
+        {
+          "name": "Create UoM category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('uomCategoryId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/uom-categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uom-categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Unit\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List UoM categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/uom-categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uom-categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create reference unit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('baseUomId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/uoms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uoms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{uomCategoryId}}\",\n  \"name\": \"Each\",\n  \"type\": \"REFERENCE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "REFERENCE unit (factor forced to 1; one per category)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create bigger unit (Dozen)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/uoms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uoms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{uomCategoryId}}\",\n  \"name\": \"Dozen\",\n  \"type\": \"BIGGER\",\n  \"factor\": 12\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List units",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/uoms?categoryId={{uomCategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uoms"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{uomCategoryId}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Convert quantity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/uoms/convert?qty=2&fromUomId={{baseUomId}}&toUomId={{baseUomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uoms",
+                "convert"
+              ],
+              "query": [
+                {
+                  "key": "qty",
+                  "value": "2"
+                },
+                {
+                  "key": "fromUomId",
+                  "value": "{{baseUomId}}"
+                },
+                {
+                  "key": "toUomId",
+                  "value": "{{baseUomId}}"
+                }
+              ]
+            },
+            "description": "Convert qty between two units of the same category."
+          },
+          "response": []
         }
       ]
     },

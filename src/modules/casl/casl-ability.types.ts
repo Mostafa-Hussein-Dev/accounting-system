@@ -21,5 +21,8 @@ export type Subjects =
   | 'Permission'
   | 'AuditLog'
   | 'Partner'
+  | 'Uom'
+  | 'Item'
+  | 'Pricelist'
   | 'all';
 export type AppAbility = MongoAbility<[Action, Subjects]>;

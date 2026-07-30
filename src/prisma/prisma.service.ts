@@ -17,6 +17,8 @@ const TENANT_SCOPED_MODELS = new Set([
   'JournalEntry',
   'JournalLine',
   'Partner',
+  'UomCategory',
+  'Uom',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

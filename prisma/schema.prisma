@@ -156,6 +156,8 @@ model Company {
   journalEntries    JournalEntry[]
   journalLines      JournalLine[]
   partners          Partner[]
+  uomCategories     UomCategory[]
+  uoms              Uom[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -844,4 +846,62 @@ model PartnerAddress {
 
   @@index([partnerId])
   @@map("partner_addresses")
+}
+
+// Units of measure (FR-401), modelled after Odoo uom.category + uom.uom. Units
+// only convert WITHIN a category. `factor` = how many REFERENCE units make one
+// of this unit (reference = 1; a dozen = 12; a gram against a kg reference =
+// 0.001), so converting qty A→B in the same category is qty × factorA ÷ factorB.
+enum UomType {
+  REFERENCE
+  BIGGER
+  SMALLER
+}
+
+model UomCategory {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  units Uom[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("uom_categories")
+}
+
+model Uom {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  categoryId String      @map("category_id") @db.Uuid
+  category   UomCategory @relation(fields: [categoryId], references: [id])
+
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  type     UomType
+  // Reference units per one of this unit (reference = 1).
+  factor   Decimal @default(1) @db.Decimal(20, 6)
+  rounding Decimal @default(0.01) @db.Decimal(20, 6)
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([categoryId])
+  @@map("uoms")
 }

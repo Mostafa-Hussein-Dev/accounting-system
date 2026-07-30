@@ -367,6 +367,30 @@ const PERMISSIONS = [
     action: 'delete',
     description: 'Delete customers/suppliers',
   },
+  {
+    key: 'uom.read',
+    subject: 'Uom',
+    action: 'read',
+    description: 'View units of measure',
+  },
+  {
+    key: 'uom.create',
+    subject: 'Uom',
+    action: 'create',
+    description: 'Create units of measure',
+  },
+  {
+    key: 'uom.update',
+    subject: 'Uom',
+    action: 'update',
+    description: 'Edit units of measure',
+  },
+  {
+    key: 'uom.delete',
+    subject: 'Uom',
+    action: 'delete',
+    description: 'Delete units of measure',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -417,6 +441,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'sequence.read',
         'journal.read',
         'partner.read',
+        'uom.read',
       ],
     },
   ];

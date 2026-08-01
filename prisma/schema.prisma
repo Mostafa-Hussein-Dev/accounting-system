@@ -38,6 +38,7 @@ enum ControlType {
   VAT_IN
   CASH
   BANK
+  INVENTORY
 }
 
 enum TaxTreatment {
@@ -145,32 +146,38 @@ model Company {
   fiscalYearStartMonth Int      @default(1) @map("fiscal_year_start_month")
   settings             Json     @default("{}")
 
-  members           UserCompany[]
-  userRoles         UserRole[]
-  invitations       Invitation[]
-  roles             Role[]
-  branches          Branch[]
-  exchangeRates     ExchangeRate[]
-  accounts          Account[]
-  taxRates          TaxRate[]
-  documentSequences DocumentSequence[]
-  journalEntries    JournalEntry[]
-  journalLines      JournalLine[]
-  partners          Partner[]
-  uomCategories     UomCategory[]
-  uoms              Uom[]
-  itemCategories    ItemCategory[]
-  brands            Brand[]
-  families          Family[]
-  sizes             Size[]
-  colours           Colour[]
-  items             Item[]
-  itemVariants      ItemVariant[]
-  itemBarcodes      ItemBarcode[]
-  pricelists        Pricelist[]
-  pricelistLines    PricelistLine[]
-  locations         Location[]
-  stockMovements    StockMovement[]
+  members            UserCompany[]
+  userRoles          UserRole[]
+  invitations        Invitation[]
+  roles              Role[]
+  branches           Branch[]
+  exchangeRates      ExchangeRate[]
+  accounts           Account[]
+  taxRates           TaxRate[]
+  documentSequences  DocumentSequence[]
+  journalEntries     JournalEntry[]
+  journalLines       JournalLine[]
+  partners           Partner[]
+  uomCategories      UomCategory[]
+  uoms               Uom[]
+  itemCategories     ItemCategory[]
+  brands             Brand[]
+  families           Family[]
+  sizes              Size[]
+  colours            Colour[]
+  items              Item[]
+  itemVariants       ItemVariant[]
+  itemBarcodes       ItemBarcode[]
+  pricelists         Pricelist[]
+  pricelistLines     PricelistLine[]
+  locations          Location[]
+  stockMovements     StockMovement[]
+  purchaseOrders     PurchaseOrder[]
+  purchaseOrderLines PurchaseOrderLine[]
+  goodsReceipts      GoodsReceipt[]
+  goodsReceiptLines  GoodsReceiptLine[]
+  vendorBills        VendorBill[]
+  vendorBillLines    VendorBillLine[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -200,10 +207,12 @@ model Currency {
 
   exchangeRates      ExchangeRate[]
   restrictedAccounts Account[]
-  baseForCompanies   Company[]      @relation("CompanyBaseCurrency")
-  creditPartners     Partner[]      @relation("PartnerCreditCurrency")
-  pricedItems        Item[]         @relation("ItemPriceCurrency")
-  pricelists         Pricelist[]    @relation("PricelistCurrency")
+  baseForCompanies   Company[]       @relation("CompanyBaseCurrency")
+  creditPartners     Partner[]       @relation("PartnerCreditCurrency")
+  pricedItems        Item[]          @relation("ItemPriceCurrency")
+  pricelists         Pricelist[]     @relation("PricelistCurrency")
+  purchaseOrders     PurchaseOrder[] @relation("POCurrency")
+  vendorBills        VendorBill[]    @relation("VBCurrency")
 
   @@map("currencies")
 }
@@ -339,7 +348,9 @@ model TaxRate {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  defaultForItems Item[] @relation("ItemDefaultTax")
+  defaultForItems    Item[]              @relation("ItemDefaultTax")
+  purchaseOrderLines PurchaseOrderLine[] @relation("POLineTax")
+  vendorBillLines    VendorBillLine[]    @relation("VBLineTax")
 
   @@index([companyId])
   @@index([companyId, treatment, effectiveDate])
@@ -439,6 +450,8 @@ model JournalEntry {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
+  vendorBill VendorBill? @relation("VendorBillJournalEntry")
+
   // Number is unique per company; null (draft) rows are exempt (Postgres treats
   // NULL as distinct), so many drafts coexist.
   @@unique([companyId, entryNumber])
@@ -526,6 +539,9 @@ model Branch {
   documentSequences DocumentSequence[]
   journalEntries    JournalEntry[]
   locations         Location[]         @relation("BranchLocations")
+  purchaseOrders    PurchaseOrder[]    @relation("BranchPurchaseOrders")
+  goodsReceipts     GoodsReceipt[]     @relation("BranchGoodsReceipts")
+  vendorBills       VendorBill[]       @relation("BranchVendorBills")
 
   @@index([companyId])
   @@index([deletedAt])
@@ -834,6 +850,8 @@ model Partner {
   addresses      PartnerAddress[]
   journalLines   JournalLine[]
   stockMovements StockMovement[]
+  purchaseOrders PurchaseOrder[]  @relation("PartnerPurchaseOrders")
+  vendorBills    VendorBill[]     @relation("PartnerVendorBills")
 
   @@unique([companyId, ref])
   @@index([companyId])
@@ -920,6 +938,10 @@ model Uom {
   baseItems     Item[] @relation("ItemBaseUom")
   salesItems    Item[] @relation("ItemSalesUom")
   purchaseItems Item[] @relation("ItemPurchaseUom")
+
+  purchaseOrderLines PurchaseOrderLine[] @relation("UomPurchaseOrderLines")
+  goodsReceiptLines  GoodsReceiptLine[]  @relation("UomGoodsReceiptLines")
+  vendorBillLines    VendorBillLine[]    @relation("UomVendorBillLines")
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -1095,6 +1117,10 @@ model Item {
   pricelistLines PricelistLine[]
   stockMovements StockMovement[]
 
+  purchaseOrderLines PurchaseOrderLine[] @relation("ItemPurchaseOrderLines")
+  goodsReceiptLines  GoodsReceiptLine[]  @relation("ItemGoodsReceiptLines")
+  vendorBillLines    VendorBillLine[]    @relation("ItemVendorBillLines")
+
   @@unique([companyId, code])
   @@index([companyId])
   @@index([categoryId])
@@ -1130,6 +1156,10 @@ model ItemVariant {
   updatedAt      DateTime        @updatedAt @map("updated_at")
   pricelistLines PricelistLine[]
   stockMovements StockMovement[]
+
+  purchaseOrderLines PurchaseOrderLine[] @relation("VariantPurchaseOrderLines")
+  goodsReceiptLines  GoodsReceiptLine[]  @relation("VariantGoodsReceiptLines")
+  vendorBillLines    VendorBillLine[]    @relation("VariantVendorBillLines")
 
   @@unique([itemId, sizeId, colourId])
   @@unique([companyId, sku])
@@ -1269,6 +1299,7 @@ model Location {
   defaultForBranches Branch[]        @relation("BranchDefaultLocation")
   movementsFrom      StockMovement[] @relation("StockMovementFrom")
   movementsTo        StockMovement[] @relation("StockMovementTo")
+  goodsReceipts      GoodsReceipt[]  @relation("LocationGoodsReceipts")
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -1330,6 +1361,9 @@ model StockMovement {
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
+  // The goods-receipt line that generated this movement, if any (FR-501).
+  goodsReceiptLine GoodsReceiptLine? @relation("GoodsReceiptLineMovement")
+
   @@index([companyId])
   @@index([itemId, variantId])
   @@index([fromLocationId])
@@ -1337,4 +1371,276 @@ model StockMovement {
   @@index([partnerId])
   @@index([movementDate])
   @@map("stock_movements")
+}
+
+// ===========================================================================
+// Purchasing (FR-501). PO -> Goods Receipt -> Vendor Bill. The receipt updates
+// stock + moving-average cost (FR-402); the vendor bill posts the GL entry
+// (DR inventory + DR input VAT + CR supplier payable) via PostingService.
+// Money is the 4-field pattern: doc-currency amounts + base (USD) equivalents;
+// rate is "currency units per 1 USD" (base = original / rate).
+// ===========================================================================
+
+enum PurchaseOrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  BILLED
+  CANCELLED
+}
+
+enum GoodsReceiptStatus {
+  DRAFT
+  CONFIRMED
+}
+
+enum VendorBillStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  orderNo    String              @map("order_no")
+  status     PurchaseOrderStatus @default(DRAFT)
+  supplierId String              @map("supplier_id") @db.Uuid
+  supplier   Partner             @relation("PartnerPurchaseOrders", fields: [supplierId], references: [id])
+  branchId   String?             @map("branch_id") @db.Uuid
+  branch     Branch?             @relation("BranchPurchaseOrders", fields: [branchId], references: [id])
+
+  currencyCode String   @map("currency_code")
+  currency     Currency @relation("POCurrency", fields: [currencyCode], references: [code])
+  rate         Decimal  @db.Decimal(20, 6)
+
+  orderDate    DateTime  @map("order_date") @db.Date
+  expectedDate DateTime? @map("expected_date") @db.Date
+  notes        String?
+
+  // Server-computed totals, in document currency and base (USD).
+  subtotal       Decimal @default(0) @db.Decimal(20, 2)
+  vatTotal       Decimal @default(0) @map("vat_total") @db.Decimal(20, 2)
+  grandTotal     Decimal @default(0) @map("grand_total") @db.Decimal(20, 2)
+  subtotalBase   Decimal @default(0) @map("subtotal_base") @db.Decimal(20, 2)
+  vatTotalBase   Decimal @default(0) @map("vat_total_base") @db.Decimal(20, 2)
+  grandTotalBase Decimal @default(0) @map("grand_total_base") @db.Decimal(20, 2)
+
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines    PurchaseOrderLine[]
+  receipts GoodsReceipt[]
+  bills    VendorBill[]
+
+  @@unique([companyId, orderNo])
+  @@index([companyId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  purchaseOrderId String        @map("purchase_order_id") @db.Uuid
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  lineNo    Int          @map("line_no")
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation("ItemPurchaseOrderLines", fields: [itemId], references: [id])
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation("VariantPurchaseOrderLines", fields: [variantId], references: [id])
+  uomId     String       @map("uom_id") @db.Uuid
+  uom       Uom          @relation("UomPurchaseOrderLines", fields: [uomId], references: [id])
+
+  qtyOrdered  Decimal @map("qty_ordered") @db.Decimal(20, 3)
+  qtyReceived Decimal @default(0) @map("qty_received") @db.Decimal(20, 3)
+  unitCost    Decimal @map("unit_cost") @db.Decimal(20, 4)
+
+  // VAT snapshot at line entry (from the item defaults, overridable).
+  taxRateId    String?      @map("tax_rate_id") @db.Uuid
+  taxRate      TaxRate?     @relation("POLineTax", fields: [taxRateId], references: [id])
+  vatTreatment TaxTreatment @default(STANDARD) @map("vat_treatment")
+  ratePct      Decimal      @default(0) @map("rate_pct") @db.Decimal(5, 2)
+
+  netAmount   Decimal @map("net_amount") @db.Decimal(20, 2)
+  vatAmount   Decimal @map("vat_amount") @db.Decimal(20, 2)
+  totalAmount Decimal @map("total_amount") @db.Decimal(20, 2)
+
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  receiptLines GoodsReceiptLine[]
+  billLines    VendorBillLine[]
+
+  @@index([companyId])
+  @@index([purchaseOrderId])
+  @@index([itemId])
+  @@map("purchase_order_lines")
+}
+
+model GoodsReceipt {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  receiptNo       String             @map("receipt_no")
+  status          GoodsReceiptStatus @default(DRAFT)
+  purchaseOrderId String             @map("purchase_order_id") @db.Uuid
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+
+  // Destination INTERNAL location the goods land in.
+  locationId String   @map("location_id") @db.Uuid
+  location   Location @relation("LocationGoodsReceipts", fields: [locationId], references: [id])
+  branchId   String?  @map("branch_id") @db.Uuid
+  branch     Branch?  @relation("BranchGoodsReceipts", fields: [branchId], references: [id])
+
+  receiptDate DateTime @map("receipt_date") @db.Date
+  notes       String?
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lines GoodsReceiptLine[]
+
+  @@unique([companyId, receiptNo])
+  @@index([companyId])
+  @@index([purchaseOrderId])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  goodsReceiptId String       @map("goods_receipt_id") @db.Uuid
+  goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+
+  purchaseOrderLineId String            @map("purchase_order_line_id") @db.Uuid
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id])
+
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation("ItemGoodsReceiptLines", fields: [itemId], references: [id])
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation("VariantGoodsReceiptLines", fields: [variantId], references: [id])
+  uomId     String       @map("uom_id") @db.Uuid
+  uom       Uom          @relation("UomGoodsReceiptLines", fields: [uomId], references: [id])
+
+  qtyReceived  Decimal @map("qty_received") @db.Decimal(20, 3)
+  // Unit cost in BASE currency (doc unitCost / PO rate), frozen for valuation.
+  unitCostBase Decimal @map("unit_cost_base") @db.Decimal(20, 4)
+
+  // The stock movement this line generated on confirm (traceability).
+  stockMovementId String?        @unique @map("stock_movement_id") @db.Uuid
+  stockMovement   StockMovement? @relation("GoodsReceiptLineMovement", fields: [stockMovementId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([goodsReceiptId])
+  @@map("goods_receipt_lines")
+}
+
+model VendorBill {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  billNo          String           @map("bill_no")
+  status          VendorBillStatus @default(DRAFT)
+  supplierId      String           @map("supplier_id") @db.Uuid
+  supplier        Partner          @relation("PartnerVendorBills", fields: [supplierId], references: [id])
+  purchaseOrderId String?          @map("purchase_order_id") @db.Uuid
+  purchaseOrder   PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  branchId        String?          @map("branch_id") @db.Uuid
+  branch          Branch?          @relation("BranchVendorBills", fields: [branchId], references: [id])
+
+  currencyCode String   @map("currency_code")
+  currency     Currency @relation("VBCurrency", fields: [currencyCode], references: [code])
+  rate         Decimal  @db.Decimal(20, 6)
+
+  billDate    DateTime  @map("bill_date") @db.Date
+  dueDate     DateTime? @map("due_date") @db.Date
+  supplierRef String?   @map("supplier_ref")
+  notes       String?
+
+  subtotal       Decimal @default(0) @db.Decimal(20, 2)
+  vatTotal       Decimal @default(0) @map("vat_total") @db.Decimal(20, 2)
+  grandTotal     Decimal @default(0) @map("grand_total") @db.Decimal(20, 2)
+  subtotalBase   Decimal @default(0) @map("subtotal_base") @db.Decimal(20, 2)
+  vatTotalBase   Decimal @default(0) @map("vat_total_base") @db.Decimal(20, 2)
+  grandTotalBase Decimal @default(0) @map("grand_total_base") @db.Decimal(20, 2)
+
+  // The posted GL entry (set on confirm; also stamps JournalEntry.sourceDoc*).
+  journalEntryId String?       @unique @map("journal_entry_id") @db.Uuid
+  journalEntry   JournalEntry? @relation("VendorBillJournalEntry", fields: [journalEntryId], references: [id])
+  postedAt       DateTime?     @map("posted_at")
+
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines VendorBillLine[]
+
+  @@unique([companyId, billNo])
+  @@index([companyId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("vendor_bills")
+}
+
+model VendorBillLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  vendorBillId String     @map("vendor_bill_id") @db.Uuid
+  vendorBill   VendorBill @relation(fields: [vendorBillId], references: [id], onDelete: Cascade)
+
+  purchaseOrderLineId String?            @map("purchase_order_line_id") @db.Uuid
+  purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id])
+
+  lineNo    Int          @map("line_no")
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation("ItemVendorBillLines", fields: [itemId], references: [id])
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation("VariantVendorBillLines", fields: [variantId], references: [id])
+  uomId     String       @map("uom_id") @db.Uuid
+  uom       Uom          @relation("UomVendorBillLines", fields: [uomId], references: [id])
+
+  qty      Decimal @db.Decimal(20, 3)
+  unitCost Decimal @map("unit_cost") @db.Decimal(20, 4)
+
+  taxRateId    String?      @map("tax_rate_id") @db.Uuid
+  taxRate      TaxRate?     @relation("VBLineTax", fields: [taxRateId], references: [id])
+  vatTreatment TaxTreatment @default(STANDARD) @map("vat_treatment")
+  ratePct      Decimal      @default(0) @map("rate_pct") @db.Decimal(5, 2)
+
+  netAmount   Decimal @map("net_amount") @db.Decimal(20, 2)
+  vatAmount   Decimal @map("vat_amount") @db.Decimal(20, 2)
+  totalAmount Decimal @map("total_amount") @db.Decimal(20, 2)
+
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([vendorBillId])
+  @@index([itemId])
+  @@map("vendor_bill_lines")
 }

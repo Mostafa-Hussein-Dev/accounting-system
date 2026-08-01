@@ -356,6 +356,11 @@ export const DEFAULT_CHART: DefaultAccountSeed[] = [
     type: ASSET,
     normalBalance: DEBIT,
     parentNumber: '3',
+    // Inventory valuation control account (FR-402/FR-501). Vendor bills post
+    // DR here; sub-ledger valuation is the stock ledger, so it's non-postable
+    // directly (like AR/AP).
+    isControl: true,
+    controlType: ControlType.INVENTORY,
   },
   {
     number: '371',

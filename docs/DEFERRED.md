@@ -213,7 +213,10 @@ Delivered in `src/modules/stock` (migrations `20260801120000_add_stock`,
   (CUSTOMER/SUPPLIER/ADJUSTMENT/TRANSIT), Odoo `stock.location`. CRUD for
   INTERNAL only; virtual ones are seeded and read-only.
 - **StockMovement** — append-only, double-entry (from/to location), qty in the
-  item base UoM. **Moving-average (AVCO) valuation** per **(item, variant)**
+  item base UoM, and a **`partnerId`** (Odoo stock.move.partner_id): required for
+  receipts (a supplier) and issues (a customer) with role checks, rejected for
+  internal transfers/adjustments — the JournalLine.partnerId conditional pattern.
+  **Moving-average (AVCO) valuation** per **(item, variant)**
   stream: inbound sets cost + recomputes the average, outbound/transfer valued
   at the current average; `avgCost` cached on Item/ItemVariant, total value =
   Σ movement value. Row-locked per stream for concurrency; **negative stock

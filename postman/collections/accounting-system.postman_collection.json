@@ -4220,7 +4220,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if(pm.response.code===201){pm.collectionVariables.set('partnerId', pm.response.json().data.id);}"
+                  "if(pm.response.code===201){pm.environment.set('partnerId', pm.response.json().data.id);}"
                 ]
               }
             }
@@ -5363,6 +5363,48 @@
               ],
               "path": [
                 "locations"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "",
+                  "description": "INTERNAL | SUPPLIER | CUSTOMER | ADJUSTMENT | TRANSIT",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get virtual locations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){",
+                  "  const d = pm.response.json().data;",
+                  "  const pick = (t)=>{const x=d.find(l=>l.type===t); if(x) return x.id;};",
+                  "  const s=pick('SUPPLIER'); if(s) pm.environment.set('supplierLocationId', s);",
+                  "  const c=pick('CUSTOMER'); if(c) pm.environment.set('customerLocationId', c);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations/virtual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                "virtual"
               ]
             }
           },
@@ -5433,7 +5475,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"RECEIPT\",\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{supplierLocationId}}\",\n  \"toLocationId\": \"{{internalLocationId}}\",\n  \"qty\": 10,\n  \"unitCost\": 5\n}",
+              "raw": "{\n  \"type\": \"RECEIPT\",\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{supplierLocationId}}\",\n  \"toLocationId\": \"{{internalLocationId}}\",\n  \"qty\": 10,\n  \"unitCost\": 5,\n  \"partnerId\": \"{{supplierPartnerId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -5460,7 +5502,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"ISSUE\",\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{customerLocationId}}\",\n  \"qty\": 3\n}",
+              "raw": "{\n  \"type\": \"ISSUE\",\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{customerLocationId}}\",\n  \"qty\": 3,\n  \"partnerId\": \"{{customerPartnerId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -5542,6 +5584,11 @@
                 {
                   "key": "itemId",
                   "value": "{{itemId}}"
+                },
+                {
+                  "key": "partnerId",
+                  "value": "",
+                  "disabled": true
                 }
               ]
             }

@@ -797,6 +797,7 @@ async function seedDefaultSequences(companyId: string): Promise<void> {
     { docType: 'PURCHASE_ORDER', prefix: 'PO-' },
     { docType: 'PAYMENT_RECEIPT', prefix: 'REC-' },
     { docType: 'JOURNAL_ENTRY', prefix: 'JE-' },
+    { docType: 'STOCK_MOVEMENT', prefix: 'STK-' },
   ];
   const existing = await prisma.documentSequence.findMany({
     where: { companyId, branchId: null },

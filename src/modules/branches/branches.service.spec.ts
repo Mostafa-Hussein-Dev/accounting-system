@@ -202,7 +202,7 @@ describe('BranchesService', () => {
     createdBranchIds.push(branch.id);
     expect(branch.stockLocationId).toBeTruthy();
     const loc = await prisma.location.findUnique({
-      where: { id: branch.stockLocationId },
+      where: { id: branch.stockLocationId as string },
     });
     expect(loc?.type).toBe('INTERNAL');
     expect(loc?.branchId).toBe(branch.id);

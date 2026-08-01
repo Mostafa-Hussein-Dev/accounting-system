@@ -1,5 +1,10 @@
 import { randomUUID } from 'crypto';
-import { PrismaClient, Prisma, DocumentType } from '@prisma/client';
+import {
+  PrismaClient,
+  Prisma,
+  DocumentType,
+  LocationType,
+} from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 import { DEFAULT_CHART } from '../src/modules/accounts/account-defaults';
@@ -639,6 +644,7 @@ async function main() {
     await seedFullChart(company.id);
     await seedDefaultVatRate(company.id);
     await seedDefaultSequences(company.id);
+    await seedDefaultLocations(company.id);
 
     for (const demoUser of tenant.users) {
       let user = await prisma.user.findUnique({
@@ -816,6 +822,37 @@ async function seedDefaultSequences(companyId: string): Promise<void> {
       resetPeriod: 'YEARLY',
       padWidth: 4,
       nextNumber: 1,
+    })),
+  });
+}
+
+/**
+ * Seed a company's four virtual counterparty stock locations (FR-402).
+ * Idempotent — skips any type already present. Mirrors
+ * LocationsService.applyDefaultLocations for seed use.
+ */
+async function seedDefaultLocations(companyId: string): Promise<void> {
+  const defaults: { code: string; name: string; type: LocationType }[] = [
+    { code: 'CUSTOMERS', name: 'Customers', type: 'CUSTOMER' },
+    { code: 'SUPPLIERS', name: 'Suppliers', type: 'SUPPLIER' },
+    { code: 'ADJUSTMENT', name: 'Inventory Adjustment', type: 'ADJUSTMENT' },
+    { code: 'TRANSIT', name: 'Transit', type: 'TRANSIT' },
+  ];
+  const existing = await prisma.location.findMany({
+    where: { companyId },
+    select: { type: true },
+  });
+  const have = new Set(existing.map((e) => e.type));
+  const toCreate = defaults.filter((l) => !have.has(l.type));
+  if (toCreate.length === 0) {
+    return;
+  }
+  await prisma.location.createMany({
+    data: toCreate.map((l) => ({
+      companyId,
+      code: l.code,
+      name: l.name,
+      type: l.type,
     })),
   });
 }

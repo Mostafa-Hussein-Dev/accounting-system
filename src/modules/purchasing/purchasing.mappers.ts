@@ -7,6 +7,10 @@ import {
   GoodsReceiptLineResponseDto,
   GoodsReceiptResponseDto,
 } from './dto/goods-receipt.dto';
+import {
+  VendorBillLineResponseDto,
+  VendorBillResponseDto,
+} from './dto/vendor-bill.dto';
 
 export const PO_INCLUDE = {
   lines: { orderBy: { lineNo: 'asc' } },
@@ -74,6 +78,65 @@ export function toGoodsReceiptResponse(
     notes: gr.notes,
     lines: gr.lines.map(toGrLine),
     createdAt: gr.createdAt,
+  };
+}
+
+export const VB_INCLUDE = {
+  lines: { orderBy: { lineNo: 'asc' } },
+} satisfies Prisma.VendorBillInclude;
+
+type VendorBillWithLines = Prisma.VendorBillGetPayload<{
+  include: typeof VB_INCLUDE;
+}>;
+type VendorBillLineEntity = VendorBillWithLines['lines'][number];
+
+function toVbLine(l: VendorBillLineEntity): VendorBillLineResponseDto {
+  return {
+    id: l.id,
+    lineNo: l.lineNo,
+    itemId: l.itemId,
+    variantId: l.variantId,
+    uomId: l.uomId,
+    qty: Number(l.qty),
+    unitCost: Number(l.unitCost),
+    taxRateId: l.taxRateId,
+    vatTreatment: l.vatTreatment,
+    ratePct: Number(l.ratePct),
+    netAmount: Number(l.netAmount),
+    vatAmount: Number(l.vatAmount),
+    totalAmount: Number(l.totalAmount),
+    description: l.description,
+  };
+}
+
+export function toVendorBillResponse(
+  b: VendorBillWithLines,
+): VendorBillResponseDto {
+  return {
+    id: b.id,
+    companyId: b.companyId,
+    billNo: b.billNo,
+    status: b.status,
+    supplierId: b.supplierId,
+    purchaseOrderId: b.purchaseOrderId,
+    branchId: b.branchId,
+    currencyCode: b.currencyCode,
+    rate: Number(b.rate),
+    billDate: b.billDate,
+    dueDate: b.dueDate,
+    supplierRef: b.supplierRef,
+    notes: b.notes,
+    subtotal: Number(b.subtotal),
+    vatTotal: Number(b.vatTotal),
+    grandTotal: Number(b.grandTotal),
+    subtotalBase: Number(b.subtotalBase),
+    vatTotalBase: Number(b.vatTotalBase),
+    grandTotalBase: Number(b.grandTotalBase),
+    journalEntryId: b.journalEntryId,
+    postedAt: b.postedAt,
+    lines: b.lines.map(toVbLine),
+    createdAt: b.createdAt,
+    updatedAt: b.updatedAt,
   };
 }
 

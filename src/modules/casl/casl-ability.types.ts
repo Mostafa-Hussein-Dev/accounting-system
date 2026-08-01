@@ -26,5 +26,6 @@ export type Subjects =
   | 'Pricelist'
   | 'Location'
   | 'Stock'
+  | 'Purchase'
   | 'all';
 export type AppAbility = MongoAbility<[Action, Subjects]>;

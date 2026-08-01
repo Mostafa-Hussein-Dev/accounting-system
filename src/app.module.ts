@@ -22,6 +22,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { ItemsModule } from './modules/items/items.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { StockModule } from './modules/stock/stock.module';
+import { PurchasingModule } from './modules/purchasing/purchasing.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -49,6 +50,7 @@ import { HealthController } from './health/health.controller';
     ItemsModule,
     PricingModule,
     StockModule,
+    PurchasingModule,
   ],
   controllers: [HealthController],
   providers: [],

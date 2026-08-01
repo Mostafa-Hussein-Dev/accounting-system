@@ -97,7 +97,9 @@ export class BranchesController {
 
   @Patch(':id')
   @RequirePermissions({ action: 'update', subject: 'Branch' })
-  @ApiOperation({ summary: 'Update a branch (also used to deactivate via isActive)' })
+  @ApiOperation({
+    summary: 'Update a branch (also used to deactivate via isActive)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Branch updated',

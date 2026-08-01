@@ -3,26 +3,36 @@ import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateBranchDto {
   @ApiProperty({
-    description: 'Branch display name (fallback used when no localized name is set)',
+    description:
+      'Branch display name (fallback used when no localized name is set)',
     example: 'Beirut Main Branch',
   })
   @IsString()
   @MaxLength(255)
   name!: string;
 
-  @ApiPropertyOptional({ description: 'Arabic name', example: 'فرع بيروت الرئيسي' })
+  @ApiPropertyOptional({
+    description: 'Arabic name',
+    example: 'فرع بيروت الرئيسي',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(255)
   nameAr?: string;
 
-  @ApiPropertyOptional({ description: 'French name', example: 'Succursale principale de Beyrouth' })
+  @ApiPropertyOptional({
+    description: 'French name',
+    example: 'Succursale principale de Beyrouth',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(255)
   nameFr?: string;
 
-  @ApiPropertyOptional({ description: 'English name', example: 'Beirut Main Branch' })
+  @ApiPropertyOptional({
+    description: 'English name',
+    example: 'Beirut Main Branch',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(255)
@@ -39,7 +49,7 @@ export class CreateBranchDto {
 
   @ApiPropertyOptional({
     description:
-      'Stock location this branch draws from. Optional until the inventory module (FR-401) ships the Location model — becomes required then.',
+      'Existing INTERNAL stock location to use as this branch default (FR-402). If omitted, a default location is created automatically for the branch.',
     example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab',
   })
   @IsOptional()

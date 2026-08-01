@@ -4220,7 +4220,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if(pm.response.code===201){pm.collectionVariables.set('partnerId', pm.response.json().data.id);}"
+                  "if(pm.response.code===201){pm.environment.set('partnerId', pm.response.json().data.id);}"
                 ]
               }
             }
@@ -5328,6 +5328,407 @@
               "body": "{\n  \"data\": null,\n  \"error\": {\n    \"code\": \"SEQUENCE_NOT_FOUND\",\n    \"message\": \"Document sequence with id c1d2e3f4-0000-4a5b-9c8d-1234567890ab was not found.\",\n    \"field\": null\n  }\n}"
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Stock",
+      "item": [
+        {
+          "name": "List locations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){",
+                  "  const d = pm.response.json().data;",
+                  "  const pick = (t)=>{const x=d.find(l=>l.type===t); if(x) return x.id;};",
+                  "  const i=pick('INTERNAL'); if(i) pm.environment.set('internalLocationId', i);",
+                  "  const s=pick('SUPPLIER'); if(s) pm.environment.set('supplierLocationId', s);",
+                  "  const c=pick('CUSTOMER'); if(c) pm.environment.set('customerLocationId', c);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "",
+                  "description": "INTERNAL | SUPPLIER | CUSTOMER | ADJUSTMENT | TRANSIT",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get virtual locations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){",
+                  "  const d = pm.response.json().data;",
+                  "  const pick = (t)=>{const x=d.find(l=>l.type===t); if(x) return x.id;};",
+                  "  const s=pick('SUPPLIER'); if(s) pm.environment.set('supplierLocationId', s);",
+                  "  const c=pick('CUSTOMER'); if(c) pm.environment.set('customerLocationId', c);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations/virtual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                "virtual"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create location (internal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('transferlocationId', pm.response.json().data.id);pm.environment.set('internalLocationId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WH-MAIN\",\n  \"name\": \"Main Warehouse\",\n  \"branchId\": \"{{branchId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Receipt (supplier -> internal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('stockMovementId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "movements"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"RECEIPT\",\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{supplierLocationId}}\",\n  \"toLocationId\": \"{{internalLocationId}}\",\n  \"qty\": 10,\n  \"unitCost\": 5,\n  \"partnerId\": \"{{supplierPartnerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Issue (internal -> customer)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "movements"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ISSUE\",\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{customerLocationId}}\",\n  \"qty\": 3,\n  \"partnerId\": \"{{customerPartnerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Adjust (physical count)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/adjustments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "adjustments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"{{itemId}}\",\n  \"locationId\": \"{{internalLocationId}}\",\n  \"countedQty\": 8,\n  \"unitCost\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Transfer (internal -> internal)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/transfers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "transfers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{transferlocationId}}\",\n  \"qty\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List movements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/movements?itemId={{itemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "movements"
+              ],
+              "query": [
+                {
+                  "key": "itemId",
+                  "value": "{{itemId}}"
+                },
+                {
+                  "key": "partnerId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "On-hand",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/on-hand?itemId={{itemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "on-hand"
+              ],
+              "query": [
+                {
+                  "key": "itemId",
+                  "value": "{{itemId}}"
+                },
+                {
+                  "key": "locationId",
+                  "value": "{{internalLocationId}}",
+                  "description": "On-hand at ONE location; omit for the company-wide total",
+                  "disabled": true
+                },
+                {
+                  "key": "variantId",
+                  "value": "",
+                  "description": "Restrict to one variant",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk on-hand",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/on-hand/bulk?breakdown=total",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "on-hand",
+                "bulk"
+              ],
+              "query": [
+                {
+                  "key": "breakdown",
+                  "value": "total",
+                  "description": "total | byLocation"
+                },
+                {
+                  "key": "itemIds",
+                  "value": "{{itemId}}",
+                  "description": "comma-separated item ids; omit for all",
+                  "disabled": true
+                },
+                {
+                  "key": "variantId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "includeZero",
+                  "value": "false",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Item stock breakdown",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}",
+                "stock"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Valuation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/valuation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "valuation"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },

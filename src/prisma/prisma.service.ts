@@ -27,6 +27,8 @@ const TENANT_SCOPED_MODELS = new Set([
   'Item',
   'ItemVariant',
   'ItemBarcode',
+  'Location',
+  'StockMovement',
   'Pricelist',
   'PricelistLine',
 ]);

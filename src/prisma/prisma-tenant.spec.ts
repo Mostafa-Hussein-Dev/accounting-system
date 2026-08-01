@@ -12,6 +12,7 @@ describe('PrismaService.forTenant', () => {
   let companyBId: string;
   let branchAId: string;
   let branchBId: string;
+  let stockLocationAId: string;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -29,11 +30,38 @@ describe('PrismaService.forTenant', () => {
     companyAId = companyA.id;
     companyBId = companyB.id;
 
+    // Branch.stockLocationId is a required FK (FR-402); make a location each.
+    const locA = await prisma.location.create({
+      data: {
+        companyId: companyAId,
+        code: 'A-STK',
+        name: 'A',
+        type: 'INTERNAL',
+      },
+    });
+    const locB = await prisma.location.create({
+      data: {
+        companyId: companyBId,
+        code: 'B-STK',
+        name: 'B',
+        type: 'INTERNAL',
+      },
+    });
+    stockLocationAId = locA.id;
+
     const branchA = await prisma.branch.create({
-      data: { companyId: companyAId, name: 'Branch A' },
+      data: {
+        companyId: companyAId,
+        name: 'Branch A',
+        stockLocationId: locA.id,
+      },
     });
     const branchB = await prisma.branch.create({
-      data: { companyId: companyBId, name: 'Branch B' },
+      data: {
+        companyId: companyBId,
+        name: 'Branch B',
+        stockLocationId: locB.id,
+      },
     });
     branchAId = branchA.id;
     branchBId = branchB.id;
@@ -41,6 +69,9 @@ describe('PrismaService.forTenant', () => {
 
   afterAll(async () => {
     await prisma.branch.deleteMany({
+      where: { companyId: { in: [companyAId, companyBId] } },
+    });
+    await prisma.location.deleteMany({
       where: { companyId: { in: [companyAId, companyBId] } },
     });
     await prisma.company.deleteMany({
@@ -67,7 +98,11 @@ describe('PrismaService.forTenant', () => {
 
   it('create forces companyId to the scoped tenant, ignoring the caller-supplied value', async () => {
     const created = await prisma.forTenant(companyAId).branch.create({
-      data: { companyId: companyBId, name: 'Forced Create' },
+      data: {
+        companyId: companyBId,
+        name: 'Forced Create',
+        stockLocationId: stockLocationAId,
+      },
     });
     expect(created.companyId).toBe(companyAId);
     await prisma.branch.delete({ where: { id: created.id } });

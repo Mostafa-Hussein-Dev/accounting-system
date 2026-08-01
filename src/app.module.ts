@@ -21,6 +21,7 @@ import { UomModule } from './modules/uom/uom.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { ItemsModule } from './modules/items/items.module';
 import { PricingModule } from './modules/pricing/pricing.module';
+import { StockModule } from './modules/stock/stock.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -47,6 +48,7 @@ import { HealthController } from './health/health.controller';
     CatalogModule,
     ItemsModule,
     PricingModule,
+    StockModule,
   ],
   controllers: [HealthController],
   providers: [],

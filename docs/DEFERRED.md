@@ -6,7 +6,7 @@ forget. Keep this list updated as modules land.
 
 | # | Deferred item | Where | Blocked on | What to do when unblocked |
 |---|---|---|---|---|
-| 1 | `Branch.stockLocationId` is a nullable UUID with **no foreign key** | `prisma/schema.prisma` (Branch), `src/modules/branches/` | Inventory `Location` model (FR-401 / FR-404) | Add the FK to `locations`, backfill, and change the column from nullable to **NOT NULL** in the same migration. |
+| 1 | ~~`Branch.stockLocationId` is a nullable UUID with **no foreign key**~~ — **RESOLVED (FR-402)**: FK to `locations` added and the column made **NOT NULL** (migration `20260801120000_add_stock`, which backfilled a default INTERNAL location per branch). `BranchesService.create` now provisions each new branch's default location. | `prisma/schema.prisma` (Branch), `src/modules/branches/` | — | — |
 | 2 | ~~**Default VAT treatment per item**~~ — **RESOLVED (FR-401)**: `Item.vatTreatment` (STANDARD/ZERO/EXEMPT) + `Item.defaultTaxRateId` FK to `tax_rates` (migration `20260730140000_add_items`). Invoicing will default a sale/purchase line's VAT from these. | `prisma/schema.prisma` (Item) | — | — |
 | 3 | ~~**Document numbers are not yet consumed**~~ — **RESOLVED (FR-901)**: the GL posting path now calls `SequencesService.nextNumber(...)` for `JOURNAL_ENTRY`. Still applies to invoicing/purchasing/payments when those are built. | Sequences module (FR-106) | Invoicing / Purchasing / Payments (FR-5xx/6xx/8xx) | When creating each document, call `nextNumber(companyId, branchId, docType, documentDate, tx)` inside its transaction (see `PostingService.post` for the reference pattern). |
 | 4 | ~~**`JournalLine.partnerId`** has no FK~~ — **RESOLVED (FR-301)**: FK to `partners` added (migration `20260727130000_add_partners`). Partner balances/statements derive from `journalLine.partnerId`. **Still open:** no path yet WRITES partnerId onto a line (see "Partner postings" note below). | `prisma/schema.prisma` (JournalLine) | — | — |
@@ -197,8 +197,7 @@ Delivered across `src/modules/uom`, `src/modules/catalog`, `src/modules/items`,
   scanner lookup), **multi-currency pricelists** + a price resolver.
 
 **Deferred (agreed with the user, tied to other foundations):**
-- **FR-402 stock ledger** — `location` + `stock_movement`, on-hand/valuation, and
-  the `Branch.stockLocationId` FK (deferred #1) — the next module.
+- ~~**FR-402 stock ledger**~~ — **BUILT** (see the FR-402 section below).
 - **Image upload/cloud storage** — items store image **URLs** only; actual
   upload/object storage is out of scope.
 - **FR-406 barcode/label printing** — design + print templates.
@@ -206,6 +205,39 @@ Delivered across `src/modules/uom`, `src/modules/catalog`, `src/modules/items`,
   are stored; capturing actual serials/expiries happens at stock/invoice time.
 - **Pricelist formula/percentage rules** — pricelists do FIXED prices only
   (Odoo's discount/formula rule types are not built).
+
+### FR-402 — Stock ledger — BUILT
+Delivered in `src/modules/stock` (migrations `20260801120000_add_stock`,
+`20260801120100_seed_stock_sequences`):
+- **Location** model — INTERNAL locations (per branch) + virtual counterparties
+  (CUSTOMER/SUPPLIER/ADJUSTMENT/TRANSIT), Odoo `stock.location`. CRUD for
+  INTERNAL only; virtual ones are seeded and read-only.
+- **StockMovement** — append-only, double-entry (from/to location), qty in the
+  item base UoM, and a **`partnerId`** (Odoo stock.move.partner_id): required for
+  receipts (a supplier) and issues (a customer) with role checks, rejected for
+  internal transfers/adjustments — the JournalLine.partnerId conditional pattern.
+  **Moving-average (AVCO) valuation** per **(item, variant)**
+  stream: inbound sets cost + recomputes the average, outbound/transfer valued
+  at the current average; `avgCost` cached on Item/ItemVariant, total value =
+  Σ movement value. Row-locked per stream for concurrency; **negative stock
+  blocked** on internal locations.
+- Endpoints: `POST /stock/movements`, `/stock/adjustments` (count-based),
+  `/stock/transfers`; reads `GET /stock/movements`, `/stock/on-hand`,
+  `/items/:id/stock`, `/stock/valuation?asOf=`. Resolves deferred #1.
+
+**Deferred within/around FR-402 (revisit when the blocking work lands):**
+- **GL valuation postings** — stock movements do **not** post to the general
+  ledger yet. Real-time inventory valuation (stock interim/valuation accounts,
+  COGS on issue) belongs to the document confirm flows (goods receipt / goods
+  issue) via `PostingService` + posting rules (**FR-902**). Same pattern as
+  partners: data now, GL wiring when documents exist. Stamp
+  `StockMovement.sourceDocType`/`sourceDocId` then (they carry no FK yet).
+- **FIFO / standard-cost** methods — only moving-average is implemented.
+- **Lot / serial / expiry capture at movement time** — `Item.trackSerial`/
+  `trackExpiry` flags exist; capturing actual serials/expiries on a movement is
+  not built.
+- **Reservations / delivery-order workflow, reorder rules, multi-step routes,
+  landed costs** — out of scope for the ledger.
 
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist

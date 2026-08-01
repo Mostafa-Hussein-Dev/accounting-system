@@ -37,16 +37,23 @@ describe('SequencesService', () => {
     companyAId = a.id;
     companyBId = b.id;
 
-    platformAdmin = { userId: 'admin', companyId: null, isPlatformAdmin: true, mustChangePassword: false };
+    platformAdmin = {
+      userId: 'admin',
+      companyId: null,
+      isPlatformAdmin: true,
+      mustChangePassword: false,
+    };
     callerA = {
       userId: 'caller-a',
       companyId: companyAId,
-      isPlatformAdmin: false, mustChangePassword: false,
+      isPlatformAdmin: false,
+      mustChangePassword: false,
     };
     callerB = {
       userId: 'caller-b',
       companyId: companyBId,
-      isPlatformAdmin: false, mustChangePassword: false,
+      isPlatformAdmin: false,
+      mustChangePassword: false,
     };
   });
 
@@ -230,7 +237,7 @@ describe('SequencesService', () => {
 
   it('applyDefaultSequences seeds the default set idempotently', async () => {
     const created = await service.applyDefaultSequences(companyBId, prisma);
-    expect(created).toBe(8);
+    expect(created).toBe(9);
     const again = await service.applyDefaultSequences(companyBId, prisma);
     expect(again).toBe(0);
   });

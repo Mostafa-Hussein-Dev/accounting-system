@@ -66,6 +66,7 @@ enum DocumentType {
   PURCHASE_ORDER
   PAYMENT_RECEIPT
   JOURNAL_ENTRY
+  STOCK_MOVEMENT
 }
 
 // Journal-entry lifecycle (FR-901/FR-906). A DRAFT entry is editable and does
@@ -168,6 +169,8 @@ model Company {
   itemBarcodes      ItemBarcode[]
   pricelists        Pricelist[]
   pricelistLines    PricelistLine[]
+  locations         Location[]
+  stockMovements    StockMovement[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -510,12 +513,10 @@ model Branch {
   nameEn  String? @map("name_en")
   address String?
 
-  // NOTE (FR-401/FR-404): nullable + NO foreign key ON PURPOSE — the inventory
-  // `Location` model does not exist yet. When that model is created:
-  //   1. add the relation + FK constraint to `locations`, and
-  //   2. CHANGE THIS COLUMN FROM NULLABLE (String?) TO NOT-NULL (String),
-  //      backfilling existing rows in the same migration.
-  stockLocationId String? @map("stock_location_id") @db.Uuid
+  // FR-402: the branch's default internal stock location. Backfilled + made
+  // NOT NULL when the inventory `Location` model landed (resolves deferred #1).
+  stockLocationId String   @map("stock_location_id") @db.Uuid
+  stockLocation   Location @relation("BranchDefaultLocation", fields: [stockLocationId], references: [id])
 
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -524,6 +525,7 @@ model Branch {
 
   documentSequences DocumentSequence[]
   journalEntries    JournalEntry[]
+  locations         Location[]         @relation("BranchLocations")
 
   @@index([companyId])
   @@index([deletedAt])
@@ -829,8 +831,9 @@ model Partner {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  addresses    PartnerAddress[]
-  journalLines JournalLine[]
+  addresses      PartnerAddress[]
+  journalLines   JournalLine[]
+  stockMovements StockMovement[]
 
   @@unique([companyId, ref])
   @@index([companyId])
@@ -1078,6 +1081,10 @@ model Item {
 
   imageUrls String[] @default([]) @map("image_urls")
 
+  // FR-402 moving-average cost (base currency), maintained per valuation stream.
+  // Used for a no-variant item; variant items carry their own on ItemVariant.
+  avgCost Decimal @default(0) @map("avg_cost") @db.Decimal(20, 4)
+
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1086,6 +1093,7 @@ model Item {
   variants       ItemVariant[]
   barcodes       ItemBarcode[]
   pricelistLines PricelistLine[]
+  stockMovements StockMovement[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -1113,11 +1121,15 @@ model ItemVariant {
   sku      String?
   isActive Boolean @default(true) @map("is_active")
 
+  // FR-402 moving-average cost (base currency) for this specific variant.
+  avgCost Decimal @default(0) @map("avg_cost") @db.Decimal(20, 4)
+
   barcodes ItemBarcode[]
 
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   pricelistLines PricelistLine[]
+  stockMovements StockMovement[]
 
   @@unique([itemId, sizeId, colourId])
   @@unique([companyId, sku])
@@ -1202,4 +1214,127 @@ model PricelistLine {
   @@index([pricelistId])
   @@index([itemId])
   @@map("pricelist_lines")
+}
+
+// A stock location (FR-402, Odoo stock.location). INTERNAL locations hold real
+// on-hand stock and belong to a branch; the virtual locations (CUSTOMER,
+// SUPPLIER, ADJUSTMENT, TRANSIT) are the double-entry counterparties every
+// movement posts against, so on-hand is derived exactly like a GL balance
+// (Σ moved-in − Σ moved-out). Company-scoped, soft-deleted.
+enum LocationType {
+  INTERNAL
+  CUSTOMER
+  SUPPLIER
+  ADJUSTMENT
+  TRANSIT
+}
+
+// Why a movement happened. RECEIPT/OPENING bring stock in from SUPPLIER/
+// ADJUSTMENT; ISSUE sends it to CUSTOMER/ADJUSTMENT; TRANSFER is INTERNAL→
+// INTERNAL; ADJUSTMENT reconciles a physical count against the ADJUSTMENT
+// location. Inbound moves (RECEIPT/OPENING/adjustment-in) set the cost; the
+// rest are valued at the current moving-average.
+enum StockMovementType {
+  RECEIPT
+  ISSUE
+  TRANSFER
+  ADJUSTMENT
+  OPENING
+}
+
+model Location {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  code   String
+  name   String
+  nameAr String? @map("name_ar")
+  nameFr String? @map("name_fr")
+  nameEn String? @map("name_en")
+
+  type LocationType
+
+  // INTERNAL locations belong to a branch; virtual locations (CUSTOMER/SUPPLIER/
+  // ADJUSTMENT/TRANSIT) are company-level (branchId null).
+  branchId String? @map("branch_id") @db.Uuid
+  branch   Branch? @relation("BranchLocations", fields: [branchId], references: [id])
+
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Branches whose default stock location is this one (the other Branch relation).
+  defaultForBranches Branch[]        @relation("BranchDefaultLocation")
+  movementsFrom      StockMovement[] @relation("StockMovementFrom")
+  movementsTo        StockMovement[] @relation("StockMovementTo")
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([branchId])
+  @@index([deletedAt])
+  @@map("locations")
+}
+
+// One append-only stock ledger row (FR-402, Odoo stock.move + valuation layer).
+// Double-entry: qty (in the item's BASE UoM) moves from one location to another.
+// Never updated or deleted — a correction is a reversing movement. Value is the
+// moving-average valuation frozen at posting; total inventory value = Σ value,
+// and avgCost on Item/ItemVariant caches the current average for fast COGS.
+model StockMovement {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  movementNo   String            @map("movement_no")
+  type         StockMovementType
+  movementDate DateTime          @map("movement_date") @db.Date
+
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation(fields: [itemId], references: [id])
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation(fields: [variantId], references: [id])
+
+  fromLocationId String   @map("from_location_id") @db.Uuid
+  fromLocation   Location @relation("StockMovementFrom", fields: [fromLocationId], references: [id])
+  toLocationId   String   @map("to_location_id") @db.Uuid
+  toLocation     Location @relation("StockMovementTo", fields: [toLocationId], references: [id])
+
+  // The external counterparty (Odoo stock.move.partner_id). Nullable column, but
+  // service-REQUIRED whenever a SUPPLIER/CUSTOMER location is involved (a receipt
+  // or issue) and REJECTED for internal transfers/adjustments — the same
+  // conditional pattern as JournalLine.partnerId on AR/AP postings. Lets stock
+  // history roll up per supplier/customer without a location per partner.
+  partnerId String?  @map("partner_id") @db.Uuid
+  partner   Partner? @relation(fields: [partnerId], references: [id])
+
+  // Quantity is ALWAYS stored in the item's base UoM (like GL amounts in base
+  // currency); a non-base input UoM is converted before persisting.
+  qty Decimal @db.Decimal(20, 3)
+
+  // Moving-average valuation, frozen at the time of the move (base currency).
+  unitCost     Decimal @map("unit_cost") @db.Decimal(20, 4)
+  value        Decimal @db.Decimal(20, 4)
+  costCurrency String  @map("cost_currency")
+
+  reason    String?
+  reference String?
+  branchId  String? @map("branch_id") @db.Uuid
+
+  // Link back to the source document (invoice/PO/…) once those exist. No FK yet
+  // — see docs/DEFERRED.md.
+  sourceDocType String? @map("source_doc_type")
+  sourceDocId   String? @map("source_doc_id") @db.Uuid
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([companyId])
+  @@index([itemId, variantId])
+  @@index([fromLocationId])
+  @@index([toLocationId])
+  @@index([partnerId])
+  @@index([movementDate])
+  @@map("stock_movements")
 }

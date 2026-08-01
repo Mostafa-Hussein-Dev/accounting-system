@@ -7,3 +7,4 @@ export * from './dto/location.dto';
 export * from './dto/stock-movement.dto';
 export * from './dto/stock-read.dto';
 export * from './dto/stock-ops.dto';
+export * from './dto/bulk-on-hand.dto';

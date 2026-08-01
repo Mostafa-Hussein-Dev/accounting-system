@@ -23,6 +23,7 @@ import {
   ValuationResponseDto,
 } from './dto/stock-read.dto';
 import { AdjustStockDto, TransferStockDto } from './dto/stock-ops.dto';
+import { BulkOnHandQueryDto, OnHandRowDto } from './dto/bulk-on-hand.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
@@ -81,6 +82,17 @@ export class StockController {
     @CurrentUser() caller: AuthenticatedUser,
   ): Promise<OnHandResponseDto> {
     return this.svc.onHand(query, caller);
+  }
+
+  // Bulk on-hand for many items, with filtering + optional per-location
+  // breakdown. Static subpath, declared distinctly from 'on-hand'.
+  @Get('on-hand/bulk')
+  @RequirePermissions({ action: 'read', subject: 'Stock' })
+  bulkOnHand(
+    @Query() query: BulkOnHandQueryDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<Paginated<OnHandRowDto>> {
+    return this.svc.bulkOnHand(query, caller);
   }
 
   @Get('valuation')

@@ -5418,7 +5418,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if(pm.response.code<300){pm.environment.set('locationId', pm.response.json().data.id);pm.environment.set('internalLocationId', pm.response.json().data.id);}"
+                  "if(pm.response.code<300){pm.environment.set('transferlocationId', pm.response.json().data.id);pm.environment.set('internalLocationId', pm.response.json().data.id);}"
                 ]
               }
             }
@@ -5613,6 +5613,68 @@
                 {
                   "key": "itemId",
                   "value": "{{itemId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk on-hand",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/on-hand/bulk?breakdown=total",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "on-hand",
+                "bulk"
+              ],
+              "query": [
+                {
+                  "key": "breakdown",
+                  "value": "total",
+                  "description": "total | byLocation"
+                },
+                {
+                  "key": "itemIds",
+                  "value": "{{itemId}}",
+                  "description": "comma-separated item ids; omit for all",
+                  "disabled": true
+                },
+                {
+                  "key": "variantId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "locationId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "includeZero",
+                  "value": "false",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
                 }
               ]
             }

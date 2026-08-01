@@ -313,4 +313,48 @@ describe('StockService (FR-402)', () => {
       ),
     ).rejects.toMatchObject({ response: { code: 'PARTNER_NOT_APPLICABLE' } });
   });
+
+  it('bulk on-hand: multiple items, filtering and per-location breakdown', async () => {
+    const i1 = await makeItem();
+    const i2 = await makeItem();
+    await receipt(i1, 5, 2); // i1 @ A = 5
+    await receipt(i2, 3, 4); // i2 @ A = 3
+    await stock.transfer(
+      {
+        itemId: i2,
+        fromLocationId: internalA,
+        toLocationId: internalB,
+        qty: 1,
+      },
+      caller,
+    ); // i2: A=2, B=1
+
+    // total across locations, for the two items
+    const total = await stock.bulkOnHand(
+      { itemIds: [i1, i2], breakdown: 'total' },
+      caller,
+    );
+    expect(total.meta.total).toBe(2);
+    const r1 = total.data.find((r) => r.itemId === i1)!;
+    expect(r1.qty).toBe(5);
+    expect(r1.locationId).toBeNull();
+    const r2 = total.data.find((r) => r.itemId === i2)!;
+    expect(r2.qty).toBe(3);
+
+    // per-location breakdown for i2 → two rows (A=2, B=1)
+    const byLoc = await stock.bulkOnHand(
+      { itemIds: [i2], breakdown: 'byLocation' },
+      caller,
+    );
+    expect(byLoc.data.map((r) => r.qty).sort()).toEqual([1, 2]);
+    expect(byLoc.data.every((r) => r.locationId && r.locationCode)).toBe(true);
+
+    // narrow to one location
+    const atB = await stock.bulkOnHand(
+      { itemIds: [i2], breakdown: 'byLocation', locationId: internalB },
+      caller,
+    );
+    expect(atB.data).toHaveLength(1);
+    expect(atB.data[0].qty).toBe(1);
+  });
 });

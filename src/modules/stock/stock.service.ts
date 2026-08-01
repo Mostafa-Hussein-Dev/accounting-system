@@ -34,6 +34,7 @@ import {
   VariantStockDto,
 } from './dto/stock-read.dto';
 import { AdjustStockDto, TransferStockDto } from './dto/stock-ops.dto';
+import { BulkOnHandQueryDto, OnHandRowDto } from './dto/bulk-on-hand.dto';
 
 // The valuation direction a move implies, derived from the location TYPES (not
 // the requested StockMovementType): stock entering the internal network from a
@@ -398,6 +399,140 @@ export class StockService {
       value: round(value, 4),
       currency,
     };
+  }
+
+  /**
+   * On-hand + valuation for many items at once, with rich filtering and an
+   * optional per-location breakdown — the bulk companion to onHand(). Derived
+   * entirely from the movement ledger; INTERNAL locations only.
+   */
+  async bulkOnHand(
+    query: BulkOnHandQueryDto,
+    caller: AuthenticatedUser,
+  ): Promise<Paginated<OnHandRowDto>> {
+    const companyId = this.resolveCompanyId(query.companyId, caller);
+    const client = this.clientFor(caller);
+    const currency = await this.baseCurrency(client, companyId);
+    const byLocation = query.breakdown === 'byLocation';
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 100;
+
+    // A movement counts toward on-hand at an INTERNAL location, optionally
+    // narrowed to one branch and/or one location.
+    const internalFilter: Prisma.LocationWhereInput = {
+      type: LocationType.INTERNAL,
+    };
+    if (query.branchId) internalFilter.branchId = query.branchId;
+
+    const baseWhere: Prisma.StockMovementWhereInput = { companyId };
+    if (query.itemIds?.length) baseWhere.itemId = { in: query.itemIds };
+    if (query.variantId) baseWhere.variantId = query.variantId;
+
+    const inByKeys = byLocation
+      ? (['itemId', 'variantId', 'toLocationId'] as const)
+      : (['itemId', 'variantId'] as const);
+    const outByKeys = byLocation
+      ? (['itemId', 'variantId', 'fromLocationId'] as const)
+      : (['itemId', 'variantId'] as const);
+
+    const [inRows, outRows] = await Promise.all([
+      client.stockMovement.groupBy({
+        by: inByKeys as unknown as Prisma.StockMovementScalarFieldEnum[],
+        _sum: { qty: true, value: true },
+        where: {
+          ...baseWhere,
+          toLocation: internalFilter,
+          ...(query.locationId ? { toLocationId: query.locationId } : {}),
+        },
+      }),
+      client.stockMovement.groupBy({
+        by: outByKeys as unknown as Prisma.StockMovementScalarFieldEnum[],
+        _sum: { qty: true, value: true },
+        where: {
+          ...baseWhere,
+          fromLocation: internalFilter,
+          ...(query.locationId ? { fromLocationId: query.locationId } : {}),
+        },
+      }),
+    ]);
+
+    type Row = {
+      itemId: string;
+      variantId: string | null;
+      locationId: string | null;
+      qty: number;
+      value: number;
+    };
+    const cells = new Map<string, Row>();
+    const bump = (
+      itemId: string,
+      variantId: string | null,
+      locationId: string | null,
+      qty: number,
+      value: number,
+    ): void => {
+      const key = `${itemId}|${variantId ?? '_'}|${locationId ?? '_'}`;
+      const cell: Row = cells.get(key) ?? {
+        itemId,
+        variantId,
+        locationId,
+        qty: 0,
+        value: 0,
+      };
+      cell.qty += qty;
+      cell.value += value;
+      cells.set(key, cell);
+    };
+    for (const r of inRows) {
+      bump(
+        r.itemId,
+        r.variantId,
+        byLocation ? (r as { toLocationId: string }).toLocationId : null,
+        Number(r._sum.qty ?? 0),
+        Number(r._sum.value ?? 0),
+      );
+    }
+    for (const r of outRows) {
+      bump(
+        r.itemId,
+        r.variantId,
+        byLocation ? (r as { fromLocationId: string }).fromLocationId : null,
+        -Number(r._sum.qty ?? 0),
+        -Number(r._sum.value ?? 0),
+      );
+    }
+
+    const codes = byLocation
+      ? await this.internalLocationCodes(client, companyId)
+      : new Map<string, string>();
+
+    let rows: OnHandRowDto[] = [...cells.values()]
+      .map((c) => {
+        const qty = round(c.qty, 3);
+        const value = round(c.value, 4);
+        return {
+          itemId: c.itemId,
+          variantId: c.variantId,
+          locationId: c.locationId,
+          locationCode: c.locationId
+            ? (codes.get(c.locationId) ?? c.locationId)
+            : null,
+          qty,
+          avgCost: qty > 0 ? round(value / qty, 4) : 0,
+          value,
+          currency,
+        };
+      })
+      .filter((r) => query.includeZero || r.qty !== 0 || r.value !== 0)
+      .sort(
+        (a, b) =>
+          a.itemId.localeCompare(b.itemId) ||
+          (a.locationCode ?? '').localeCompare(b.locationCode ?? ''),
+      );
+
+    const total = rows.length;
+    rows = rows.slice((page - 1) * limit, page * limit);
+    return Paginated.of(rows, total, page, limit);
   }
 
   /** Per-variant, per-internal-location on-hand breakdown for an item. */

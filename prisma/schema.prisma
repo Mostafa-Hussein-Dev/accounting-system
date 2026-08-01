@@ -831,8 +831,9 @@ model Partner {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  addresses    PartnerAddress[]
-  journalLines JournalLine[]
+  addresses      PartnerAddress[]
+  journalLines   JournalLine[]
+  stockMovements StockMovement[]
 
   @@unique([companyId, ref])
   @@index([companyId])
@@ -1300,6 +1301,14 @@ model StockMovement {
   toLocationId   String   @map("to_location_id") @db.Uuid
   toLocation     Location @relation("StockMovementTo", fields: [toLocationId], references: [id])
 
+  // The external counterparty (Odoo stock.move.partner_id). Nullable column, but
+  // service-REQUIRED whenever a SUPPLIER/CUSTOMER location is involved (a receipt
+  // or issue) and REJECTED for internal transfers/adjustments — the same
+  // conditional pattern as JournalLine.partnerId on AR/AP postings. Lets stock
+  // history roll up per supplier/customer without a location per partner.
+  partnerId String?  @map("partner_id") @db.Uuid
+  partner   Partner? @relation(fields: [partnerId], references: [id])
+
   // Quantity is ALWAYS stored in the item's base UoM (like GL amounts in base
   // currency); a non-base input UoM is converted before persisting.
   qty Decimal @db.Decimal(20, 3)
@@ -1325,6 +1334,7 @@ model StockMovement {
   @@index([itemId, variantId])
   @@index([fromLocationId])
   @@index([toLocationId])
+  @@index([partnerId])
   @@index([movementDate])
   @@map("stock_movements")
 }

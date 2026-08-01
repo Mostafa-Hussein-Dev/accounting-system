@@ -237,7 +237,7 @@ describe('SequencesService', () => {
 
   it('applyDefaultSequences seeds the default set idempotently', async () => {
     const created = await service.applyDefaultSequences(companyBId, prisma);
-    expect(created).toBe(9);
+    expect(created).toBe(11);
     const again = await service.applyDefaultSequences(companyBId, prisma);
     expect(again).toBe(0);
   });

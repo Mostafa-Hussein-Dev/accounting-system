@@ -486,6 +486,36 @@ const PERMISSIONS = [
     action: 'update',
     description: 'Adjust stock (physical count reconciliation)',
   },
+  {
+    key: 'purchase.read',
+    subject: 'Purchase',
+    action: 'read',
+    description: 'View purchase orders, goods receipts and vendor bills',
+  },
+  {
+    key: 'purchase.create',
+    subject: 'Purchase',
+    action: 'create',
+    description: 'Create purchase orders and vendor bills',
+  },
+  {
+    key: 'purchase.update',
+    subject: 'Purchase',
+    action: 'update',
+    description: 'Edit / cancel purchase orders',
+  },
+  {
+    key: 'purchase.delete',
+    subject: 'Purchase',
+    action: 'delete',
+    description: 'Delete draft purchase documents',
+  },
+  {
+    key: 'purchase.post',
+    subject: 'Purchase',
+    action: 'post',
+    description: 'Confirm POs, receive goods, and post vendor bills',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -541,6 +571,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'pricelist.read',
         'location.read',
         'stock.read',
+        'purchase.read',
       ],
     },
   ];

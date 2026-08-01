@@ -6,3 +6,4 @@ export * from './stock.controller';
 export * from './dto/location.dto';
 export * from './dto/stock-movement.dto';
 export * from './dto/stock-read.dto';
+export * from './dto/stock-ops.dto';

@@ -22,6 +22,7 @@ import {
   ValuationQueryDto,
   ValuationResponseDto,
 } from './dto/stock-read.dto';
+import { AdjustStockDto, TransferStockDto } from './dto/stock-ops.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
@@ -53,6 +54,24 @@ export class StockController {
     @CurrentUser() caller: AuthenticatedUser,
   ): Promise<Paginated<MovementResponseDto>> {
     return this.svc.listMovements(query, caller);
+  }
+
+  @Post('adjustments')
+  @RequirePermissions({ action: 'update', subject: 'Stock' })
+  adjust(
+    @Body() dto: AdjustStockDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<MovementResponseDto> {
+    return this.svc.adjust(dto, caller);
+  }
+
+  @Post('transfers')
+  @RequirePermissions({ action: 'create', subject: 'Stock' })
+  transfer(
+    @Body() dto: TransferStockDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<MovementResponseDto> {
+    return this.svc.transfer(dto, caller);
   }
 
   @Get('on-hand')

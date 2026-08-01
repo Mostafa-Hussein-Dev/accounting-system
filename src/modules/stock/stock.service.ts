@@ -33,6 +33,7 @@ import {
   ValuationResponseDto,
   VariantStockDto,
 } from './dto/stock-read.dto';
+import { AdjustStockDto, TransferStockDto } from './dto/stock-ops.dto';
 
 // The valuation direction a move implies, derived from the location TYPES (not
 // the requested StockMovementType): stock entering the internal network from a
@@ -247,6 +248,93 @@ export class StockService {
       total,
       page,
       limit,
+    );
+  }
+
+  // --- convenience operations ----------------------------------------------
+
+  /**
+   * Reconcile a physical count: posts the difference between the counted
+   * quantity and current on-hand as an ADJUSTMENT against the virtual
+   * ADJUSTMENT location. Up = inbound (needs unitCost), down = outbound.
+   */
+  async adjust(
+    dto: AdjustStockDto,
+    caller: AuthenticatedUser,
+  ): Promise<MovementResponseDto> {
+    const companyId = this.resolveCompanyId(dto.companyId, caller);
+    const client = this.clientFor(caller);
+    const item = await this.resolveItem(client, dto.itemId, companyId);
+    const variant = await this.resolveVariant(client, item, dto.variantId);
+    await this.resolveLocation(client, dto.locationId, companyId);
+    const adjustment = await this.resolveVirtual(
+      client,
+      companyId,
+      LocationType.ADJUSTMENT,
+    );
+
+    const counted = await this.convertToBase(
+      client,
+      item,
+      dto.uomId,
+      dto.countedQty,
+    );
+    const current = await this.locationOnHand(
+      client,
+      companyId,
+      item.id,
+      variant?.id ?? null,
+      dto.locationId,
+    );
+    const delta = round(counted - current, 3);
+    if (delta === 0) {
+      throw new BadRequestException({
+        code: 'ADJUSTMENT_NO_CHANGE',
+        message: `Counted quantity already matches on-hand (${current}).`,
+        field: 'countedQty',
+      });
+    }
+
+    const up = delta > 0;
+    return this.createMovement(
+      {
+        type: StockMovementType.ADJUSTMENT,
+        movementDate: dto.movementDate,
+        itemId: item.id,
+        variantId: variant?.id,
+        fromLocationId: up ? adjustment.id : dto.locationId,
+        toLocationId: up ? dto.locationId : adjustment.id,
+        qty: Math.abs(delta),
+        // delta is already in base units; do not re-convert.
+        unitCost: up ? dto.unitCost : undefined,
+        reason: dto.reason,
+        branchId: dto.branchId,
+        companyId: dto.companyId,
+      },
+      caller,
+    );
+  }
+
+  /** Move stock between two internal locations (value-neutral). */
+  async transfer(
+    dto: TransferStockDto,
+    caller: AuthenticatedUser,
+  ): Promise<MovementResponseDto> {
+    return this.createMovement(
+      {
+        type: StockMovementType.TRANSFER,
+        movementDate: dto.movementDate,
+        itemId: dto.itemId,
+        variantId: dto.variantId,
+        fromLocationId: dto.fromLocationId,
+        toLocationId: dto.toLocationId,
+        qty: dto.qty,
+        uomId: dto.uomId,
+        reason: dto.reason,
+        branchId: dto.branchId,
+        companyId: dto.companyId,
+      },
+      caller,
     );
   }
 
@@ -720,6 +808,25 @@ export class StockService {
       throw new NotFoundException({
         code: 'LOCATION_NOT_FOUND',
         message: `Location ${id} was not found in this company.`,
+        field: null,
+      });
+    }
+    return loc;
+  }
+
+  /** The company's virtual location of a given type (seeded once per company). */
+  private async resolveVirtual(
+    client: Prisma.TransactionClient,
+    companyId: string,
+    type: LocationType,
+  ): Promise<Location> {
+    const loc = await client.location.findFirst({
+      where: { companyId, type, deletedAt: null },
+    });
+    if (!loc) {
+      throw new NotFoundException({
+        code: 'VIRTUAL_LOCATION_MISSING',
+        message: `No ${type} location is configured for this company.`,
         field: null,
       });
     }

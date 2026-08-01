@@ -5332,6 +5332,286 @@
       ]
     },
     {
+      "name": "Stock",
+      "item": [
+        {
+          "name": "List locations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){",
+                  "  const d = pm.response.json().data;",
+                  "  const pick = (t)=>{const x=d.find(l=>l.type===t); if(x) return x.id;};",
+                  "  const i=pick('INTERNAL'); if(i) pm.environment.set('internalLocationId', i);",
+                  "  const s=pick('SUPPLIER'); if(s) pm.environment.set('supplierLocationId', s);",
+                  "  const c=pick('CUSTOMER'); if(c) pm.environment.set('customerLocationId', c);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create location (internal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('locationId', pm.response.json().data.id);pm.environment.set('internalLocationId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WH-MAIN\",\n  \"name\": \"Main Warehouse\",\n  \"branchId\": \"{{branchId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Receipt (supplier -> internal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('stockMovementId', pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "movements"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"RECEIPT\",\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{supplierLocationId}}\",\n  \"toLocationId\": \"{{internalLocationId}}\",\n  \"qty\": 10,\n  \"unitCost\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Issue (internal -> customer)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "movements"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ISSUE\",\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{customerLocationId}}\",\n  \"qty\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Adjust (physical count)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/adjustments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "adjustments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"{{itemId}}\",\n  \"locationId\": \"{{internalLocationId}}\",\n  \"countedQty\": 8,\n  \"unitCost\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Transfer (internal -> internal)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/transfers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "transfers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{locationId}}\",\n  \"qty\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List movements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/movements?itemId={{itemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "movements"
+              ],
+              "query": [
+                {
+                  "key": "itemId",
+                  "value": "{{itemId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "On-hand",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/on-hand?itemId={{itemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "on-hand"
+              ],
+              "query": [
+                {
+                  "key": "itemId",
+                  "value": "{{itemId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Item stock breakdown",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/items/{{itemId}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "items",
+                "{{itemId}}",
+                "stock"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Valuation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock/valuation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "valuation"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "System",
       "item": [
         {

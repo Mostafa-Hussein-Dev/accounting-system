@@ -25,6 +25,14 @@ import {
   MovementResponseDto,
   QueryMovementDto,
 } from './dto/stock-movement.dto';
+import {
+  ItemStockResponseDto,
+  OnHandQueryDto,
+  OnHandResponseDto,
+  ValuationQueryDto,
+  ValuationResponseDto,
+  VariantStockDto,
+} from './dto/stock-read.dto';
 
 // The valuation direction a move implies, derived from the location TYPES (not
 // the requested StockMovementType): stock entering the internal network from a
@@ -242,6 +250,234 @@ export class StockService {
     );
   }
 
+  // --- derived reads -------------------------------------------------------
+
+  /** On-hand + valuation for a stream, company-wide or at one location. */
+  async onHand(
+    query: OnHandQueryDto,
+    caller: AuthenticatedUser,
+  ): Promise<OnHandResponseDto> {
+    const companyId = this.resolveCompanyId(query.companyId, caller);
+    const client = this.clientFor(caller);
+    const item = await this.resolveItem(client, query.itemId, companyId);
+    const variantId = query.variantId ?? null;
+    const currency = await this.baseCurrency(client, companyId);
+
+    let qty: number;
+    let value: number;
+    if (query.locationId) {
+      qty = await this.locationOnHand(
+        client,
+        companyId,
+        item.id,
+        variantId,
+        query.locationId,
+      );
+      value = await this.locationValueNet(
+        client,
+        companyId,
+        item.id,
+        variantId,
+        query.locationId,
+      );
+    } else {
+      qty = await this.streamOnHandTotal(client, companyId, item.id, variantId);
+      value = await this.streamValueNet(client, companyId, item.id, variantId);
+    }
+
+    const cached = variantId
+      ? await this.variantAvg(client, variantId)
+      : Number(item.avgCost);
+    const avgCost = qty > 0 ? round(value / qty, 4) : round(cached, 4);
+    return {
+      itemId: item.id,
+      variantId,
+      locationId: query.locationId ?? null,
+      qty: round(qty, 3),
+      avgCost,
+      value: round(value, 4),
+      currency,
+    };
+  }
+
+  /** Per-variant, per-internal-location on-hand breakdown for an item. */
+  async itemStock(
+    itemId: string,
+    caller: AuthenticatedUser,
+    companyIdOverride?: string,
+  ): Promise<ItemStockResponseDto> {
+    const companyId = this.resolveCompanyId(companyIdOverride, caller);
+    const client = this.clientFor(caller);
+    const item = await this.resolveItem(client, itemId, companyId);
+    const currency = await this.baseCurrency(client, companyId);
+
+    const [inRows, outRows] = await Promise.all([
+      client.stockMovement.groupBy({
+        by: ['variantId', 'toLocationId'],
+        _sum: { qty: true, value: true },
+        where: {
+          companyId,
+          itemId: item.id,
+          toLocation: { type: LocationType.INTERNAL },
+        },
+      }),
+      client.stockMovement.groupBy({
+        by: ['variantId', 'fromLocationId'],
+        _sum: { qty: true, value: true },
+        where: {
+          companyId,
+          itemId: item.id,
+          fromLocation: { type: LocationType.INTERNAL },
+        },
+      }),
+    ]);
+
+    // Accumulate net qty/value per (variant, location).
+    const cells = new Map<
+      string,
+      {
+        variantId: string | null;
+        locationId: string;
+        qty: number;
+        value: number;
+      }
+    >();
+    const bump = (
+      variantId: string | null,
+      locationId: string,
+      qty: number,
+      value: number,
+    ): void => {
+      const key = `${variantId ?? '_'}|${locationId}`;
+      const cell = cells.get(key) ?? {
+        variantId,
+        locationId,
+        qty: 0,
+        value: 0,
+      };
+      cell.qty += qty;
+      cell.value += value;
+      cells.set(key, cell);
+    };
+    for (const r of inRows) {
+      bump(
+        r.variantId,
+        r.toLocationId,
+        Number(r._sum.qty ?? 0),
+        Number(r._sum.value ?? 0),
+      );
+    }
+    for (const r of outRows) {
+      bump(
+        r.variantId,
+        r.fromLocationId,
+        -Number(r._sum.qty ?? 0),
+        -Number(r._sum.value ?? 0),
+      );
+    }
+
+    const locationCodes = await this.internalLocationCodes(client, companyId);
+    const byVariant = new Map<string, VariantStockDto>();
+    let totalQty = 0;
+    let totalValue = 0;
+    for (const cell of cells.values()) {
+      if (round(cell.qty, 3) === 0 && round(cell.value, 4) === 0) continue;
+      const vk = cell.variantId ?? '_';
+      const v =
+        byVariant.get(vk) ??
+        ({
+          variantId: cell.variantId,
+          qty: 0,
+          value: 0,
+          locations: [],
+        } as VariantStockDto);
+      v.locations.push({
+        locationId: cell.locationId,
+        locationCode: locationCodes.get(cell.locationId) ?? cell.locationId,
+        qty: round(cell.qty, 3),
+        value: round(cell.value, 4),
+      });
+      v.qty = round(v.qty + cell.qty, 3);
+      v.value = round(v.value + cell.value, 4);
+      byVariant.set(vk, v);
+      totalQty += cell.qty;
+      totalValue += cell.value;
+    }
+
+    return {
+      itemId: item.id,
+      totalQty: round(totalQty, 3),
+      totalValue: round(totalValue, 4),
+      currency,
+      breakdown: [...byVariant.values()],
+    };
+  }
+
+  /** Total inventory value per item (and grand total) as of a date. */
+  async valuation(
+    query: ValuationQueryDto,
+    caller: AuthenticatedUser,
+  ): Promise<ValuationResponseDto> {
+    const companyId = this.resolveCompanyId(query.companyId, caller);
+    const client = this.clientFor(caller);
+    const currency = await this.baseCurrency(client, companyId);
+    const asOf = this.parseDate(query.asOf);
+    const dateFilter = { movementDate: { lte: asOf } };
+
+    const [inRows, outRows] = await Promise.all([
+      client.stockMovement.groupBy({
+        by: ['itemId'],
+        _sum: { qty: true, value: true },
+        where: {
+          companyId,
+          toLocation: { type: LocationType.INTERNAL },
+          ...dateFilter,
+        },
+      }),
+      client.stockMovement.groupBy({
+        by: ['itemId'],
+        _sum: { qty: true, value: true },
+        where: {
+          companyId,
+          fromLocation: { type: LocationType.INTERNAL },
+          ...dateFilter,
+        },
+      }),
+    ]);
+
+    const byItem = new Map<string, { qty: number; value: number }>();
+    for (const r of inRows) {
+      const cur = byItem.get(r.itemId) ?? { qty: 0, value: 0 };
+      cur.qty += Number(r._sum.qty ?? 0);
+      cur.value += Number(r._sum.value ?? 0);
+      byItem.set(r.itemId, cur);
+    }
+    for (const r of outRows) {
+      const cur = byItem.get(r.itemId) ?? { qty: 0, value: 0 };
+      cur.qty -= Number(r._sum.qty ?? 0);
+      cur.value -= Number(r._sum.value ?? 0);
+      byItem.set(r.itemId, cur);
+    }
+
+    let totalValue = 0;
+    const items = [...byItem.entries()]
+      .map(([itemId, v]) => ({
+        itemId,
+        qty: round(v.qty, 3),
+        value: round(v.value, 4),
+      }))
+      .filter((r) => r.qty !== 0 || r.value !== 0)
+      .sort((a, b) => b.value - a.value);
+    for (const r of items) totalValue += r.value;
+
+    return {
+      asOf: asOf.toISOString().slice(0, 10),
+      totalValue: round(totalValue, 4),
+      currency,
+      items,
+    };
+  }
+
   // --- valuation / on-hand helpers -----------------------------------------
 
   /** Total on-hand for a stream across ALL internal locations (the AVCO base). */
@@ -285,6 +521,71 @@ export class StockService {
       }),
     ]);
     return Number(inAgg._sum.qty ?? 0) - Number(outAgg._sum.qty ?? 0);
+  }
+
+  /** Net inventory value for a stream across internal locations (as-of optional). */
+  private async streamValueNet(
+    client: Prisma.TransactionClient,
+    companyId: string,
+    itemId: string,
+    variantId: string | null,
+  ): Promise<number> {
+    const stream = { companyId, itemId, variantId };
+    const [inAgg, outAgg] = await Promise.all([
+      client.stockMovement.aggregate({
+        _sum: { value: true },
+        where: { ...stream, toLocation: { type: LocationType.INTERNAL } },
+      }),
+      client.stockMovement.aggregate({
+        _sum: { value: true },
+        where: { ...stream, fromLocation: { type: LocationType.INTERNAL } },
+      }),
+    ]);
+    return Number(inAgg._sum.value ?? 0) - Number(outAgg._sum.value ?? 0);
+  }
+
+  /** Net inventory value for a stream at one specific location. */
+  private async locationValueNet(
+    client: Prisma.TransactionClient,
+    companyId: string,
+    itemId: string,
+    variantId: string | null,
+    locationId: string,
+  ): Promise<number> {
+    const stream = { companyId, itemId, variantId };
+    const [inAgg, outAgg] = await Promise.all([
+      client.stockMovement.aggregate({
+        _sum: { value: true },
+        where: { ...stream, toLocationId: locationId },
+      }),
+      client.stockMovement.aggregate({
+        _sum: { value: true },
+        where: { ...stream, fromLocationId: locationId },
+      }),
+    ]);
+    return Number(inAgg._sum.value ?? 0) - Number(outAgg._sum.value ?? 0);
+  }
+
+  private async variantAvg(
+    client: Prisma.TransactionClient,
+    variantId: string,
+  ): Promise<number> {
+    const v = await client.itemVariant.findUnique({
+      where: { id: variantId },
+      select: { avgCost: true },
+    });
+    return Number(v?.avgCost ?? 0);
+  }
+
+  private async internalLocationCodes(
+    client: Prisma.TransactionClient,
+    companyId: string,
+  ): Promise<Map<string, string>> {
+    const rows = await client.location.findMany({
+      where: { companyId, type: LocationType.INTERNAL },
+      select: { id: true, code: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.code]));
   }
 
   private async setAvg(

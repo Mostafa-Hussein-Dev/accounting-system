@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { StockService } from './stock.service';
 import {
@@ -6,6 +15,13 @@ import {
   MovementResponseDto,
   QueryMovementDto,
 } from './dto/stock-movement.dto';
+import {
+  ItemStockResponseDto,
+  OnHandQueryDto,
+  OnHandResponseDto,
+  ValuationQueryDto,
+  ValuationResponseDto,
+} from './dto/stock-read.dto';
 import { Paginated } from '../../common/types/paginated.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
@@ -37,5 +53,42 @@ export class StockController {
     @CurrentUser() caller: AuthenticatedUser,
   ): Promise<Paginated<MovementResponseDto>> {
     return this.svc.listMovements(query, caller);
+  }
+
+  @Get('on-hand')
+  @RequirePermissions({ action: 'read', subject: 'Stock' })
+  onHand(
+    @Query() query: OnHandQueryDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<OnHandResponseDto> {
+    return this.svc.onHand(query, caller);
+  }
+
+  @Get('valuation')
+  @RequirePermissions({ action: 'read', subject: 'Stock' })
+  valuation(
+    @Query() query: ValuationQueryDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<ValuationResponseDto> {
+    return this.svc.valuation(query, caller);
+  }
+}
+
+// On-hand for one item, nested under the item resource for convenience.
+@ApiTags('Stock')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, CompanyMembershipGuard, PermissionsGuard)
+@Controller('items/:itemId')
+export class ItemStockController {
+  constructor(private readonly svc: StockService) {}
+
+  @Get('stock')
+  @RequirePermissions({ action: 'read', subject: 'Stock' })
+  itemStock(
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @CurrentUser() caller: AuthenticatedUser,
+    @Query('companyId') companyId?: string,
+  ): Promise<ItemStockResponseDto> {
+    return this.svc.itemStock(itemId, caller, companyId);
   }
 }

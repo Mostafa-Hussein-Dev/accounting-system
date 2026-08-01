@@ -5,12 +5,12 @@ import { UomModule } from '../uom/uom.module';
 import { LocationsService } from './locations.service';
 import { LocationsController } from './locations.controller';
 import { StockService } from './stock.service';
-import { StockController } from './stock.controller';
+import { StockController, ItemStockController } from './stock.controller';
 
 @Module({
   imports: [CaslModule, SequencesModule, UomModule],
   providers: [LocationsService, StockService],
-  controllers: [LocationsController, StockController],
+  controllers: [LocationsController, StockController, ItemStockController],
   exports: [LocationsService, StockService],
 })
 export class StockModule {}

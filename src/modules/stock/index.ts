@@ -5,3 +5,4 @@ export * from './stock.service';
 export * from './stock.controller';
 export * from './dto/location.dto';
 export * from './dto/stock-movement.dto';
+export * from './dto/stock-read.dto';

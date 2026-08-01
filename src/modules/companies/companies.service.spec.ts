@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { TaxesService } from '../taxes/taxes.service';
 import { SequencesService } from '../sequences/sequences.service';
+import { LocationsService } from '../stock/locations.service';
 import { CompaniesService } from './companies.service';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 
@@ -18,7 +19,8 @@ describe('CompaniesService (settings — FR-108)', () => {
   const platformAdmin: AuthenticatedUser = {
     userId: 'admin',
     companyId: null,
-    isPlatformAdmin: true, mustChangePassword: false,
+    isPlatformAdmin: true,
+    mustChangePassword: false,
   };
 
   beforeAll(async () => {
@@ -31,6 +33,7 @@ describe('CompaniesService (settings — FR-108)', () => {
         AccountsService,
         TaxesService,
         SequencesService,
+        LocationsService,
       ],
     }).compile();
     prisma = moduleRef.get(PrismaService);
@@ -135,7 +138,8 @@ describe('CompaniesService (settings — FR-108)', () => {
     const caller: AuthenticatedUser = {
       userId: user.id,
       companyId: co.id,
-      isPlatformAdmin: false, mustChangePassword: false,
+      isPlatformAdmin: false,
+      mustChangePassword: false,
     };
     // The Company Member role does not grant company.create -> forbidden,
     // regardless of active company.

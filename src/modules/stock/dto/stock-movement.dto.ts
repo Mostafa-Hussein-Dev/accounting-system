@@ -42,6 +42,15 @@ export class CreateMovementDto {
   @IsUUID()
   variantId?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'The external counterparty. REQUIRED for receipts (a supplier) and issues (a customer); must be OMITTED for internal transfers/adjustments.',
+  })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUUID()
+  partnerId?: string;
+
   @ApiProperty({ description: 'Source location.' })
   @IsUUID()
   fromLocationId!: string;
@@ -141,6 +150,12 @@ export class QueryMovementDto {
   @IsUUID()
   locationId?: string;
 
+  @ApiPropertyOptional({ description: 'Movements for this partner.' })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUUID()
+  partnerId?: string;
+
   @ApiPropertyOptional({ enum: StockMovementType })
   @IsOptional()
   @IsEnum(StockMovementType)
@@ -175,6 +190,7 @@ export class MovementResponseDto {
   @ApiPropertyOptional({ nullable: true }) variantId!: string | null;
   @ApiProperty() fromLocationId!: string;
   @ApiProperty() toLocationId!: string;
+  @ApiPropertyOptional({ nullable: true }) partnerId!: string | null;
   @ApiProperty({ description: 'Quantity in the item base UoM.', example: 10 })
   qty!: number;
   @ApiProperty({ example: 4.5 }) unitCost!: number;
@@ -196,6 +212,7 @@ export class MovementResponseDto {
     dto.variantId = m.variantId;
     dto.fromLocationId = m.fromLocationId;
     dto.toLocationId = m.toLocationId;
+    dto.partnerId = m.partnerId;
     dto.qty = Number(m.qty);
     dto.unitCost = Number(m.unitCost);
     dto.value = Number(m.value);

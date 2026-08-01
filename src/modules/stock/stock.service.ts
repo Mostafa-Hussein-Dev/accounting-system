@@ -120,6 +120,16 @@ export class StockService {
       const direction = this.classify(from.type, to.type);
       this.assertTypeMatchesDirection(dto.type, direction);
 
+      // Receipts/issues MUST carry the counterparty; transfers/adjustments must
+      // NOT (the JournalLine.partnerId pattern, applied to stock).
+      const partnerId = await this.resolvePartner(
+        tx,
+        companyId,
+        from,
+        to,
+        dto.partnerId,
+      );
+
       const qty = await this.convertToBase(tx, item, dto.uomId, dto.qty);
 
       // Serialize concurrent movements on this valuation stream.
@@ -196,6 +206,7 @@ export class StockService {
           variantId: variant?.id ?? null,
           fromLocationId: from.id,
           toLocationId: to.id,
+          partnerId,
           qty,
           unitCost,
           value,
@@ -221,6 +232,7 @@ export class StockService {
     if (query.companyId) where.companyId = query.companyId;
     if (query.itemId) where.itemId = query.itemId;
     if (query.variantId) where.variantId = query.variantId;
+    if (query.partnerId) where.partnerId = query.partnerId;
     if (query.type) where.type = query.type;
     if (query.locationId) {
       where.OR = [
@@ -810,6 +822,71 @@ export class StockService {
       });
     }
     return loc;
+  }
+
+  /**
+   * Enforce the counterparty rule: a movement touching a SUPPLIER or CUSTOMER
+   * location REQUIRES a partner of the matching role; an internal transfer or
+   * adjustment must NOT carry one. Returns the validated partnerId or null.
+   */
+  private async resolvePartner(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    from: Location,
+    to: Location,
+    partnerId: string | undefined,
+  ): Promise<string | null> {
+    const involvesSupplier =
+      from.type === LocationType.SUPPLIER || to.type === LocationType.SUPPLIER;
+    const involvesCustomer =
+      from.type === LocationType.CUSTOMER || to.type === LocationType.CUSTOMER;
+
+    if (!involvesSupplier && !involvesCustomer) {
+      if (partnerId) {
+        throw new BadRequestException({
+          code: 'PARTNER_NOT_APPLICABLE',
+          message:
+            'Internal transfers and adjustments must not carry a partner.',
+          field: 'partnerId',
+        });
+      }
+      return null;
+    }
+
+    if (!partnerId) {
+      throw new BadRequestException({
+        code: 'PARTNER_REQUIRED',
+        message: involvesSupplier
+          ? 'A receipt from a supplier requires a supplier partner.'
+          : 'An issue to a customer requires a customer partner.',
+        field: 'partnerId',
+      });
+    }
+    const partner = await tx.partner.findFirst({
+      where: { id: partnerId, companyId, deletedAt: null },
+    });
+    if (!partner) {
+      throw new NotFoundException({
+        code: 'PARTNER_NOT_FOUND',
+        message: `Partner ${partnerId} was not found in this company.`,
+        field: 'partnerId',
+      });
+    }
+    if (involvesSupplier && !partner.isSupplier) {
+      throw new BadRequestException({
+        code: 'PARTNER_NOT_SUPPLIER',
+        message: `Partner "${partner.name}" is not marked as a supplier.`,
+        field: 'partnerId',
+      });
+    }
+    if (involvesCustomer && !partner.isCustomer) {
+      throw new BadRequestException({
+        code: 'PARTNER_NOT_CUSTOMER',
+        message: `Partner "${partner.name}" is not marked as a customer.`,
+        field: 'partnerId',
+      });
+    }
+    return partner.id;
   }
 
   /** The company's virtual location of a given type (seeded once per company). */

@@ -52,6 +52,16 @@ export class LocationsController {
     return this.svc.findAll(query, caller);
   }
 
+  // Declared before ':id' so "virtual" isn't parsed as a location id.
+  @Get('virtual')
+  @RequirePermissions({ action: 'read', subject: 'Location' })
+  findVirtual(
+    @CurrentUser() caller: AuthenticatedUser,
+    @Query('companyId') companyId?: string,
+  ): Promise<LocationResponseDto[]> {
+    return this.svc.findVirtual(caller, companyId);
+  }
+
   @Get(':id')
   @RequirePermissions({ action: 'read', subject: 'Location' })
   findOne(

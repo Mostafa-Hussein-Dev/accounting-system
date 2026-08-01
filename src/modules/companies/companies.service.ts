@@ -12,6 +12,7 @@ import { Paginated } from '../../common/types/paginated.type';
 import { AccountsService } from '../accounts/accounts.service';
 import { TaxesService } from '../taxes/taxes.service';
 import { SequencesService } from '../sequences/sequences.service';
+import { LocationsService } from '../stock/locations.service';
 import {
   isPlatformAdmin,
   type AuthenticatedUser,
@@ -54,6 +55,7 @@ export class CompaniesService {
     private readonly accountsService: AccountsService,
     private readonly taxesService: TaxesService,
     private readonly sequencesService: SequencesService,
+    private readonly locationsService: LocationsService,
   ) {}
 
   /**
@@ -126,6 +128,7 @@ export class CompaniesService {
     await this.accountsService.applyDefaultChart(company.id, tx);
     await this.taxesService.applyDefaultVatRate(company.id, tx);
     await this.sequencesService.applyDefaultSequences(company.id, tx);
+    await this.locationsService.applyDefaultLocations(company.id, tx);
 
     return CompanyResponseDto.fromEntity(company);
   }
@@ -276,7 +279,6 @@ export class CompaniesService {
     }
     return company;
   }
-
 
   /**
    * A company user may create a company only if they hold the company.create

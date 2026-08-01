@@ -19,9 +19,80 @@ import {
 
 const PRISMA_UNIQUE = 'P2002';
 
+// The four virtual counterparty locations every company must have (Odoo's
+// Customers/Vendors/Inventory-adjustment/Transit). Seeded once per company.
+const DEFAULT_VIRTUAL_LOCATIONS: {
+  code: string;
+  name: string;
+  type: LocationType;
+}[] = [
+  { code: 'CUSTOMERS', name: 'Customers', type: LocationType.CUSTOMER },
+  { code: 'SUPPLIERS', name: 'Suppliers', type: LocationType.SUPPLIER },
+  {
+    code: 'ADJUSTMENT',
+    name: 'Inventory Adjustment',
+    type: LocationType.ADJUSTMENT,
+  },
+  { code: 'TRANSIT', name: 'Transit', type: LocationType.TRANSIT },
+];
+
+const VIRTUAL_TYPES: LocationType[] = [
+  LocationType.CUSTOMER,
+  LocationType.SUPPLIER,
+  LocationType.ADJUSTMENT,
+  LocationType.TRANSIT,
+];
+
 @Injectable()
 export class LocationsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Seed a company's four virtual counterparty locations (FR-402). Idempotent —
+   * skips any type the company already has. Called from CompaniesService.provision
+   * (company create / register) in the same transaction, so a fresh company can
+   * never lack them. Returns how many were created.
+   */
+  async applyDefaultLocations(
+    companyId: string,
+    client: Prisma.TransactionClient,
+  ): Promise<number> {
+    const existing = await client.location.findMany({
+      where: { companyId },
+      select: { type: true },
+    });
+    const have = new Set(existing.map((e) => e.type));
+    const toCreate = DEFAULT_VIRTUAL_LOCATIONS.filter((v) => !have.has(v.type));
+    if (toCreate.length === 0) {
+      return 0;
+    }
+    await client.location.createMany({
+      data: toCreate.map((v) => ({
+        companyId,
+        code: v.code,
+        name: v.name,
+        type: v.type,
+      })),
+    });
+    return toCreate.length;
+  }
+
+  /** The company's virtual counterparty locations (one call for the frontend). */
+  async findVirtual(
+    caller: AuthenticatedUser,
+    companyId?: string,
+  ): Promise<LocationResponseDto[]> {
+    const where: Prisma.LocationWhereInput = {
+      deletedAt: null,
+      type: { in: VIRTUAL_TYPES },
+    };
+    if (companyId) where.companyId = companyId;
+    const rows = await this.clientFor(caller).location.findMany({
+      where,
+      orderBy: { type: 'asc' },
+    });
+    return rows.map(LocationResponseDto.fromEntity);
+  }
 
   private clientFor(caller: AuthenticatedUser): Prisma.TransactionClient {
     if (isPlatformAdmin(caller)) {

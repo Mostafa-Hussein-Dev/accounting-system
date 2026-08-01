@@ -5556,7 +5556,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{locationId}}\",\n  \"qty\": 2\n}",
+              "raw": "{\n  \"itemId\": \"{{itemId}}\",\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{transferlocationId}}\",\n  \"qty\": 2\n}",
               "options": {
                 "raw": {
                   "language": "json"

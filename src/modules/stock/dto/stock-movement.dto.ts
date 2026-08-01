@@ -113,6 +113,11 @@ export class CreateMovementDto {
   @Transform(emptyToUndefined)
   @IsUUID()
   companyId?: string;
+
+  // Set by document flows (e.g. goods receipt) to link the movement back to its
+  // source; not part of the public manual API surface.
+  sourceDocType?: string;
+  sourceDocId?: string;
 }
 
 export class QueryMovementDto {

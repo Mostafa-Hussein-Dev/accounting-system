@@ -3,6 +3,10 @@ import {
   PurchaseOrderLineResponseDto,
   PurchaseOrderResponseDto,
 } from './dto/purchase-order.dto';
+import {
+  GoodsReceiptLineResponseDto,
+  GoodsReceiptResponseDto,
+} from './dto/goods-receipt.dto';
 
 export const PO_INCLUDE = {
   lines: { orderBy: { lineNo: 'asc' } },
@@ -30,6 +34,46 @@ function toLine(l: PurchaseOrderLineEntity): PurchaseOrderLineResponseDto {
     vatAmount: Number(l.vatAmount),
     totalAmount: Number(l.totalAmount),
     description: l.description,
+  };
+}
+
+export const GR_INCLUDE = {
+  lines: { orderBy: { createdAt: 'asc' } },
+} satisfies Prisma.GoodsReceiptInclude;
+
+type GoodsReceiptWithLines = Prisma.GoodsReceiptGetPayload<{
+  include: typeof GR_INCLUDE;
+}>;
+type GoodsReceiptLineEntity = GoodsReceiptWithLines['lines'][number];
+
+function toGrLine(l: GoodsReceiptLineEntity): GoodsReceiptLineResponseDto {
+  return {
+    id: l.id,
+    purchaseOrderLineId: l.purchaseOrderLineId,
+    itemId: l.itemId,
+    variantId: l.variantId,
+    uomId: l.uomId,
+    qtyReceived: Number(l.qtyReceived),
+    unitCostBase: Number(l.unitCostBase),
+    stockMovementId: l.stockMovementId,
+  };
+}
+
+export function toGoodsReceiptResponse(
+  gr: GoodsReceiptWithLines,
+): GoodsReceiptResponseDto {
+  return {
+    id: gr.id,
+    companyId: gr.companyId,
+    receiptNo: gr.receiptNo,
+    status: gr.status,
+    purchaseOrderId: gr.purchaseOrderId,
+    locationId: gr.locationId,
+    branchId: gr.branchId,
+    receiptDate: gr.receiptDate,
+    notes: gr.notes,
+    lines: gr.lines.map(toGrLine),
+    createdAt: gr.createdAt,
   };
 }
 

@@ -68,6 +68,8 @@ enum DocumentType {
   PAYMENT_RECEIPT
   JOURNAL_ENTRY
   STOCK_MOVEMENT
+  GOODS_RECEIPT
+  PURCHASE_INVOICE
 }
 
 // Journal-entry lifecycle (FR-901/FR-906). A DRAFT entry is editable and does

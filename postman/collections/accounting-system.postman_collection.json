@@ -5613,6 +5613,18 @@
                 {
                   "key": "itemId",
                   "value": "{{itemId}}"
+                },
+                {
+                  "key": "locationId",
+                  "value": "{{internalLocationId}}",
+                  "description": "On-hand at ONE location; omit for the company-wide total",
+                  "disabled": true
+                },
+                {
+                  "key": "variantId",
+                  "value": "",
+                  "description": "Restrict to one variant",
+                  "disabled": true
                 }
               ]
             }

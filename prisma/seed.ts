@@ -439,6 +439,48 @@ const PERMISSIONS = [
     action: 'delete',
     description: 'Delete price lists',
   },
+  {
+    key: 'location.read',
+    subject: 'Location',
+    action: 'read',
+    description: 'View stock locations',
+  },
+  {
+    key: 'location.create',
+    subject: 'Location',
+    action: 'create',
+    description: 'Create stock locations',
+  },
+  {
+    key: 'location.update',
+    subject: 'Location',
+    action: 'update',
+    description: 'Edit stock locations',
+  },
+  {
+    key: 'location.delete',
+    subject: 'Location',
+    action: 'delete',
+    description: 'Delete stock locations',
+  },
+  {
+    key: 'stock.read',
+    subject: 'Stock',
+    action: 'read',
+    description: 'View stock movements, on-hand and valuation',
+  },
+  {
+    key: 'stock.create',
+    subject: 'Stock',
+    action: 'create',
+    description: 'Post stock movements (receipts, issues, transfers)',
+  },
+  {
+    key: 'stock.update',
+    subject: 'Stock',
+    action: 'update',
+    description: 'Adjust stock (physical count reconciliation)',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -492,6 +534,8 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'uom.read',
         'item.read',
         'pricelist.read',
+        'location.read',
+        'stock.read',
       ],
     },
   ];

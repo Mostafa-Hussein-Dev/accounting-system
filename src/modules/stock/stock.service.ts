@@ -471,14 +471,12 @@ export class StockService {
     for (const cell of cells.values()) {
       if (round(cell.qty, 3) === 0 && round(cell.value, 4) === 0) continue;
       const vk = cell.variantId ?? '_';
-      const v =
-        byVariant.get(vk) ??
-        ({
-          variantId: cell.variantId,
-          qty: 0,
-          value: 0,
-          locations: [],
-        } as VariantStockDto);
+      const v: VariantStockDto = byVariant.get(vk) ?? {
+        variantId: cell.variantId,
+        qty: 0,
+        value: 0,
+        locations: [],
+      };
       v.locations.push({
         locationId: cell.locationId,
         locationCode: locationCodes.get(cell.locationId) ?? cell.locationId,

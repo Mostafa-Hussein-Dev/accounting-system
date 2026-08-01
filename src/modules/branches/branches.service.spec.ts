@@ -35,21 +35,31 @@ describe('BranchesService', () => {
     companyAId = companyA.id;
     companyBId = companyB.id;
 
-    platformAdmin = { userId: 'admin', companyId: null, isPlatformAdmin: true, mustChangePassword: false };
+    platformAdmin = {
+      userId: 'admin',
+      companyId: null,
+      isPlatformAdmin: true,
+      mustChangePassword: false,
+    };
     callerA = {
       userId: 'caller-a',
       companyId: companyAId,
-      isPlatformAdmin: false, mustChangePassword: false,
+      isPlatformAdmin: false,
+      mustChangePassword: false,
     };
     callerB = {
       userId: 'caller-b',
       companyId: companyBId,
-      isPlatformAdmin: false, mustChangePassword: false,
+      isPlatformAdmin: false,
+      mustChangePassword: false,
     };
   });
 
   afterAll(async () => {
     await prisma.branch.deleteMany({ where: { id: { in: createdBranchIds } } });
+    await prisma.location.deleteMany({
+      where: { companyId: { in: [companyAId, companyBId] } },
+    });
     await prisma.company.deleteMany({
       where: { id: { in: [companyAId, companyBId] } },
     });
@@ -158,15 +168,22 @@ describe('BranchesService', () => {
     expect(row?.deletedAt).not.toBeNull();
   });
 
-  it('persists trilingual names and stockLocationId', async () => {
-    const stockLocationId = randomUUID();
+  it('persists trilingual names and a supplied stockLocationId', async () => {
+    const loc = await prisma.location.create({
+      data: {
+        companyId: companyAId,
+        code: `WH-${randomUUID().slice(0, 8)}`,
+        name: 'Warehouse',
+        type: 'INTERNAL',
+      },
+    });
     const branch = await service.create(
       {
         name: `Trilingual ${randomUUID()}`,
         nameAr: 'فرع',
         nameFr: 'Succursale',
         nameEn: 'Branch',
-        stockLocationId,
+        stockLocationId: loc.id,
       },
       callerA,
     );
@@ -174,6 +191,29 @@ describe('BranchesService', () => {
     expect(branch.nameAr).toBe('فرع');
     expect(branch.nameFr).toBe('Succursale');
     expect(branch.nameEn).toBe('Branch');
-    expect(branch.stockLocationId).toBe(stockLocationId);
+    expect(branch.stockLocationId).toBe(loc.id);
+  });
+
+  it('auto-creates a default stock location when none is supplied', async () => {
+    const branch = await service.create(
+      { name: `Auto ${randomUUID()}` },
+      callerA,
+    );
+    createdBranchIds.push(branch.id);
+    expect(branch.stockLocationId).toBeTruthy();
+    const loc = await prisma.location.findUnique({
+      where: { id: branch.stockLocationId },
+    });
+    expect(loc?.type).toBe('INTERNAL');
+    expect(loc?.branchId).toBe(branch.id);
+  });
+
+  it('rejects a supplied stockLocationId that is not an internal location in the company', async () => {
+    await expect(
+      service.create(
+        { name: `Bad loc ${randomUUID()}`, stockLocationId: randomUUID() },
+        callerA,
+      ),
+    ).rejects.toMatchObject({ response: { code: 'LOCATION_NOT_FOUND' } });
   });
 });

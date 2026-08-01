@@ -14,17 +14,24 @@ export class BranchResponseDto {
   @ApiPropertyOptional({ example: 'فرع بيروت الرئيسي', nullable: true })
   nameAr!: string | null;
 
-  @ApiPropertyOptional({ example: 'Succursale principale de Beyrouth', nullable: true })
+  @ApiPropertyOptional({
+    example: 'Succursale principale de Beyrouth',
+    nullable: true,
+  })
   nameFr!: string | null;
 
   @ApiPropertyOptional({ example: 'Beirut Main Branch', nullable: true })
   nameEn!: string | null;
 
-  @ApiPropertyOptional({ example: 'Hamra Street, Beirut, Lebanon', nullable: true })
+  @ApiPropertyOptional({
+    example: 'Hamra Street, Beirut, Lebanon',
+    nullable: true,
+  })
   address!: string | null;
 
   @ApiPropertyOptional({
-    description: 'Stock location this branch draws from (null until the inventory module ships).',
+    description:
+      'Stock location this branch draws from (null until the inventory module ships).',
     example: null,
     nullable: true,
   })

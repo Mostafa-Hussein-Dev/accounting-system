@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { LocationType, Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { Paginated } from '../../common/types/paginated.type';
@@ -14,12 +19,34 @@ import { BranchResponseDto } from './dto/branch-response.dto';
 const PRISMA_FOREIGN_KEY_CONSTRAINT = 'P2003';
 const ALLOWED_SORT_FIELDS = ['name', 'isActive', 'createdAt', 'updatedAt'];
 
-// TODO(FR-401/FR-404): when the inventory `Location` model ships, add its FK
-// and make Branch.stockLocationId NOT-NULL (see prisma/schema.prisma).
-
 @Injectable()
 export class BranchesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private resolveCompanyId(
+    dtoCompanyId: string | undefined,
+    caller: AuthenticatedUser,
+  ): string {
+    if (!isPlatformAdmin(caller)) {
+      if (!caller.companyId) {
+        throw new BadRequestException({
+          code: 'COMPANY_CONTEXT_REQUIRED',
+          message:
+            'No active company selected. Use POST /auth/switch-company to choose one.',
+          field: null,
+        });
+      }
+      return caller.companyId;
+    }
+    if (!dtoCompanyId) {
+      throw new BadRequestException({
+        code: 'COMPANY_ID_REQUIRED',
+        message: 'A platform admin must specify companyId.',
+        field: 'companyId',
+      });
+    }
+    return dtoCompanyId;
+  }
 
   /**
    * A platform admin/support caller (no companyId of their own) gets the bare
@@ -42,18 +69,65 @@ export class BranchesService {
     dto: CreateBranchDto,
     caller: AuthenticatedUser,
   ): Promise<BranchResponseDto> {
-    const client = this.clientFor(caller);
+    const companyId = this.resolveCompanyId(dto.companyId, caller);
     try {
-      // companyId is optional on the DTO but required on the model — a
-      // company-scoped caller has it injected by forTenant(), a platform admin
-      // supplies it in the body. The unchecked input reflects that runtime
-      // guarantee (a bad/missing companyId surfaces as the P2003 mapped below).
-      const branch = await client.branch.create({
-        data: dto as Prisma.BranchUncheckedCreateInput,
+      // Every branch needs a default INTERNAL stock location (FR-402). The
+      // caller may name an existing one; otherwise we create one and link it
+      // back to the branch — all in one transaction so the NOT-NULL FK holds.
+      const branch = await this.prisma.$transaction(async (tx) => {
+        let stockLocationId = dto.stockLocationId;
+        let autoCreated = false;
+        if (stockLocationId) {
+          const loc = await tx.location.findFirst({
+            where: {
+              id: stockLocationId,
+              companyId,
+              type: LocationType.INTERNAL,
+              deletedAt: null,
+            },
+          });
+          if (!loc) {
+            throw new NotFoundException({
+              code: 'LOCATION_NOT_FOUND',
+              message: `Internal location ${stockLocationId} was not found in this company.`,
+              field: 'stockLocationId',
+            });
+          }
+        } else {
+          const loc = await tx.location.create({
+            data: {
+              companyId,
+              code: `STOCK-${randomUUID().slice(0, 8)}`,
+              name: `Stock - ${dto.name}`,
+              type: LocationType.INTERNAL,
+            },
+          });
+          stockLocationId = loc.id;
+          autoCreated = true;
+        }
+        const created = await tx.branch.create({
+          data: {
+            companyId,
+            name: dto.name,
+            nameAr: dto.nameAr ?? null,
+            nameFr: dto.nameFr ?? null,
+            nameEn: dto.nameEn ?? null,
+            address: dto.address ?? null,
+            stockLocationId,
+          },
+        });
+        if (autoCreated) {
+          await tx.location.update({
+            where: { id: stockLocationId },
+            data: { branchId: created.id },
+          });
+        }
+        return created;
       });
       return BranchResponseDto.fromEntity(branch);
     } catch (error) {
-      throw this.mapWriteError(error, dto.companyId);
+      if (error instanceof NotFoundException) throw error;
+      throw this.mapWriteError(error, companyId);
     }
   }
 
@@ -116,7 +190,7 @@ export class BranchesService {
     try {
       const branch = await client.branch.update({
         where: { id },
-        data: dto as Prisma.BranchUncheckedUpdateInput,
+        data: dto,
       });
       return BranchResponseDto.fromEntity(branch);
     } catch (error) {

@@ -1,23 +1,5 @@
+# PostgreSQL runs natively on the host (localhost:5432), not in Docker.
 services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: accounting_postgres
-    environment:
-      POSTGRES_DB: accounting_db
-      POSTGRES_USER: accounting_user
-      POSTGRES_PASSWORD: accounting_pass
-    ports:
-      - '5432:5432'
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U accounting_user -d accounting_db']
-      interval: 10s
-      retries: 5
-    networks:
-      - accounting_network
-
   redis:
     image: redis:8-alpine
     container_name: accounting_redis
@@ -55,8 +37,6 @@ services:
   #   ports:
   #     - '3000:3000'
   #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
   #     redis:
   #       condition: service_healthy
   #   env_file: .env
@@ -67,7 +47,6 @@ services:
   #     - accounting_network
 
 volumes:
-  postgres_data:
   redis_data:
 
 networks:

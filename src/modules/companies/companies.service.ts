@@ -210,6 +210,11 @@ export class CompaniesService {
    * (FR-108). rounding/enabledModules are replaced wholesale; the record-typed
    * keys (defaultTemplates/featureFlags/fieldVisibility) are deep-merged so a
    * single flag can be toggled without resending the whole set.
+   *
+   * baseCurrencyCode/fiscalYearStartMonth are Company columns rather than
+   * settings-JSON keys, and are written as such — getSettings() has always
+   * returned them, so accepting them here is what makes this endpoint's read
+   * and write shapes agree.
    */
   async updateSettings(
     id: string,
@@ -244,9 +249,22 @@ export class CompaniesService {
       };
     }
 
+    // baseCurrencyCode / fiscalYearStartMonth are Company columns, not
+    // settings-JSON keys — resolveSettings() reads them from the row. Writing
+    // them into `merged` would put them somewhere nothing ever reads, so they
+    // go into the same UPDATE as their own columns.
+    const columns: Prisma.CompanyUncheckedUpdateInput = {};
+    if (dto.baseCurrencyCode !== undefined) {
+      await this.assertCurrencyExists(dto.baseCurrencyCode);
+      columns.baseCurrencyCode = dto.baseCurrencyCode;
+    }
+    if (dto.fiscalYearStartMonth !== undefined) {
+      columns.fiscalYearStartMonth = dto.fiscalYearStartMonth;
+    }
+
     const updated = await this.prisma.company.update({
       where: { id },
-      data: { settings: merged as Prisma.InputJsonValue },
+      data: { ...columns, settings: merged as Prisma.InputJsonValue },
     });
     return this.resolveSettings(updated);
   }

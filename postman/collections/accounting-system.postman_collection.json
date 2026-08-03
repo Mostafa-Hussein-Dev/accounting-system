@@ -2838,7 +2838,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"enabledModules\": [\n    \"invoicing\",\n    \"purchasing\"\n  ],\n  \"featureFlags\": {\n    \"creditNotes\": true\n  },\n  \"rounding\": {\n    \"decimals\": 2,\n    \"mode\": \"HALF_UP\"\n  }\n}",
+              "raw": "{\n  \"baseCurrencyCode\": \"USD\",\n  \"fiscalYearStartMonth\": 1,\n  \"enabledModules\": [\n    \"invoicing\",\n    \"purchasing\"\n  ],\n  \"featureFlags\": {\n    \"creditNotes\": true\n  },\n  \"rounding\": {\n    \"decimals\": 2,\n    \"mode\": \"HALF_UP\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2856,7 +2856,7 @@
                 "settings"
               ]
             },
-            "description": "FR-108. Merge a partial settings payload. featureFlags / fieldVisibility / defaultTemplates are deep-merged (toggle one without resending all); rounding / enabledModules are replaced. Platform admin, or a Company Admin of that company (needs company.update). Base currency and fiscal-year start are set via PATCH /companies/:id instead."
+            "description": "FR-108. Merge a partial settings payload. featureFlags / fieldVisibility / defaultTemplates are deep-merged (toggle one without resending all); rounding / enabledModules are replaced. Platform admin, or a Company Admin of that company (needs company.update). baseCurrencyCode / fiscalYearStartMonth are Company columns rather than settings-JSON keys, but are accepted here too, since GET returns them — the read and write shapes match. PATCH /companies/:id also sets them."
           },
           "response": [
             {

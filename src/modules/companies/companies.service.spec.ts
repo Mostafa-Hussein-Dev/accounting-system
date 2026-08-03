@@ -115,6 +115,46 @@ describe('CompaniesService (settings — FR-108)', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('persists base currency and fiscal year through updateSettings', async () => {
+    const c = await make();
+
+    const after = await service.updateSettings(c.id, {
+      baseCurrencyCode: 'LBP',
+      fiscalYearStartMonth: 4,
+    });
+    expect(after.baseCurrencyCode).toBe('LBP');
+    expect(after.fiscalYearStartMonth).toBe(4);
+
+    // Re-read rather than trusting the mutation's own return value: both live
+    // on Company columns, not in the settings JSON, and the regression this
+    // covers wrote them where getSettings() never looks — the PATCH looked
+    // like it worked and the value reverted on the next read.
+    const reread = await service.getSettings(c.id);
+    expect(reread.baseCurrencyCode).toBe('LBP');
+    expect(reread.fiscalYearStartMonth).toBe(4);
+  });
+
+  it('rejects an unknown base currency from updateSettings', async () => {
+    const c = await make();
+    await expect(
+      service.updateSettings(c.id, { baseCurrencyCode: 'ZZZ' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('leaves the settings JSON intact when only columns are patched', async () => {
+    const c = await make();
+    await service.updateSettings(c.id, {
+      featureFlags: { creditNotes: true },
+      enabledModules: ['invoicing'],
+    });
+
+    await service.updateSettings(c.id, { baseCurrencyCode: 'LBP' });
+
+    const reread = await service.getSettings(c.id);
+    expect(reread.featureFlags).toEqual({ creditNotes: true });
+    expect(reread.enabledModules).toEqual(['invoicing']);
+  });
+
   it('rejects company creation by a user without company.create (Member-only)', async () => {
     const co = await make();
     const memberRole = await prisma.role.findFirstOrThrow({

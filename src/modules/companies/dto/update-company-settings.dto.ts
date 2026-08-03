@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -35,11 +36,40 @@ export class RoundingSettingDto {
   mode!: (typeof ROUNDING_MODES)[number];
 }
 
-// All fields optional — a PATCH merges the provided keys into the company's
-// `settings` JSON (FR-108). featureFlags / fieldVisibility / defaultTemplates
-// are deep-merged so a single flag can be toggled; rounding / enabledModules
-// are replaced wholesale.
+// All fields optional. Most are merged into the company's `settings` JSON
+// (FR-108): featureFlags / fieldVisibility / defaultTemplates are deep-merged
+// so a single flag can be toggled; rounding / enabledModules are replaced
+// wholesale.
+//
+// baseCurrencyCode and fiscalYearStartMonth are the exception — they are real
+// Company columns, not settings-JSON keys, and updateSettings() writes them
+// there. They belong on this DTO because the settings *response* has always
+// returned them: without them the endpoint advertised fields it silently
+// refused to accept. Since the app runs `whitelist: true` (main.ts), they were
+// stripped from the body, so a PATCH succeeded, changed nothing, and echoed the
+// old values straight back.
 export class UpdateCompanySettingsDto {
+  @ApiPropertyOptional({
+    description:
+      'Currency the books are kept in (Currency.code). Stored on the Company row, not in the settings JSON.',
+    example: 'USD',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(3)
+  baseCurrencyCode?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Month the fiscal year starts, 1–12. Stored on the Company row, not in the settings JSON.',
+    example: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  fiscalYearStartMonth?: number;
+
   @ApiPropertyOptional({ type: RoundingSettingDto })
   @IsOptional()
   @ValidateNested()

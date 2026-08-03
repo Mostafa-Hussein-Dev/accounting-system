@@ -356,3 +356,82 @@ Small, and mostly deletion:
 - Any new endpoint returning a base-currency amount should carry a currency
   field from day one, even while that value is still inferred — the field is
   the contract, and the source can be corrected in one place later.
+
+---
+
+## 10. Manual verification today (before the fix)
+
+How to observe the defect, what is safe to exercise meanwhile, and what to
+re-run once §6 lands. Assumes the API on `:3001` and the frontend on `:5173`.
+
+### 10.1 Reproduce the defect
+
+Do this on a throwaway company, not one whose numbers you care about.
+
+1. Pick a company with **at least one posted journal entry**, and note its base
+   currency (`GET /companies/:id/settings` → `baseCurrencyCode`, or the
+   company's Settings tab).
+2. Note an account's balance:
+   `GET /accounts/:id/balance` → `naturalBalance`. In the UI: Chart of Accounts
+   → open the account → **Balance**. Record both the number and the label.
+3. Change the company's base currency to a currency with a very different scale
+   — USD → LBP is the clearest, since the true rate is ~90,000 and LBP carries
+   0 decimals.
+4. Re-read the same balance.
+
+**Expected (the bug):** the number is unchanged and the label changed. A
+balance that was `100.00 USD` now reads `100 LBP`. Nothing converted, nothing
+errored.
+
+**After §6 this must instead still read `100 USD`** — the amount keeps the
+currency it was posted in, and the setting change affects only new postings.
+
+### 10.2 Confirm the API is the source, not the UI
+
+Worth doing once, so the defect isn't mistaken for a formatting bug:
+
+```bash
+curl -s "$API/accounts/$ACCOUNT_ID/balance" -H "Authorization: Bearer $TOKEN"
+```
+
+The response contains `totalDebitBase`, `balance`, `naturalBalance` and **no
+currency field**. That absence is the defect. The frontend's label comes from
+`GET /companies/:id/settings`, which is a different request entirely — which is
+why the two can disagree.
+
+### 10.3 Safe to exercise meanwhile
+
+Base currency can be changed freely on a company with **no postings** — there
+is no history to mislabel, and it is the normal way to correct a setup mistake.
+That path is worth testing, because it also covers `Currency.decimalPlaces`:
+
+- Create a company, set base currency **LBP**, don't post anything.
+- Any base-currency amount for it must render with **0 decimals** (`0 LBP`,
+  never `0.00 LBP`); a USD company renders 2 (`0.00 USD`).
+- Rounding decimals accept 0–6 and reject 7.
+- Saving settings must not clear `enabledModules` / `featureFlags` /
+  `fieldVisibility` — the form doesn't edit them and `PATCH` is partial.
+
+### 10.4 Repair a company that has already drifted
+
+If a company's base currency was changed after posting, the stored amounts are
+still in the *old* currency. Setting `baseCurrencyCode` back to that old
+currency makes the display truthful again — no data changes, because nothing
+ever converted:
+
+```bash
+curl -s -X PATCH "$API/companies/$COMPANY_ID/settings" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"baseCurrencyCode":"USD"}'
+```
+
+Verify with `GET /accounts/:id/balance` that the figure now carries the
+currency it was actually posted in.
+
+### 10.5 Re-run after §6
+
+- §8's test plan in full.
+- §10.1 again — it is the regression test for this defect.
+- A company that legitimately changed base currency mid-life should then show
+  **two** base currencies across its history, reported separately rather than
+  summed (see §6.3).

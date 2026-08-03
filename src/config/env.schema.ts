@@ -29,6 +29,18 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().default('Accounting System <no-reply@example.com>'),
+  // Where outgoing mail goes: 'smtp' hands it to the transporter above,
+  // 'log' prints it to the server log and sends nothing. Its own switch
+  // rather than a branch on NODE_ENV, because "which environment is this"
+  // and "should mail actually be delivered" are different questions — a
+  // developer wanting to inspect real messages in mailpit shouldn't have to
+  // claim to be running production to do it.
+  //
+  // Defaults to 'smtp' deliberately: an unreachable SMTP host fails loudly
+  // and locally, whereas defaulting to 'log' would let a real deployment
+  // silently swallow every password-reset and invitation email — invisible
+  // until a user reports never receiving one.
+  MAIL_TRANSPORT: z.enum(['smtp', 'log']).default('smtp'),
   // Comma-separated list of allowed browser origins (the frontend's dev
   // server / deployed URL) — the API has no CORS policy without this, so no
   // browser-based request (from any origin, including the frontend) can

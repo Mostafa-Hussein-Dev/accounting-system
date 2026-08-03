@@ -22,8 +22,12 @@ interface SendInvitationParams {
 /**
  * Thin wrapper over nodemailer. One transporter, created once and reused —
  * nodemailer pools connections internally, no need to reconnect per send.
- * In development this points at the mailpit container (docker-compose.yml,
- * web UI at http://localhost:8025) so nothing ever leaves the machine.
+ * Locally the SMTP defaults point at the mailpit container
+ * (docker-compose.yml, web UI at http://localhost:8025) so nothing ever
+ * leaves the machine.
+ *
+ * Whether mail is actually delivered is controlled by MAIL_TRANSPORT, not by
+ * NODE_ENV — see `send()` below.
  *
  * Deliberately synchronous/direct (no BullMQ queue) for now — the codebase
  * has Redis provisioned but no queue infrastructure wired up yet. If email
@@ -35,12 +39,12 @@ export class MailerService {
   private readonly logger = new Logger(MailerService.name);
   private readonly transporter: nodemailer.Transporter;
   private readonly from: string;
-  private readonly isDev: boolean;
+  private readonly logOnly: boolean;
 
   constructor(private readonly configService: ConfigService<EnvConfig, true>) {
     this.from = this.configService.get('MAIL_FROM', { infer: true });
-    this.isDev =
-      this.configService.get('NODE_ENV', { infer: true }) === 'development';
+    this.logOnly =
+      this.configService.get('MAIL_TRANSPORT', { infer: true }) === 'log';
     this.transporter = nodemailer.createTransport({
       host: this.configService.get('SMTP_HOST', { infer: true }),
       port: this.configService.get('SMTP_PORT', { infer: true }),
@@ -56,18 +60,20 @@ export class MailerService {
   }
 
   /**
-   * Single choke point for every outgoing email. In development we skip SMTP
-   * entirely and print the message to the terminal instead — so local flows
-   * (password reset, etc.) work without a running SMTP server like mailpit,
-   * and the code/link is visible right in the server logs. In any other
-   * environment the message goes out over the real transporter.
+   * Single choke point for every outgoing email.
+   *
+   * With MAIL_TRANSPORT=log we skip SMTP entirely and print the message to
+   * the terminal — so local flows (password reset, invitations) work with no
+   * SMTP server running at all, and the code/link is readable straight from
+   * the server logs. With MAIL_TRANSPORT=smtp (the default) it goes out over
+   * the real transporter, which locally means mailpit.
    */
   private async send(options: nodemailer.SendMailOptions): Promise<void> {
-    if (this.isDev) {
+    if (this.logOnly) {
       this.logger.log(
         [
           '',
-          '──────── ✉️  DEV EMAIL (not sent) ────────',
+          '──── ✉️  EMAIL (not sent — MAIL_TRANSPORT=log) ────',
           `From:    ${String(options.from ?? this.from)}`,
           `To:      ${String(options.to)}`,
           `Subject: ${String(options.subject ?? '')}`,

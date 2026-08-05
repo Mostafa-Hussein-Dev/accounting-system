@@ -31,6 +31,12 @@ const TENANT_SCOPED_MODELS = new Set([
   'StockMovement',
   'Pricelist',
   'PricelistLine',
+  'PurchaseOrder',
+  'PurchaseOrderLine',
+  'GoodsReceipt',
+  'GoodsReceiptLine',
+  'VendorBill',
+  'VendorBillLine',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

@@ -43,6 +43,8 @@ const DEFAULT_SEQUENCES: { docType: DocumentType; prefix: string }[] = [
   { docType: DocumentType.PAYMENT_RECEIPT, prefix: 'REC-' },
   { docType: DocumentType.JOURNAL_ENTRY, prefix: 'JE-' },
   { docType: DocumentType.STOCK_MOVEMENT, prefix: 'STK-' },
+  { docType: DocumentType.GOODS_RECEIPT, prefix: 'GRN-' },
+  { docType: DocumentType.PURCHASE_INVOICE, prefix: 'BILL-' },
 ];
 
 @Injectable()

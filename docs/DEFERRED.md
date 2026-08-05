@@ -11,7 +11,7 @@ forget. Keep this list updated as modules land.
 | 3 | ~~**Document numbers are not yet consumed**~~ — **RESOLVED (FR-901)**: the GL posting path now calls `SequencesService.nextNumber(...)` for `JOURNAL_ENTRY`. Still applies to invoicing/purchasing/payments when those are built. | Sequences module (FR-106) | Invoicing / Purchasing / Payments (FR-5xx/6xx/8xx) | When creating each document, call `nextNumber(companyId, branchId, docType, documentDate, tx)` inside its transaction (see `PostingService.post` for the reference pattern). |
 | 4 | ~~**`JournalLine.partnerId`** has no FK~~ — **RESOLVED (FR-301)**: FK to `partners` added (migration `20260727130000_add_partners`). Partner balances/statements derive from `journalLine.partnerId`. **Still open:** no path yet WRITES partnerId onto a line (see "Partner postings" note below). | `prisma/schema.prisma` (JournalLine) | — | — |
 | 5 | **`JournalLine.costCenterId`** is a nullable UUID with **no foreign key** | `prisma/schema.prisma` (JournalLine) | Cost-centre / analytic dimension model (not yet planned) | Add the FK once cost centres exist; expose it on the manual-JE line DTO then. |
-| 6 | **`JournalEntry.sourceDocType` / `sourceDocId`** carry no FK — auto-posted entries can't yet link back to their source document | `prisma/schema.prisma` (JournalEntry) | Document models (FR-5xx/6xx/8xx) + posting rules (FR-902) | Add the FK to `documents` (or per-type) and set these when `PostingService.post` is invoked from a document's confirm flow. |
+| 6 | ~~**`JournalEntry.sourceDocType` / `sourceDocId`** carry no FK~~ — **PARTLY RESOLVED (FR-501)**: the vendor-bill confirm now STAMPS `sourceDocType='PURCHASE_INVOICE'` + `sourceDocId=bill.id` on the posted entry (`VendorBillsService.confirm`). Columns still carry no DB FK (kept free-form, polymorphic across doc types). Sales/payments (FR-6xx/8xx) should stamp them the same way. | `prisma/schema.prisma` (JournalEntry) | — | Optionally add a polymorphic FK later; for now each document confirm sets these. |
 
 ## Larger deferred features (need a design pass)
 
@@ -238,6 +238,45 @@ Delivered in `src/modules/stock` (migrations `20260801120000_add_stock`,
   not built.
 - **Reservations / delivery-order workflow, reorder rules, multi-step routes,
   landed costs** — out of scope for the ledger.
+
+### FR-501 — Purchasing (PO → goods receipt → vendor bill) — BUILT
+Delivered in `src/modules/purchasing` (migrations `20260801140000_add_purchasing`,
+`_mark_inventory_control`, `20260801140200_add_purchase_doc_types`):
+- **PurchaseOrder(+Line)** — multi-currency (4-field money, in-force rate
+  resolver), server-computed line/doc totals, VAT snapshot from item defaults,
+  supplier-role check; DRAFT edit, confirm, cancel.
+- **GoodsReceipt(+Line)** — receive a confirmed PO full/partial: posts inbound
+  `StockMovement`s (supplier→internal, `partnerId`=vendor, `sourceDoc` stamped)
+  at frozen base cost + moving-average update, advances PO line qty + PO status.
+  Atomic via `StockService.postMovementInTx`.
+- **VendorBill(+Line)** — DRAFT then confirm → posts **DR inventory (control
+  acct 37, new `ControlType.INVENTORY`) + DR input VAT + CR supplier payable**
+  (base currency, AP line carries partnerId) via a directly-created POSTED
+  entry (DB balance trigger validates); stamps `JournalEntry.sourceDoc*`
+  (resolves deferred #6); PO → BILLED. Audited as POST.
+- New `DocumentType` GOODS_RECEIPT + PURCHASE_INVOICE (GRN-/BILL- sequences).
+  Perms `purchase.{read,create,update,delete,post}`; CASL `Purchase` subject.
+
+**Deferred within FR-5xx (revisit when built):**
+- **FR-502 landed cost** — allocate freight/customs/extra customs fee across
+  received items so item cost reflects true landed cost. Needs its own design
+  (allocation basis, extra-cost lines, re-valuation of received layers).
+- **FR-503 supplier payments** — pay a bill (DR payable / CR cash-bank, + FX
+  line) belongs to **Cash & Payments (FR-8xx/§13)**; only *view balance*
+  exists now (`GET /partners/:id/balance`).
+- **GL timing** — inventory posts at the vendor bill (PRD-literal), not at
+  receipt; the Odoo-style GRNI/perpetual variant (post at receipt, clear at
+  bill) is not built.
+- Approvals / full three-way match. **A quantity FLOOR is now enforced**:
+  `VendorBillsService.assertNotOverBilled` rejects a bill that would push a PO
+  line's cumulative billed qty past its **ordered** qty (`PO_LINE_OVER_BILLED`,
+  checked on create + confirm, counting every non-cancelled bill — DRAFT +
+  POSTED — so a duplicate is caught at create, not only at post), and validates the PO-line
+  linkage (`PO_LINE_MISMATCH`). Still deferred: the **received-qty ceiling**
+  (can't bill beyond what was received), **price-variance tolerance**, a
+  **permissioned override** for genuine exceptions, and audit of overrides.
+- editing a posted bill (only reversal today); per-item-category valuation
+  accounts (single company INVENTORY account for now).
 
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist

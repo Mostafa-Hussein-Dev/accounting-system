@@ -11,6 +11,7 @@ import {
   Location,
   LocationType,
   Prisma,
+  StockMovement,
   StockMovementType,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -98,10 +99,26 @@ export class StockService {
     dto: CreateMovementDto,
     caller: AuthenticatedUser,
   ): Promise<MovementResponseDto> {
+    const created = await this.prisma.$transaction((tx) =>
+      this.postMovementInTx(tx, dto, caller),
+    );
+    return MovementResponseDto.fromEntity(created);
+  }
+
+  /**
+   * The movement-posting core, runnable inside a CALLER-supplied transaction so
+   * a multi-line document (e.g. a goods receipt) posts all its movements
+   * atomically. Returns the created row.
+   */
+  async postMovementInTx(
+    tx: Prisma.TransactionClient,
+    dto: CreateMovementDto,
+    caller: AuthenticatedUser,
+  ): Promise<StockMovement> {
     const companyId = this.resolveCompanyId(dto.companyId, caller);
     const movementDate = this.parseDate(dto.movementDate);
 
-    const created = await this.prisma.$transaction(async (tx) => {
+    {
       const item = await this.resolveItem(tx, dto.itemId, companyId);
       const variant = await this.resolveVariant(tx, item, dto.variantId);
       const from = await this.resolveLocation(
@@ -215,12 +232,12 @@ export class StockService {
           reason: dto.reason ?? null,
           reference: dto.reference ?? null,
           branchId: dto.branchId ?? null,
+          sourceDocType: dto.sourceDocType ?? null,
+          sourceDocId: dto.sourceDocId ?? null,
           createdBy: caller.userId,
         },
       });
-    });
-
-    return MovementResponseDto.fromEntity(created);
+    }
   }
 
   async listMovements(

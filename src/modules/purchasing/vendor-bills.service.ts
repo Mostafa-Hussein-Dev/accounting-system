@@ -113,6 +113,15 @@ export class VendorBillsService {
           });
         }
       }
+      await this.assertNotOverBilled(
+        tx,
+        companyId,
+        dto.purchaseOrderId ?? null,
+        dto.lines.map((l) => ({
+          purchaseOrderLineId: l.purchaseOrderLineId ?? null,
+          qty: l.qty,
+        })),
+      );
       const rate = await resolveRate(
         tx,
         companyId,
@@ -205,6 +214,17 @@ export class VendorBillsService {
 
     const bill = await this.prisma.$transaction(async (tx) => {
       const companyId = existing.companyId;
+      // Re-check at post time (authoritative): another bill may have posted
+      // against these PO lines since this draft was created.
+      await this.assertNotOverBilled(
+        tx,
+        companyId,
+        existing.purchaseOrderId,
+        existing.lines.map((l) => ({
+          purchaseOrderLineId: l.purchaseOrderLineId,
+          qty: Number(l.qty),
+        })),
+      );
       const baseCurrency = (
         await tx.company.findUniqueOrThrow({
           where: { id: companyId },
@@ -440,6 +460,64 @@ export class VendorBillsService {
       });
     }
     return account;
+  }
+
+  /**
+   * Quantity floor: the cumulative billed qty per PO line must not exceed the
+   * ordered qty. Legitimate splits (which sum to the ordered qty) pass; a
+   * duplicate full bill — or any bill pushing a line past its order — is
+   * rejected (PO_LINE_OVER_BILLED). Only counts POSTED bills, so this draft
+   * isn't double-counted. Lines with no purchaseOrderLineId (ad-hoc charges,
+   * non-PO bills) are exempt. Also validates the PO-line linkage.
+   * NOTE: the received-qty ceiling, price-variance tolerance and permissioned
+   * override are the fuller three-way match (deferred, docs/DEFERRED.md).
+   */
+  private async assertNotOverBilled(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    billPurchaseOrderId: string | null,
+    lines: { purchaseOrderLineId: string | null; qty: number }[],
+  ): Promise<void> {
+    const byPoLine = new Map<string, number>();
+    for (const l of lines) {
+      if (!l.purchaseOrderLineId) continue;
+      byPoLine.set(
+        l.purchaseOrderLineId,
+        (byPoLine.get(l.purchaseOrderLineId) ?? 0) + l.qty,
+      );
+    }
+    for (const [poLineId, thisQty] of byPoLine) {
+      const poLine = await tx.purchaseOrderLine.findFirst({
+        where: { id: poLineId, companyId },
+        select: { id: true, qtyOrdered: true, purchaseOrderId: true },
+      });
+      if (
+        !poLine ||
+        (billPurchaseOrderId && poLine.purchaseOrderId !== billPurchaseOrderId)
+      ) {
+        throw new BadRequestException({
+          code: 'PO_LINE_MISMATCH',
+          message: `Purchase-order line ${poLineId} does not belong to this bill's purchase order.`,
+          field: 'purchaseOrderLineId',
+        });
+      }
+      const posted = await tx.vendorBillLine.aggregate({
+        _sum: { qty: true },
+        where: {
+          purchaseOrderLineId: poLineId,
+          vendorBill: { status: VendorBillStatus.POSTED, deletedAt: null },
+        },
+      });
+      const alreadyBilled = Number(posted._sum.qty ?? 0);
+      const ordered = Number(poLine.qtyOrdered);
+      if (alreadyBilled + thisQty > ordered + 1e-9) {
+        throw new ConflictException({
+          code: 'PO_LINE_OVER_BILLED',
+          message: `PO line ${poLineId}: ordered ${ordered}, already billed ${alreadyBilled}; this bill's ${thisQty} would exceed the order.`,
+          field: 'qty',
+        });
+      }
+    }
   }
 
   private async buildLines(

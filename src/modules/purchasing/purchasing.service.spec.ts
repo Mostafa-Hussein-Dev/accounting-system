@@ -385,4 +385,93 @@ describe('Purchasing (FR-501) — full flow', () => {
       ),
     ).rejects.toMatchObject({ response: { code: 'PARTNER_NOT_SUPPLIER' } });
   });
+
+  // --- over-billing guard (quantity floor) ---------------------------------
+
+  const makePo = async (qtyOrdered: number) => {
+    const po = await orders.create(
+      {
+        supplierId,
+        currencyCode: 'USD',
+        orderDate: '2026-08-01',
+        lines: [{ itemId, qtyOrdered, unitCost: 5 }],
+      },
+      caller,
+    );
+    await orders.confirm(po.id, caller);
+    return po;
+  };
+  const bill = async (
+    po: { id: string; lines: { id: string }[] },
+    qty: number,
+  ) => {
+    const b = await bills.create(
+      {
+        supplierId,
+        purchaseOrderId: po.id,
+        currencyCode: 'USD',
+        billDate: '2026-08-03',
+        lines: [
+          { itemId, qty, unitCost: 5, purchaseOrderLineId: po.lines[0].id },
+        ],
+      },
+      caller,
+    );
+    return bills.confirm(b.id, caller);
+  };
+
+  it('blocks a duplicate full bill on a PO line (PO_LINE_OVER_BILLED)', async () => {
+    const po = await makePo(10);
+    await bill(po, 10); // fully billed
+    await expect(bill(po, 10)).rejects.toMatchObject({
+      response: { code: 'PO_LINE_OVER_BILLED' },
+    });
+  });
+
+  it('allows a legitimate split but blocks going over the ordered qty', async () => {
+    const po = await makePo(10);
+    await bill(po, 6);
+    await bill(po, 4); // 6 + 4 = 10, ok
+    await expect(bill(po, 1)).rejects.toMatchObject({
+      response: { code: 'PO_LINE_OVER_BILLED' },
+    });
+  });
+
+  it('does not cap a bill line with no purchaseOrderLineId (ad-hoc)', async () => {
+    const b = await bills.create(
+      {
+        supplierId,
+        currencyCode: 'USD',
+        billDate: '2026-08-03',
+        lines: [{ itemId, qty: 999, unitCost: 5 }], // no PO line link
+      },
+      caller,
+    );
+    const posted = await bills.confirm(b.id, caller);
+    expect(posted.status).toBe('POSTED');
+  });
+
+  it('rejects a bill line linked to a PO line from a different PO', async () => {
+    const poA = await makePo(5);
+    const poB = await makePo(5);
+    await expect(
+      bills.create(
+        {
+          supplierId,
+          purchaseOrderId: poA.id,
+          currencyCode: 'USD',
+          billDate: '2026-08-03',
+          lines: [
+            {
+              itemId,
+              qty: 1,
+              unitCost: 5,
+              purchaseOrderLineId: poB.lines[0].id,
+            },
+          ],
+        },
+        caller,
+      ),
+    ).rejects.toMatchObject({ response: { code: 'PO_LINE_MISMATCH' } });
+  });
 });

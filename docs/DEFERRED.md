@@ -267,8 +267,14 @@ Delivered in `src/modules/purchasing` (migrations `20260801140000_add_purchasing
 - **GL timing** — inventory posts at the vendor bill (PRD-literal), not at
   receipt; the Odoo-style GRNI/perpetual variant (post at receipt, clear at
   bill) is not built.
-- Approvals / three-way match (PO↔receipt↔bill quantity+price reconciliation);
-  editing a posted bill (only reversal today); per-item-category valuation
+- Approvals / full three-way match. **A quantity FLOOR is now enforced**:
+  `VendorBillsService.assertNotOverBilled` rejects a bill that would push a PO
+  line's cumulative billed qty past its **ordered** qty (`PO_LINE_OVER_BILLED`,
+  checked on create + confirm, counting POSTED bills), and validates the PO-line
+  linkage (`PO_LINE_MISMATCH`). Still deferred: the **received-qty ceiling**
+  (can't bill beyond what was received), **price-variance tolerance**, a
+  **permissioned override** for genuine exceptions, and audit of overrides.
+- editing a posted bill (only reversal today); per-item-category valuation
   accounts (single company INVENTORY account for now).
 
 ## Conventions

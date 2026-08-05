@@ -36,6 +36,7 @@ interface PreparedLine {
   currency: string;
   rate: number;
   amountBase: number;
+  baseCurrencyCode: string;
   partnerId: string | null;
   description: string | null;
 }
@@ -314,6 +315,7 @@ export class GlService {
         currency: money.currency,
         rate: money.rate,
         amountBase: money.amountBase,
+        baseCurrencyCode: baseCurrency,
         partnerId: line.partnerId ?? null,
         description: line.description ?? null,
       });

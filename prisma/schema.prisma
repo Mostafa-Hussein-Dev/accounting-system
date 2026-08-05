@@ -215,6 +215,9 @@ model Currency {
   pricelists         Pricelist[]     @relation("PricelistCurrency")
   purchaseOrders     PurchaseOrder[] @relation("POCurrency")
   vendorBills        VendorBill[]    @relation("VBCurrency")
+  journalLinesBase   JournalLine[]   @relation("JournalLineBaseCurrency")
+  purchaseOrdersBase PurchaseOrder[] @relation("POBaseCurrency")
+  vendorBillsBase    VendorBill[]    @relation("VBBaseCurrency")
 
   @@map("currencies")
 }
@@ -493,6 +496,13 @@ model JournalLine {
   rate           Decimal @db.Decimal(20, 6)
   amountBase     Decimal @map("amount_base") @db.Decimal(20, 2)
 
+  // The currency `amountBase` is denominated in — the company base currency AT
+  // POSTING TIME, stored WITH the frozen amount so it can never be relabelled by
+  // a later Company.baseCurrencyCode change (see docs/URGENT.md). Balances group
+  // by this, not by the mutable company setting.
+  baseCurrencyCode String   @map("base_currency_code")
+  baseCurrency     Currency @relation("JournalLineBaseCurrency", fields: [baseCurrencyCode], references: [code])
+
   // partnerId now has a Partner FK (FR-301). costCenterId stays a bare nullable
   // column — the cost-centre model doesn't exist yet (see docs/DEFERRED.md).
   // Sub-ledger (AR/AP) postings set partnerId so partner balances/statements are
@@ -508,6 +518,7 @@ model JournalLine {
   @@index([companyId])
   @@index([journalEntryId])
   @@index([accountId])
+  @@index([baseCurrencyCode])
   @@map("journal_lines")
 }
 
@@ -1419,6 +1430,11 @@ model PurchaseOrder {
   currency     Currency @relation("POCurrency", fields: [currencyCode], references: [code])
   rate         Decimal  @db.Decimal(20, 6)
 
+  // Base currency the *Base totals are denominated in, frozen at creation so a
+  // later Company.baseCurrencyCode change can't relabel them (docs/URGENT.md).
+  baseCurrencyCode String   @map("base_currency_code")
+  baseCurrency     Currency @relation("POBaseCurrency", fields: [baseCurrencyCode], references: [code])
+
   orderDate    DateTime  @map("order_date") @db.Date
   expectedDate DateTime? @map("expected_date") @db.Date
   notes        String?
@@ -1573,6 +1589,11 @@ model VendorBill {
   currencyCode String   @map("currency_code")
   currency     Currency @relation("VBCurrency", fields: [currencyCode], references: [code])
   rate         Decimal  @db.Decimal(20, 6)
+
+  // Base currency the *Base totals are denominated in, frozen at creation so a
+  // later Company.baseCurrencyCode change can't relabel them (docs/URGENT.md).
+  baseCurrencyCode String   @map("base_currency_code")
+  baseCurrency     Currency @relation("VBBaseCurrency", fields: [baseCurrencyCode], references: [code])
 
   billDate    DateTime  @map("bill_date") @db.Date
   dueDate     DateTime? @map("due_date") @db.Date

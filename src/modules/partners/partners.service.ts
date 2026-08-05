@@ -13,6 +13,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { Paginated } from '../../common/types/paginated.type';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { resolvePresentationRate } from '../../common/money/present-currency';
 import {
   isPlatformAdmin,
   type AuthenticatedUser,
@@ -25,6 +26,7 @@ import { PartnerResponseDto } from './dto/partner-response.dto';
 import {
   PartnerBalanceResponseDto,
   PartnerCurrencyBalanceDto,
+  PartnerPresentationRateDto,
 } from './dto/partner-balance-response.dto';
 import { PartnerTransactionRowDto } from './dto/partner-transaction-response.dto';
 import { QueryStatementDto } from './dto/query-statement.dto';
@@ -312,6 +314,8 @@ export class PartnersService {
     id: string,
     caller: AuthenticatedUser,
     asOf?: string,
+    presentIn?: string,
+    rateType?: string,
   ): Promise<PartnerBalanceResponseDto> {
     const partner = await this.getOwned(id, caller);
     const asOfDate = this.parseAsOf(asOf);
@@ -326,9 +330,10 @@ export class PartnersService {
       journalEntry: entryFilter,
     };
 
-    const [bySide, byCurrencySide] = await this.prisma.$transaction([
+    const [byBaseSide, byCurrencySide] = await this.prisma.$transaction([
+      // Base figures grouped by the STORED base currency (never summed across).
       this.prisma.journalLine.groupBy({
-        by: ['side'],
+        by: ['baseCurrencyCode', 'side'],
         where,
         _sum: { amountBase: true },
       }),
@@ -339,13 +344,22 @@ export class PartnersService {
       }),
     ]);
 
-    let totalDebitBase = 0;
-    let totalCreditBase = 0;
-    for (const g of bySide) {
+    const baseMap = new Map<string, { debit: number; credit: number }>();
+    for (const g of byBaseSide) {
+      const bucket = baseMap.get(g.baseCurrencyCode) ?? { debit: 0, credit: 0 };
       const amt = Number(g._sum.amountBase ?? 0);
-      if (g.side === JournalSide.DEBIT) totalDebitBase += amt;
-      else totalCreditBase += amt;
+      if (g.side === JournalSide.DEBIT) bucket.debit += amt;
+      else bucket.credit += amt;
+      baseMap.set(g.baseCurrencyCode, bucket);
     }
+    const byBaseCurrency = [...baseMap.entries()].map(
+      ([currency, { debit, credit }]) => ({
+        currency,
+        totalDebitBase: round2(debit),
+        totalCreditBase: round2(credit),
+        balanceBase: round2(debit - credit),
+      }),
+    );
 
     const currencyMap = new Map<string, PartnerCurrencyBalanceDto>();
     for (const g of byCurrencySide) {
@@ -366,15 +380,82 @@ export class PartnersService {
     dto.ref = partner.ref;
     dto.name = partner.name;
     dto.asOf = asOfDate.toISOString().slice(0, 10);
-    dto.totalDebitBase = round2(totalDebitBase);
-    dto.totalCreditBase = round2(totalCreditBase);
-    dto.balanceBase = round2(totalDebitBase - totalCreditBase);
+    dto.byBaseCurrency = byBaseCurrency;
+    if (byBaseCurrency.length === 1) {
+      const r = byBaseCurrency[0];
+      dto.baseCurrency = r.currency;
+      dto.totalDebitBase = r.totalDebitBase;
+      dto.totalCreditBase = r.totalCreditBase;
+      dto.balanceBase = r.balanceBase;
+    } else if (byBaseCurrency.length === 0) {
+      const company = await this.prisma.company.findUniqueOrThrow({
+        where: { id: partner.companyId },
+        select: { baseCurrencyCode: true },
+      });
+      dto.baseCurrency = company.baseCurrencyCode;
+      dto.totalDebitBase = 0;
+      dto.totalCreditBase = 0;
+      dto.balanceBase = 0;
+    } else {
+      // Mixed base currency: never sum across them (docs/URGENT.md §6.3).
+      dto.baseCurrency = null;
+      dto.totalDebitBase = null;
+      dto.totalCreditBase = null;
+      dto.balanceBase = null;
+    }
     dto.byCurrency = [...currencyMap.values()].map((c) => ({
       currency: c.currency,
       debit: round2(c.debit),
       credit: round2(c.credit),
       net: round2(c.debit - c.credit),
     }));
+
+    // Tier 2: present the balance in a requested currency (?presentIn).
+    if (presentIn) {
+      const rt = rateType ?? DEFAULT_RATE_TYPE;
+      const rates: PartnerPresentationRateDto[] = [];
+      let debit = 0;
+      let credit = 0;
+      let ok = true;
+      for (const s of byBaseCurrency) {
+        const pr = await resolvePresentationRate(
+          this.prisma,
+          partner.companyId,
+          s.currency,
+          presentIn,
+          asOfDate,
+          rt,
+        );
+        if (!pr) {
+          ok = false;
+          continue;
+        }
+        rates.push({
+          from: s.currency,
+          rate: pr.rate,
+          rateType: pr.rateType,
+          rateDate: pr.rateDate,
+        });
+        debit += s.totalDebitBase * pr.rate;
+        credit += s.totalCreditBase * pr.rate;
+      }
+      const cur = await this.prisma.currency.findUnique({
+        where: { code: presentIn },
+        select: { decimalPlaces: true },
+      });
+      const f = 10 ** (cur?.decimalPlaces ?? 2);
+      const round = (n: number): number =>
+        Math.round((n + Number.EPSILON) * f) / f;
+      dto.presentation = {
+        currency: presentIn,
+        totalDebitBase: ok ? round(debit) : null,
+        totalCreditBase: ok ? round(credit) : null,
+        balanceBase: ok ? round(debit - credit) : null,
+        rates,
+      };
+    } else {
+      dto.presentation = null;
+    }
     return dto;
   }
 
@@ -480,6 +561,33 @@ export class PartnersService {
     }
     const openingBalanceBase = round2(sign * (openingDebit - openingCredit));
 
+    // Base currency of the statement, from the STORED baseCurrencyCode on the
+    // partner's posted lines up to `to` (not the mutable company setting, and
+    // not the old hardcoded 'USD'). Uniform in the normal case; falls back to
+    // the company setting only when there are no postings, or (rarely) when the
+    // history spans more than one base currency.
+    const baseCodes = await this.prisma.journalLine.groupBy({
+      by: ['baseCurrencyCode'],
+      where: {
+        partnerId: id,
+        companyId: partner.companyId,
+        journalEntry: {
+          status: JournalStatus.POSTED,
+          deletedAt: null,
+          date: { lte: to },
+        },
+      },
+    });
+    const statementBaseCurrency =
+      baseCodes.length === 1
+        ? baseCodes[0].baseCurrencyCode
+        : (
+            await this.prisma.company.findUniqueOrThrow({
+              where: { id: partner.companyId },
+              select: { baseCurrencyCode: true },
+            })
+          ).baseCurrencyCode;
+
     const rate = await this.rateInForce(
       partner.companyId,
       DISPLAY_CURRENCY,
@@ -521,7 +629,7 @@ export class PartnersService {
     dto.name = partner.name;
     dto.from = from.toISOString().slice(0, 10);
     dto.to = to.toISOString().slice(0, 10);
-    dto.baseCurrency = 'USD';
+    dto.baseCurrency = statementBaseCurrency;
     dto.displayCurrency = DISPLAY_CURRENCY;
     dto.orientation = receivable ? 'receivable' : 'payable';
     dto.conversion =

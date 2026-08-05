@@ -14,11 +14,19 @@ import {
   isPlatformAdmin,
   type AuthenticatedUser,
 } from '../auth/interfaces/authenticated-user.interface';
-import { AccountBalanceResponseDto } from './dto/account-balance-response.dto';
+import {
+  AccountBalanceResponseDto,
+  BalancePresentationDto,
+  PresentationRateDto,
+} from './dto/account-balance-response.dto';
 import {
   TrialBalanceResponseDto,
   TrialBalanceRowDto,
 } from './dto/trial-balance-response.dto';
+import {
+  DEFAULT_RATE_TYPE,
+  resolvePresentationRate,
+} from '../../common/money/present-currency';
 
 /**
  * Read-side of the ledger (FR-905): account balances and the trial balance, both
@@ -33,6 +41,8 @@ export class LedgerService {
     accountId: string,
     caller: AuthenticatedUser,
     asOf?: string,
+    presentIn?: string,
+    rateType?: string,
   ): Promise<AccountBalanceResponseDto> {
     const account = await this.prisma.account.findFirst({
       where: { id: accountId, deletedAt: null },
@@ -51,32 +61,151 @@ export class LedgerService {
     }
 
     const asOfDate = this.parseAsOf(asOf);
+    // Group by the STORED base currency so figures are never summed across
+    // currencies and are labelled from the data, not the mutable setting.
     const grouped = await this.prisma.journalLine.groupBy({
-      by: ['side'],
+      by: ['baseCurrencyCode', 'side'],
       where: this.postedLineWhere(account.companyId, asOfDate, {
         accountId,
       }),
       _sum: { amountBase: true },
     });
 
-    const { debit, credit } = this.splitSides(grouped);
-    const balance = round2(debit - credit);
-    const naturalBalance =
-      account.normalBalance === NormalBalance.DEBIT
-        ? balance
-        : round2(-balance);
+    const isDebitNormal = account.normalBalance === NormalBalance.DEBIT;
+    const perCurrency = new Map<string, { debit: number; credit: number }>();
+    for (const g of grouped) {
+      const bucket = perCurrency.get(g.baseCurrencyCode) ?? {
+        debit: 0,
+        credit: 0,
+      };
+      const amt = Number(g._sum.amountBase ?? 0);
+      if (g.side === JournalSide.DEBIT) bucket.debit += amt;
+      else bucket.credit += amt;
+      perCurrency.set(g.baseCurrencyCode, bucket);
+    }
+    const byBaseCurrency = [...perCurrency.entries()].map(
+      ([currency, { debit, credit }]) => {
+        const bal = round2(debit - credit);
+        return {
+          currency,
+          totalDebitBase: round2(debit),
+          totalCreditBase: round2(credit),
+          balance: bal,
+          naturalBalance: isDebitNormal ? bal : round2(-bal),
+        };
+      },
+    );
 
     const dto = new AccountBalanceResponseDto();
     dto.accountId = account.id;
     dto.accountNumber = account.number;
     dto.accountName = account.name;
     dto.normalBalance = account.normalBalance;
-    dto.totalDebitBase = debit;
-    dto.totalCreditBase = credit;
-    dto.balance = balance;
-    dto.naturalBalance = naturalBalance;
     dto.asOf = asOfDate.toISOString().slice(0, 10);
+    dto.byBaseCurrency = byBaseCurrency;
+
+    if (byBaseCurrency.length === 1) {
+      const r = byBaseCurrency[0];
+      dto.currency = r.currency;
+      dto.totalDebitBase = r.totalDebitBase;
+      dto.totalCreditBase = r.totalCreditBase;
+      dto.balance = r.balance;
+      dto.naturalBalance = r.naturalBalance;
+    } else if (byBaseCurrency.length === 0) {
+      // No postings: nothing to mislabel, so the current setting is a safe label.
+      dto.currency = await this.getBaseCurrency(account.companyId);
+      dto.totalDebitBase = 0;
+      dto.totalCreditBase = 0;
+      dto.balance = 0;
+      dto.naturalBalance = 0;
+    } else {
+      // Mixed base currency: never sum across them (docs/URGENT.md §6.3).
+      dto.currency = null;
+      dto.totalDebitBase = null;
+      dto.totalCreditBase = null;
+      dto.balance = null;
+      dto.naturalBalance = null;
+    }
+
+    // Tier 2: present in a requested currency, converting each slice via the
+    // rate in force (storage never moves; missing rate -> null figures).
+    dto.presentation = presentIn
+      ? await this.present(
+          account.companyId,
+          byBaseCurrency,
+          presentIn,
+          rateType,
+          asOfDate,
+          isDebitNormal,
+        )
+      : null;
     return dto;
+  }
+
+  /** Convert per-currency balance slices into a single presentation currency. */
+  private async present(
+    companyId: string,
+    slices: {
+      currency: string;
+      totalDebitBase: number;
+      totalCreditBase: number;
+    }[],
+    presentIn: string,
+    rateType: string | undefined,
+    asOfDate: Date,
+    isDebitNormal: boolean,
+  ): Promise<BalancePresentationDto> {
+    const rt = rateType ?? DEFAULT_RATE_TYPE;
+    const rates: PresentationRateDto[] = [];
+    let debit = 0;
+    let credit = 0;
+    let ok = true;
+    for (const s of slices) {
+      const pr = await resolvePresentationRate(
+        this.prisma,
+        companyId,
+        s.currency,
+        presentIn,
+        asOfDate,
+        rt,
+      );
+      if (!pr) {
+        ok = false;
+        continue;
+      }
+      rates.push({
+        from: s.currency,
+        rate: pr.rate,
+        rateType: pr.rateType,
+        rateDate: pr.rateDate,
+      });
+      debit += s.totalDebitBase * pr.rate;
+      credit += s.totalCreditBase * pr.rate;
+    }
+    const dp = await this.currencyDecimals(presentIn);
+    const round = (n: number): number => {
+      const f = 10 ** dp;
+      return Math.round((n + Number.EPSILON) * f) / f;
+    };
+    const rawBalance = debit - credit;
+    return {
+      currency: presentIn,
+      totalDebitBase: ok ? round(debit) : null,
+      totalCreditBase: ok ? round(credit) : null,
+      balance: ok ? round(rawBalance) : null,
+      naturalBalance: ok
+        ? round(isDebitNormal ? rawBalance : -rawBalance)
+        : null,
+      rates,
+    };
+  }
+
+  private async currencyDecimals(code: string): Promise<number> {
+    const cur = await this.prisma.currency.findUnique({
+      where: { code },
+      select: { decimalPlaces: true },
+    });
+    return cur?.decimalPlaces ?? 2;
   }
 
   async trialBalance(
@@ -145,10 +274,29 @@ export class LedgerService {
     const totalDebit = round2(rows.reduce((s, r) => s + r.debit, 0));
     const totalCredit = round2(rows.reduce((s, r) => s + r.credit, 0));
 
+    // Currency from the STORED base currency of the lines in scope: a single
+    // code when uniform, null when the scope spans more than one base currency
+    // (post a base-currency change) — in which case the rows should be read via
+    // ?presentIn to convert to one currency (docs/URGENT.md).
+    const baseCurrencies = await this.prisma.journalLine.groupBy({
+      by: ['baseCurrencyCode'],
+      where: this.postedLineWhere(
+        companyId,
+        asOfDate,
+        accountIds ? { accountId: { in: accountIds } } : {},
+        branchId,
+      ),
+    });
+
     const dto = new TrialBalanceResponseDto();
     dto.companyId = companyId;
     dto.asOf = asOfDate.toISOString().slice(0, 10);
-    dto.currency = await this.getBaseCurrency(companyId);
+    dto.currency =
+      baseCurrencies.length === 1
+        ? baseCurrencies[0].baseCurrencyCode
+        : baseCurrencies.length === 0
+          ? await this.getBaseCurrency(companyId)
+          : null;
     dto.rolledUp = !!rollUp;
     dto.rows = rows;
     dto.totalDebit = totalDebit;
@@ -265,25 +413,6 @@ export class LedgerService {
         ...(branchId ? { branchId } : {}),
       },
     };
-  }
-
-  private splitSides(
-    grouped: {
-      side: JournalSide;
-      _sum: { amountBase: Prisma.Decimal | null };
-    }[],
-  ): { debit: number; credit: number } {
-    let debit = 0;
-    let credit = 0;
-    for (const g of grouped) {
-      const amount = Number(g._sum.amountBase ?? 0);
-      if (g.side === JournalSide.DEBIT) {
-        debit += amount;
-      } else {
-        credit += amount;
-      }
-    }
-    return { debit: round2(debit), credit: round2(credit) };
   }
 
   private parseAsOf(asOf?: string): Date {

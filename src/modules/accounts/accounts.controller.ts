@@ -193,8 +193,16 @@ export class AccountsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() caller: AuthenticatedUser,
     @Query('asOf') asOf?: string,
+    @Query('presentIn') presentIn?: string,
+    @Query('rateType') rateType?: string,
   ): Promise<AccountBalanceResponseDto> {
-    return this.ledgerService.accountBalance(id, caller, asOf);
+    return this.ledgerService.accountBalance(
+      id,
+      caller,
+      asOf,
+      presentIn,
+      rateType,
+    );
   }
 
   @Patch(':id')

@@ -113,6 +113,12 @@ export class PurchaseOrdersService {
         orderDate,
         tx,
       );
+      const baseCurrencyCode = (
+        await tx.company.findUniqueOrThrow({
+          where: { id: companyId },
+          select: { baseCurrencyCode: true },
+        })
+      ).baseCurrencyCode;
 
       return tx.purchaseOrder.create({
         data: {
@@ -121,6 +127,7 @@ export class PurchaseOrdersService {
           supplierId: dto.supplierId,
           branchId: dto.branchId ?? null,
           currencyCode: dto.currencyCode,
+          baseCurrencyCode,
           rate: toDecimal(rate),
           orderDate,
           expectedDate: dto.expectedDate

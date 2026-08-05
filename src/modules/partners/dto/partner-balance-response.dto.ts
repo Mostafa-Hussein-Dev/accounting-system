@@ -1,4 +1,33 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+/** The rate used to convert one source base currency into the presentation
+ *  currency (Tier 2, docs/URGENT.md §6.5). */
+export class PartnerPresentationRateDto {
+  @ApiProperty({ example: 'USD' }) from!: string;
+  @ApiProperty({ example: 89500 }) rate!: number;
+  @ApiProperty({ example: 'Official' }) rateType!: string;
+  @ApiProperty({ example: '2026-08-05' }) rateDate!: string;
+}
+
+/** The partner balance converted into a requested presentation currency
+ *  (?presentIn). Display only; null figures when a rate is missing. */
+export class PartnerBalancePresentationDto {
+  @ApiProperty({ example: 'LBP' }) currency!: string;
+  @ApiPropertyOptional({ nullable: true }) totalDebitBase!: number | null;
+  @ApiPropertyOptional({ nullable: true }) totalCreditBase!: number | null;
+  @ApiPropertyOptional({ nullable: true }) balanceBase!: number | null;
+  @ApiProperty({ type: PartnerPresentationRateDto, isArray: true })
+  rates!: PartnerPresentationRateDto[];
+}
+
+/** One base-currency slice of a partner balance (>1 only after the company's
+ *  base currency changed while it had postings — docs/URGENT.md). */
+export class PartnerBaseCurrencyBalanceDto {
+  @ApiProperty({ example: 'USD' }) currency!: string;
+  @ApiProperty({ example: 1500 }) totalDebitBase!: number;
+  @ApiProperty({ example: 500 }) totalCreditBase!: number;
+  @ApiProperty({ example: 1000 }) balanceBase!: number;
+}
 
 export class PartnerCurrencyBalanceDto {
   @ApiProperty({ example: 'USD' }) currency!: string;
@@ -36,16 +65,53 @@ export class PartnerBalanceResponseDto {
     example: '2026-12-31',
   })
   asOf!: string;
-  @ApiProperty({ description: 'Σ debit in base currency.', example: 1500 })
-  totalDebitBase!: number;
-  @ApiProperty({ description: 'Σ credit in base currency.', example: 500 })
-  totalCreditBase!: number;
-  @ApiProperty({
-    description: 'debit − credit in base currency (USD).',
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Base currency of the *Base figures, from the stored baseCurrencyCode. Null when the partner holds more than one base currency — see byBaseCurrency.',
+    example: 'USD',
+  })
+  baseCurrency!: string | null;
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Σ debit in base currency. Null when base currency is mixed.',
+    example: 1500,
+  })
+  totalDebitBase!: number | null;
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Σ credit in base currency. Null when base currency is mixed.',
+    example: 500,
+  })
+  totalCreditBase!: number | null;
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'debit − credit in base currency. Null when mixed.',
     example: 1000,
   })
-  balanceBase!: number;
+  balanceBase!: number | null;
 
-  @ApiProperty({ type: PartnerCurrencyBalanceDto, isArray: true })
+  @ApiProperty({
+    type: PartnerBaseCurrencyBalanceDto,
+    isArray: true,
+    description:
+      'Per-base-currency figures (one entry normally; several only for a mixed-base partner).',
+  })
+  byBaseCurrency!: PartnerBaseCurrencyBalanceDto[];
+
+  @ApiProperty({
+    type: PartnerCurrencyBalanceDto,
+    isArray: true,
+    description:
+      'Per-ORIGINAL-currency breakdown (from amountOriginal/currency; already self-describing).',
+  })
   byCurrency!: PartnerCurrencyBalanceDto[];
+
+  @ApiPropertyOptional({
+    type: PartnerBalancePresentationDto,
+    nullable: true,
+    description:
+      'Balance in a requested currency (?presentIn). Null unless requested; figures null when a rate is missing.',
+  })
+  presentation?: PartnerBalancePresentationDto | null;
 }

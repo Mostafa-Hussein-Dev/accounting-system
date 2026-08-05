@@ -468,6 +468,18 @@
                 {
                   "key": "asOf",
                   "value": "2026-12-31"
+                },
+                {
+                  "key": "presentIn",
+                  "value": "LBP",
+                  "description": "Convert the balance to this currency (Tier 2); returns the rate used, null when no rate",
+                  "disabled": true
+                },
+                {
+                  "key": "rateType",
+                  "value": "Official",
+                  "description": "Exchange-rate type to convert with (default Official)",
+                  "disabled": true
                 }
               ]
             },
@@ -4390,6 +4402,18 @@
                 {
                   "key": "asOf",
                   "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "presentIn",
+                  "value": "LBP",
+                  "description": "Convert the balance to this currency (Tier 2); returns the rate used, null when no rate",
+                  "disabled": true
+                },
+                {
+                  "key": "rateType",
+                  "value": "Official",
+                  "description": "Exchange-rate type to convert with (default Official)",
                   "disabled": true
                 }
               ]

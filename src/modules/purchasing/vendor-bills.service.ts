@@ -146,6 +146,7 @@ export class VendorBillsService {
         billDate,
         tx,
       );
+      const baseCurrencyCode = await this.baseCurrencyOf(tx, companyId);
 
       return tx.vendorBill.create({
         data: {
@@ -155,6 +156,7 @@ export class VendorBillsService {
           purchaseOrderId: dto.purchaseOrderId ?? null,
           branchId: dto.branchId ?? null,
           currencyCode: dto.currencyCode,
+          baseCurrencyCode,
           rate: toDecimal(rate),
           billDate,
           dueDate: dto.dueDate ? this.parseDate(dto.dueDate, 'dueDate') : null,
@@ -306,6 +308,7 @@ export class VendorBillsService {
           currency: baseCurrency,
           rate: toDecimal(1),
           amountBase: toDecimal(amountBase),
+          baseCurrencyCode: baseCurrency,
           partnerId,
         });
       };
@@ -443,6 +446,17 @@ export class VendorBillsService {
       });
     }
     return bill;
+  }
+
+  private async baseCurrencyOf(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+  ): Promise<string> {
+    const company = await tx.company.findUniqueOrThrow({
+      where: { id: companyId },
+      select: { baseCurrencyCode: true },
+    });
+    return company.baseCurrencyCode;
   }
 
   private async controlAccount(

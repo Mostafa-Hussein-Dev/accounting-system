@@ -14,11 +14,19 @@ import {
   isPlatformAdmin,
   type AuthenticatedUser,
 } from '../auth/interfaces/authenticated-user.interface';
-import { AccountBalanceResponseDto } from './dto/account-balance-response.dto';
+import {
+  AccountBalanceResponseDto,
+  BalancePresentationDto,
+  PresentationRateDto,
+} from './dto/account-balance-response.dto';
 import {
   TrialBalanceResponseDto,
   TrialBalanceRowDto,
 } from './dto/trial-balance-response.dto';
+import {
+  DEFAULT_RATE_TYPE,
+  resolvePresentationRate,
+} from '../../common/money/present-currency';
 
 /**
  * Read-side of the ledger (FR-905): account balances and the trial balance, both
@@ -33,6 +41,8 @@ export class LedgerService {
     accountId: string,
     caller: AuthenticatedUser,
     asOf?: string,
+    presentIn?: string,
+    rateType?: string,
   ): Promise<AccountBalanceResponseDto> {
     const account = await this.prisma.account.findFirst({
       where: { id: accountId, deletedAt: null },
@@ -116,7 +126,86 @@ export class LedgerService {
       dto.balance = null;
       dto.naturalBalance = null;
     }
+
+    // Tier 2: present in a requested currency, converting each slice via the
+    // rate in force (storage never moves; missing rate -> null figures).
+    dto.presentation = presentIn
+      ? await this.present(
+          account.companyId,
+          byBaseCurrency,
+          presentIn,
+          rateType,
+          asOfDate,
+          isDebitNormal,
+        )
+      : null;
     return dto;
+  }
+
+  /** Convert per-currency balance slices into a single presentation currency. */
+  private async present(
+    companyId: string,
+    slices: {
+      currency: string;
+      totalDebitBase: number;
+      totalCreditBase: number;
+    }[],
+    presentIn: string,
+    rateType: string | undefined,
+    asOfDate: Date,
+    isDebitNormal: boolean,
+  ): Promise<BalancePresentationDto> {
+    const rt = rateType ?? DEFAULT_RATE_TYPE;
+    const rates: PresentationRateDto[] = [];
+    let debit = 0;
+    let credit = 0;
+    let ok = true;
+    for (const s of slices) {
+      const pr = await resolvePresentationRate(
+        this.prisma,
+        companyId,
+        s.currency,
+        presentIn,
+        asOfDate,
+        rt,
+      );
+      if (!pr) {
+        ok = false;
+        continue;
+      }
+      rates.push({
+        from: s.currency,
+        rate: pr.rate,
+        rateType: pr.rateType,
+        rateDate: pr.rateDate,
+      });
+      debit += s.totalDebitBase * pr.rate;
+      credit += s.totalCreditBase * pr.rate;
+    }
+    const dp = await this.currencyDecimals(presentIn);
+    const round = (n: number): number => {
+      const f = 10 ** dp;
+      return Math.round((n + Number.EPSILON) * f) / f;
+    };
+    const rawBalance = debit - credit;
+    return {
+      currency: presentIn,
+      totalDebitBase: ok ? round(debit) : null,
+      totalCreditBase: ok ? round(credit) : null,
+      balance: ok ? round(rawBalance) : null,
+      naturalBalance: ok
+        ? round(isDebitNormal ? rawBalance : -rawBalance)
+        : null,
+      rates,
+    };
+  }
+
+  private async currencyDecimals(code: string): Promise<number> {
+    const cur = await this.prisma.currency.findUnique({
+      where: { code },
+      select: { decimalPlaces: true },
+    });
+    return cur?.decimalPlaces ?? 2;
   }
 
   async trialBalance(

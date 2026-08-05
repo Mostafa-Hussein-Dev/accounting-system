@@ -1,6 +1,33 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { NormalBalance } from '@prisma/client';
 
+/** The rate used to convert one source base currency into the presentation
+ *  currency (Tier 2, docs/URGENT.md §6.5). */
+export class PresentationRateDto {
+  @ApiProperty({ description: 'Source base currency.', example: 'USD' })
+  from!: string;
+  @ApiProperty({
+    description: 'Presentation units per 1 source.',
+    example: 89500,
+  })
+  rate!: number;
+  @ApiProperty({ example: 'Official' }) rateType!: string;
+  @ApiProperty({ example: '2026-08-05' }) rateDate!: string;
+}
+
+/** A balance converted into a requested presentation currency (?presentIn).
+ *  Storage never moves; this is display only. Figures are null when a required
+ *  rate is missing — never a silent conversion. */
+export class BalancePresentationDto {
+  @ApiProperty({ example: 'LBP' }) currency!: string;
+  @ApiPropertyOptional({ nullable: true }) totalDebitBase!: number | null;
+  @ApiPropertyOptional({ nullable: true }) totalCreditBase!: number | null;
+  @ApiPropertyOptional({ nullable: true }) balance!: number | null;
+  @ApiPropertyOptional({ nullable: true }) naturalBalance!: number | null;
+  @ApiProperty({ type: PresentationRateDto, isArray: true })
+  rates!: PresentationRateDto[];
+}
+
 /** One base-currency slice of a balance (there is >1 only after a company's
  *  base currency changed while it had postings — see docs/URGENT.md). */
 export class BaseCurrencyBalanceDto {
@@ -80,6 +107,14 @@ export class AccountBalanceResponseDto {
       'Per-base-currency figures. One entry in the normal case; several only for a mixed-base account.',
   })
   byBaseCurrency!: BaseCurrencyBalanceDto[];
+
+  @ApiPropertyOptional({
+    type: BalancePresentationDto,
+    nullable: true,
+    description:
+      'Present the balance in a requested currency (?presentIn). Null unless requested; its figures are null when a required rate is missing.',
+  })
+  presentation?: BalancePresentationDto | null;
 
   @ApiProperty({
     description: 'Balances include entries up to and including this date.',

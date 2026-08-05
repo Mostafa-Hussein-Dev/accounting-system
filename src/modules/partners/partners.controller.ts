@@ -136,8 +136,10 @@ export class PartnersController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() caller: AuthenticatedUser,
     @Query('asOf') asOf?: string,
+    @Query('presentIn') presentIn?: string,
+    @Query('rateType') rateType?: string,
   ): Promise<PartnerBalanceResponseDto> {
-    return this.partnersService.balance(id, caller, asOf);
+    return this.partnersService.balance(id, caller, asOf, presentIn, rateType);
   }
 
   @Get(':id/transactions')

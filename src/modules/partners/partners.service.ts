@@ -13,6 +13,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { Paginated } from '../../common/types/paginated.type';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { resolvePresentationRate } from '../../common/money/present-currency';
 import {
   isPlatformAdmin,
   type AuthenticatedUser,
@@ -25,6 +26,7 @@ import { PartnerResponseDto } from './dto/partner-response.dto';
 import {
   PartnerBalanceResponseDto,
   PartnerCurrencyBalanceDto,
+  PartnerPresentationRateDto,
 } from './dto/partner-balance-response.dto';
 import { PartnerTransactionRowDto } from './dto/partner-transaction-response.dto';
 import { QueryStatementDto } from './dto/query-statement.dto';
@@ -312,6 +314,8 @@ export class PartnersService {
     id: string,
     caller: AuthenticatedUser,
     asOf?: string,
+    presentIn?: string,
+    rateType?: string,
   ): Promise<PartnerBalanceResponseDto> {
     const partner = await this.getOwned(id, caller);
     const asOfDate = this.parseAsOf(asOf);
@@ -405,6 +409,53 @@ export class PartnersService {
       credit: round2(c.credit),
       net: round2(c.debit - c.credit),
     }));
+
+    // Tier 2: present the balance in a requested currency (?presentIn).
+    if (presentIn) {
+      const rt = rateType ?? DEFAULT_RATE_TYPE;
+      const rates: PartnerPresentationRateDto[] = [];
+      let debit = 0;
+      let credit = 0;
+      let ok = true;
+      for (const s of byBaseCurrency) {
+        const pr = await resolvePresentationRate(
+          this.prisma,
+          partner.companyId,
+          s.currency,
+          presentIn,
+          asOfDate,
+          rt,
+        );
+        if (!pr) {
+          ok = false;
+          continue;
+        }
+        rates.push({
+          from: s.currency,
+          rate: pr.rate,
+          rateType: pr.rateType,
+          rateDate: pr.rateDate,
+        });
+        debit += s.totalDebitBase * pr.rate;
+        credit += s.totalCreditBase * pr.rate;
+      }
+      const cur = await this.prisma.currency.findUnique({
+        where: { code: presentIn },
+        select: { decimalPlaces: true },
+      });
+      const f = 10 ** (cur?.decimalPlaces ?? 2);
+      const round = (n: number): number =>
+        Math.round((n + Number.EPSILON) * f) / f;
+      dto.presentation = {
+        currency: presentIn,
+        totalDebitBase: ok ? round(debit) : null,
+        totalCreditBase: ok ? round(credit) : null,
+        balanceBase: ok ? round(debit - credit) : null,
+        rates,
+      };
+    } else {
+      dto.presentation = null;
+    }
     return dto;
   }
 

@@ -106,6 +106,7 @@ describe('LedgerService — self-describing base currency (URGENT)', () => {
   afterAll(async () => {
     await prisma.journalLine.deleteMany({ where: { companyId } });
     await prisma.journalEntry.deleteMany({ where: { companyId } });
+    await prisma.exchangeRate.deleteMany({ where: { companyId } });
     await prisma.account.deleteMany({ where: { companyId } });
     await prisma.company.delete({ where: { id: companyId } });
     await prisma.$disconnect();
@@ -152,5 +153,32 @@ describe('LedgerService — self-describing base currency (URGENT)', () => {
       bal.byBaseCurrency.map((r) => [r.currency, r.balance]),
     );
     expect(byCode).toEqual({ USD: 100, LBP: 50 });
+  });
+
+  it('presents a balance in a requested currency using the rate in force (Tier 2)', async () => {
+    await prisma.exchangeRate.create({
+      data: {
+        companyId,
+        currencyCode: 'LBP',
+        rateType: 'Official',
+        effectiveDate: new Date('2020-01-01'),
+        rate: 89500, // LBP per 1 USD
+      },
+    });
+    // accA holds USD 100 + LBP 50 -> present in LBP: 100*89500 + 50 = 8,950,050.
+    const bal = await ledger.accountBalance(accA, caller, undefined, 'LBP');
+    expect(bal.presentation).not.toBeNull();
+    expect(bal.presentation!.currency).toBe('LBP');
+    expect(bal.presentation!.balance).toBe(8_950_050);
+    expect(bal.presentation!.rates.map((r) => r.from).sort()).toEqual([
+      'LBP',
+      'USD',
+    ]);
+  });
+
+  it('returns null presentation figures when a required rate is missing', async () => {
+    const bal = await ledger.accountBalance(accA, caller, undefined, 'EUR');
+    expect(bal.presentation!.currency).toBe('EUR');
+    expect(bal.presentation!.balance).toBeNull();
   });
 });

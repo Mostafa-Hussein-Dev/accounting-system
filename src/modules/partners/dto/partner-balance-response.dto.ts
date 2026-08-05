@@ -1,5 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+/** The rate used to convert one source base currency into the presentation
+ *  currency (Tier 2, docs/URGENT.md §6.5). */
+export class PartnerPresentationRateDto {
+  @ApiProperty({ example: 'USD' }) from!: string;
+  @ApiProperty({ example: 89500 }) rate!: number;
+  @ApiProperty({ example: 'Official' }) rateType!: string;
+  @ApiProperty({ example: '2026-08-05' }) rateDate!: string;
+}
+
+/** The partner balance converted into a requested presentation currency
+ *  (?presentIn). Display only; null figures when a rate is missing. */
+export class PartnerBalancePresentationDto {
+  @ApiProperty({ example: 'LBP' }) currency!: string;
+  @ApiPropertyOptional({ nullable: true }) totalDebitBase!: number | null;
+  @ApiPropertyOptional({ nullable: true }) totalCreditBase!: number | null;
+  @ApiPropertyOptional({ nullable: true }) balanceBase!: number | null;
+  @ApiProperty({ type: PartnerPresentationRateDto, isArray: true })
+  rates!: PartnerPresentationRateDto[];
+}
+
 /** One base-currency slice of a partner balance (>1 only after the company's
  *  base currency changed while it had postings — docs/URGENT.md). */
 export class PartnerBaseCurrencyBalanceDto {
@@ -86,4 +106,12 @@ export class PartnerBalanceResponseDto {
       'Per-ORIGINAL-currency breakdown (from amountOriginal/currency; already self-describing).',
   })
   byCurrency!: PartnerCurrencyBalanceDto[];
+
+  @ApiPropertyOptional({
+    type: PartnerBalancePresentationDto,
+    nullable: true,
+    description:
+      'Balance in a requested currency (?presentIn). Null unless requested; figures null when a rate is missing.',
+  })
+  presentation?: PartnerBalancePresentationDto | null;
 }

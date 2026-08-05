@@ -160,6 +160,7 @@ export class PostingService {
               currency: l.currency,
               rate: l.rate,
               amountBase: l.amountBase,
+              baseCurrencyCode: l.baseCurrencyCode,
               partnerId: l.partnerId,
               costCenterId: l.costCenterId,
               description: l.description,

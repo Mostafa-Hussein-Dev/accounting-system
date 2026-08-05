@@ -47,8 +47,13 @@ export class TrialBalanceResponseDto {
   })
   asOf!: string;
 
-  @ApiProperty({ description: 'Base currency of the amounts.', example: 'USD' })
-  currency!: string;
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Base currency of the amounts, from the stored baseCurrencyCode. Null when the scope spans more than one base currency (use ?presentIn to convert).',
+    example: 'USD',
+  })
+  currency!: string | null;
 
   @ApiProperty({
     description:

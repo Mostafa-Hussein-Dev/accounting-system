@@ -427,9 +427,11 @@ export class PurchaseOrdersService {
         }
         ratePct = Number(taxRate.ratePct);
       }
+      // Default the cost from the item when the caller didn't negotiate one.
+      const unitCost = line.unitCost ?? Number(item.costPrice);
       const amounts = computeLine({
         qty: line.qtyOrdered,
-        unitCost: line.unitCost,
+        unitCost,
         vatTreatment,
         ratePct,
       });
@@ -438,7 +440,7 @@ export class PurchaseOrdersService {
         variantId: line.variantId ?? null,
         uomId,
         qtyOrdered: line.qtyOrdered,
-        unitCost: line.unitCost,
+        unitCost,
         taxRateId: vatTreatment === TaxTreatment.STANDARD ? taxRateId : null,
         vatTreatment,
         ratePct,

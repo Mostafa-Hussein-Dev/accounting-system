@@ -339,6 +339,31 @@ describe('Purchasing (FR-501) — full flow', () => {
     ).rejects.toMatchObject({ response: { code: 'OVER_RECEIPT' } });
   });
 
+  it('defaults a PO line unit cost from the item cost price when omitted', async () => {
+    const pricedItem = await prisma.item.create({
+      data: {
+        companyId,
+        code: `IT-${randomUUID().slice(0, 8)}`,
+        name: 'Priced',
+        baseUomId: (await prisma.uom.findFirstOrThrow({ where: { companyId } }))
+          .id,
+        priceCurrency: 'USD',
+        costPrice: 7.25,
+      },
+    });
+    const po = await orders.create(
+      {
+        supplierId,
+        currencyCode: 'USD',
+        orderDate: '2026-08-01',
+        lines: [{ itemId: pricedItem.id, qtyOrdered: 4 }], // no unitCost
+      },
+      caller,
+    );
+    expect(po.lines[0].unitCost).toBe(7.25);
+    expect(po.subtotal).toBe(29); // 4 * 7.25
+  });
+
   it('rejects a non-supplier partner on a PO', async () => {
     const notSupplier = await prisma.partner.create({
       data: {

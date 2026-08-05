@@ -41,13 +41,15 @@ export class CreatePurchaseOrderLineDto {
   @IsPositive()
   qtyOrdered!: number;
 
-  @ApiProperty({
-    description: 'Unit cost in the order currency.',
+  @ApiPropertyOptional({
+    description:
+      "Unit cost in the order currency. Defaults to the item's cost price when omitted; provide it to record a supplier-specific / negotiated price.",
     example: 4.5,
   })
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
-  unitCost!: number;
+  unitCost?: number;
 
   @ApiPropertyOptional({
     description: 'Override the VAT rate; defaults to the item VAT rate.',

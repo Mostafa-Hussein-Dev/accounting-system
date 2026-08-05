@@ -428,6 +428,23 @@ describe('Purchasing (FR-501) — full flow', () => {
     });
   });
 
+  it('blocks a second duplicate DRAFT bill before either is posted', async () => {
+    const po = await makePo(10);
+    const draftBody = {
+      supplierId,
+      purchaseOrderId: po.id,
+      currencyCode: 'USD',
+      billDate: '2026-08-03',
+      lines: [
+        { itemId, qty: 10, unitCost: 5, purchaseOrderLineId: po.lines[0].id },
+      ],
+    };
+    await bills.create(draftBody, caller); // first DRAFT, not confirmed
+    await expect(bills.create(draftBody, caller)).rejects.toMatchObject({
+      response: { code: 'PO_LINE_OVER_BILLED' },
+    });
+  });
+
   it('allows a legitimate split but blocks going over the ordered qty', async () => {
     const po = await makePo(10);
     await bill(po, 6);

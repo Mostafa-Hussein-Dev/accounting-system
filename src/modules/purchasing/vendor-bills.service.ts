@@ -121,6 +121,7 @@ export class VendorBillsService {
           purchaseOrderLineId: l.purchaseOrderLineId ?? null,
           qty: l.qty,
         })),
+        null,
       );
       const rate = await resolveRate(
         tx,
@@ -224,6 +225,7 @@ export class VendorBillsService {
           purchaseOrderLineId: l.purchaseOrderLineId,
           qty: Number(l.qty),
         })),
+        existing.id,
       );
       const baseCurrency = (
         await tx.company.findUniqueOrThrow({
@@ -466,9 +468,11 @@ export class VendorBillsService {
    * Quantity floor: the cumulative billed qty per PO line must not exceed the
    * ordered qty. Legitimate splits (which sum to the ordered qty) pass; a
    * duplicate full bill — or any bill pushing a line past its order — is
-   * rejected (PO_LINE_OVER_BILLED). Only counts POSTED bills, so this draft
-   * isn't double-counted. Lines with no purchaseOrderLineId (ad-hoc charges,
-   * non-PO bills) are exempt. Also validates the PO-line linkage.
+   * rejected (PO_LINE_OVER_BILLED). Counts every NON-CANCELLED, non-deleted bill
+   * (DRAFT + POSTED) so a duplicate is caught the moment it is CREATED, not only
+   * when posted; the bill being confirmed is excluded so its own draft qty isn't
+   * double-counted. Lines with no purchaseOrderLineId (ad-hoc charges, non-PO
+   * bills) are exempt. Also validates the PO-line linkage.
    * NOTE: the received-qty ceiling, price-variance tolerance and permissioned
    * override are the fuller three-way match (deferred, docs/DEFERRED.md).
    */
@@ -477,6 +481,7 @@ export class VendorBillsService {
     companyId: string,
     billPurchaseOrderId: string | null,
     lines: { purchaseOrderLineId: string | null; qty: number }[],
+    excludeBillId: string | null,
   ): Promise<void> {
     const byPoLine = new Map<string, number>();
     for (const l of lines) {
@@ -501,19 +506,23 @@ export class VendorBillsService {
           field: 'purchaseOrderLineId',
         });
       }
-      const posted = await tx.vendorBillLine.aggregate({
+      const existing = await tx.vendorBillLine.aggregate({
         _sum: { qty: true },
         where: {
           purchaseOrderLineId: poLineId,
-          vendorBill: { status: VendorBillStatus.POSTED, deletedAt: null },
+          vendorBill: {
+            status: { not: VendorBillStatus.CANCELLED },
+            deletedAt: null,
+            ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
+          },
         },
       });
-      const alreadyBilled = Number(posted._sum.qty ?? 0);
+      const alreadyBilled = Number(existing._sum.qty ?? 0);
       const ordered = Number(poLine.qtyOrdered);
       if (alreadyBilled + thisQty > ordered + 1e-9) {
         throw new ConflictException({
           code: 'PO_LINE_OVER_BILLED',
-          message: `PO line ${poLineId}: ordered ${ordered}, already billed ${alreadyBilled}; this bill's ${thisQty} would exceed the order.`,
+          message: `PO line ${poLineId}: ordered ${ordered}, already billed ${alreadyBilled} (drafts included); this bill's ${thisQty} would exceed the order.`,
           field: 'qty',
         });
       }

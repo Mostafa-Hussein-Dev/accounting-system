@@ -270,7 +270,8 @@ Delivered in `src/modules/purchasing` (migrations `20260801140000_add_purchasing
 - Approvals / full three-way match. **A quantity FLOOR is now enforced**:
   `VendorBillsService.assertNotOverBilled` rejects a bill that would push a PO
   line's cumulative billed qty past its **ordered** qty (`PO_LINE_OVER_BILLED`,
-  checked on create + confirm, counting POSTED bills), and validates the PO-line
+  checked on create + confirm, counting every non-cancelled bill — DRAFT +
+  POSTED — so a duplicate is caught at create, not only at post), and validates the PO-line
   linkage (`PO_LINE_MISMATCH`). Still deferred: the **received-qty ceiling**
   (can't bill beyond what was received), **price-variance tolerance**, a
   **permissioned override** for genuine exceptions, and audit of overrides.

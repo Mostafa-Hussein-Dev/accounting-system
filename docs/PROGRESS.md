@@ -113,3 +113,112 @@ mutable `Company.baseCurrencyCode` silently relabelled all historical amounts
 ## Path to a working invoice (updated)
 GL engine ✅ → Partners (FR-301) ✅ → Items (FR-401) ✅ → Stock ledger (FR-402) ✅
 → **Invoicing (FR-6xx, next)**. Each document module posts via `PostingService.post()`.
+
+## Full FR roadmap status (as of 2026-08-06)
+
+Status against every PRD functional requirement (`docs/PRD.md` §7–§17).
+Legend: ✅ Done · 🟡 Partial · ⬜ Not started. **Partial** usually means the
+backend primitive exists but the full acceptance criteria depend on an unbuilt
+module (invoicing/payments/reports) or a frontend/export piece.
+
+### §7 Setup & Configuration
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-101 | Companies (tenants) | ✅ | Multi-tenant, trilingual, base currency, TIN, deactivate |
+| FR-102 | Branches | 🟡 | Entity + trilingual done; `stockLocationId` FK deferred; branch-scoped sales/reports pending those modules |
+| FR-103 | Currencies & exchange rates | ✅ | Rate types, effective dates, `/current`, override; posted base amounts protected |
+| FR-104 | Chart of accounts | ✅ | Full 759-account Plan Comptable Libanais, control accounts, nesting |
+| FR-105 | Taxes (VAT) | 🟡 | Rates + 4426/4427 mapping + default 11% done; per-item/category default VAT deferred |
+| FR-106 | Document numbering | ✅ | Gap-controlled sequences, 8 seeded series |
+| FR-107 | Languages & translations | 🟡 | Master-data trilingual fields done; UI i18n is frontend; backend translation catalogue parked |
+| FR-108 | Company settings & flags | ✅ | settings JSON, base currency, fiscal year, enabled modules |
+
+### §8 Authentication & Users
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-201 | Login & sessions | 🟡 | Login/refresh/forgot-password done; 2FA, password policy, idle logout, live "connected users" not done |
+| FR-202 | Users & roles | 🟡 | Users, roles, CASL RBAC, invitations done; per-user permission overrides + branch assignment not complete |
+
+### §9 Accounts (Customers/Suppliers/Ledger)
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-301 | Customer/supplier master | ✅ | Partners + addresses + balances (USD/LBP, self-describing); "open invoices" tab awaits invoicing |
+| FR-302 | Credit control | 🟡 | Limit stored; warn/block on sale needs invoicing |
+| FR-303 | Account statement | 🟡 | Statement + running balance endpoint done; PDF/Excel/WhatsApp export not |
+
+### §10 Inventory & Items
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-401 | Item master | ✅ | Items, variants, barcodes, UoM, cost/sale, VAT treatment |
+| FR-402 | Stock ledger & on-hand | ✅ | AVCO movements, derived on-hand, negative-stock block |
+| FR-403 | Stock counts & adjustments | ⬜ | Adjustment movement primitive exists; count workflow + journal not |
+| FR-404 | Inter-branch transfers | ⬜ | transfer_in/out reasons in enum only; no workflow |
+| FR-405 | Pricing & discounts | 🟡 | Price lists/lines done; qty/total/period/customer discount rules + bulk price tools not |
+| FR-406 | Barcode & label printing | ⬜ | Frontend label engine |
+| FR-407 | Expiry & serial tracking | ⬜ | Flags may exist; capture + reporting not |
+
+### §11 Purchasing
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-501 | PO → receipt → purchase invoice | ✅ | Full flow + AVCO + GL posting + over-billing guard (PR #14) |
+| FR-502 | Landed cost (imports) | ⬜ | Not started |
+| FR-503 | Supplier balances & payments | 🟡 | Balance done; supplier payment needs Cash & Payments |
+
+### §12 Invoicing & Sales
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-601 | Document flow (quote→order→invoice→delivery) | ⬜ | Next module |
+| FR-602 | Invoice content & calculation | ⬜ | |
+| FR-603 | Confirm & post | ⬜ | |
+| FR-604 | Deliver / print / send | ⬜ | |
+| FR-605 | Credit notes / returns / void | ⬜ | |
+
+### §13 Cash & Payments
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-801 | Receipts & payments | ⬜ | Scaffold only |
+| FR-802 | Cheque management | ⬜ | |
+| FR-803 | Currency exchange (USD↔LBP) | ⬜ | |
+| FR-804 | Banks & reconciliation | ⬜ | |
+
+### §14 Accounting / General Ledger
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-901 | Manual journal entries | ✅ | Draft→post→reverse, balanced, immutable |
+| FR-902 | Automatic posting | 🟡 | PostingService core built + used by purchasing; configurable per-company rule engine deferred |
+| FR-903 | VAT return | ⬜ | Accounts mapped; report not built |
+| FR-904 | Fiscal periods & close | ⬜ | Deferred; hook left at post path |
+| FR-905 | Financial statements | 🟡 | Trial balance done; balance sheet / income statement / GL report + export not |
+| FR-906 | Accounting integrity | 🟡 | Balanced/immutable/server-money/derived/currency/tenant/audit enforced; period-locking pending FR-904 |
+
+### §15 Reporting
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-1001 | Report runner | ⬜ | Scaffold only |
+| FR-1002 | Standard reports + dashboards | 🟡 | Only trial balance exists today |
+
+### §16 Admin & Audit
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-1101 | Admin panel (web) | 🟡 | Backend CRUD endpoints exist; web panel + platform-wide stats partial |
+| FR-1102 | Audit trail | 🟡 | Module wired; full create/update/delete + before/after coverage not verified |
+| FR-1103 | Backups | ⬜ | Ops task |
+
+### §17 Future (post-MVP)
+| Item | Status |
+|---|---|
+| Point of Sale | ⬜ Out of MVP scope |
+| HR / Payroll | ⬜ Out of MVP scope |
+
+### Big picture
+- **Phase 0 (Foundations)** — essentially complete ✅ (tenancy, auth/RBAC,
+  company/branch, chart, currencies/rates, numbering, audit; migration tooling is
+  the open ops piece).
+- **Phase 1 (Core commercial MVP)** — roughly half: the **inbound** half is done
+  (GL ✅, Partners ✅, Items ✅, Stock ✅, Purchasing ✅). The **outbound** half is
+  the gap: Invoicing → Payments → VAT return → financial statements → reporting.
+- **Critical path to a working invoice-to-cash cycle:** FR-6xx Invoicing (next) →
+  FR-8xx Payments → FR-903/905 VAT & statements.
+- **Cross-cutting items still open** on many done modules: PDF/Excel/WhatsApp
+  exports, period locking (FR-904), and the configurable posting-rule engine
+  (FR-902).

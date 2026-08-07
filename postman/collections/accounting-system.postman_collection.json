@@ -4968,6 +4968,193 @@
       ]
     },
     {
+      "name": "Invoicing",
+      "item": [
+        {
+          "name": "Create sales invoice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('salesInvoiceId',pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sales-invoices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales-invoices"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerPartnerId}}\",\n  \"locationId\": \"{{internalLocationId}}\",\n  \"currencyCode\": \"USD\",\n  \"invoiceDate\": \"2026-08-06\",\n  \"lines\": [\n    {\n      \"itemId\": \"{{itemId}}\",\n      \"qty\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List sales invoices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sales-invoices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales-invoices"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get sales invoice",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sales-invoices/{{salesInvoiceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales-invoices",
+                "{{salesInvoiceId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm sales invoice (posts GL + relieves stock)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sales-invoices/{{salesInvoiceId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales-invoices",
+                "{{salesInvoiceId}}",
+                "confirm"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete sales invoice (draft only)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sales-invoices/{{salesInvoiceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales-invoices",
+                "{{salesInvoiceId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create credit note",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('creditNoteId',pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/credit-notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "credit-notes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerPartnerId}}\",\n  \"salesInvoiceId\": \"{{salesInvoiceId}}\",\n  \"locationId\": \"{{internalLocationId}}\",\n  \"currencyCode\": \"USD\",\n  \"creditNoteDate\": \"2026-08-06\",\n  \"reason\": \"return\",\n  \"lines\": [\n    {\n      \"itemId\": \"{{itemId}}\",\n      \"qty\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List credit notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/credit-notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "credit-notes"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm credit note (posts reversal + restock)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/credit-notes/{{creditNoteId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "credit-notes",
+                "{{creditNoteId}}",
+                "confirm"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Roles",
       "item": [
         {

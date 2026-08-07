@@ -67,6 +67,9 @@ export class ItemsService {
           hasColour: dto.hasColour ?? false,
           trackSerial: dto.trackSerial ?? false,
           trackExpiry: dto.trackExpiry ?? false,
+          trackInventory: dto.trackInventory ?? true,
+          revenueAccountId: dto.revenueAccountId ?? null,
+          cogsAccountId: dto.cogsAccountId ?? null,
           imageUrls: dto.imageUrls ?? [],
           isActive: dto.isActive ?? true,
         },
@@ -156,6 +159,9 @@ export class ItemsService {
     set('hasColour', 'hasColour');
     set('trackSerial', 'trackSerial');
     set('trackExpiry', 'trackExpiry');
+    set('trackInventory', 'trackInventory');
+    set('revenueAccountId', 'revenueAccountId');
+    set('cogsAccountId', 'cogsAccountId');
     set('imageUrls', 'imageUrls');
     set('isActive', 'isActive');
 

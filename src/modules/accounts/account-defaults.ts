@@ -683,6 +683,11 @@ export const DEFAULT_CHART: DefaultAccountSeed[] = [
     type: EXPENSE,
     normalBalance: DEBIT,
     parentNumber: '6',
+    // Default COGS control account (FR-6xx). Sales invoices DR here at moving-
+    // average cost when relieving inventory. The company default in the layered
+    // item → category → company resolver; items/categories may override.
+    isControl: true,
+    controlType: ControlType.COGS,
   },
   {
     number: '601',
@@ -983,6 +988,11 @@ export const DEFAULT_CHART: DefaultAccountSeed[] = [
     type: REVENUE,
     normalBalance: CREDIT,
     parentNumber: '7',
+    // Default revenue control account (FR-6xx). Sales invoices CR line net here.
+    // The company default in the layered item → category → company resolver;
+    // items/categories may override.
+    isControl: true,
+    controlType: ControlType.REVENUE,
   },
   {
     number: '701',

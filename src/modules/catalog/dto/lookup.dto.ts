@@ -52,7 +52,8 @@ export class CreateLookupDto {
 
 export class UpdateLookupDto extends PartialType(CreateLookupDto) {}
 
-// ItemCategory adds an optional self-referential parent.
+// ItemCategory adds an optional self-referential parent and the FR-6xx
+// revenue/COGS posting-account overrides for items in the category.
 export class CreateCategoryDto extends CreateLookupDto {
   @ApiPropertyOptional({
     description: 'Parent category (same company) for nesting.',
@@ -61,6 +62,24 @@ export class CreateCategoryDto extends CreateLookupDto {
   @Transform(emptyToUndefined)
   @IsUUID()
   parentId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Revenue account for items in this category (below the item override, above the company default).',
+  })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUUID()
+  revenueAccountId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'COGS account for items in this category (below the item override, above the company default).',
+  })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUUID()
+  cogsAccountId?: string;
 }
 
 export class UpdateCategoryDto extends PartialType(CreateCategoryDto) {}
@@ -78,6 +97,16 @@ export class LookupResponseDto {
     description: 'Only present for categories.',
   })
   parentId?: string | null;
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Only present for categories (revenue override).',
+  })
+  revenueAccountId?: string | null;
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Only present for categories (COGS override).',
+  })
+  cogsAccountId?: string | null;
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
 }

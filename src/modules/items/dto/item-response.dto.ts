@@ -25,6 +25,9 @@ export class ItemResponseDto {
   @ApiProperty() hasColour!: boolean;
   @ApiProperty() trackSerial!: boolean;
   @ApiProperty() trackExpiry!: boolean;
+  @ApiProperty() trackInventory!: boolean;
+  @ApiPropertyOptional({ nullable: true }) revenueAccountId!: string | null;
+  @ApiPropertyOptional({ nullable: true }) cogsAccountId!: string | null;
   @ApiProperty({ type: [String] }) imageUrls!: string[];
   @ApiProperty() isActive!: boolean;
   @ApiProperty() createdAt!: Date;
@@ -55,6 +58,9 @@ export class ItemResponseDto {
     dto.hasColour = i.hasColour;
     dto.trackSerial = i.trackSerial;
     dto.trackExpiry = i.trackExpiry;
+    dto.trackInventory = i.trackInventory;
+    dto.revenueAccountId = i.revenueAccountId;
+    dto.cogsAccountId = i.cogsAccountId;
     dto.imageUrls = i.imageUrls;
     dto.isActive = i.isActive;
     dto.createdAt = i.createdAt;

@@ -39,6 +39,8 @@ enum ControlType {
   CASH
   BANK
   INVENTORY
+  REVENUE
+  COGS
 }
 
 enum TaxTreatment {
@@ -180,6 +182,10 @@ model Company {
   goodsReceiptLines  GoodsReceiptLine[]
   vendorBills        VendorBill[]
   vendorBillLines    VendorBillLine[]
+  salesInvoices      SalesInvoice[]
+  salesInvoiceLines  SalesInvoiceLine[]
+  creditNotes        CreditNote[]
+  creditNoteLines    CreditNoteLine[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -218,6 +224,10 @@ model Currency {
   journalLinesBase   JournalLine[]   @relation("JournalLineBaseCurrency")
   purchaseOrdersBase PurchaseOrder[] @relation("POBaseCurrency")
   vendorBillsBase    VendorBill[]    @relation("VBBaseCurrency")
+  salesInvoices      SalesInvoice[]  @relation("SICurrency")
+  creditNotes        CreditNote[]    @relation("CNCurrency")
+  salesInvoicesBase  SalesInvoice[]  @relation("SIBaseCurrency")
+  creditNotesBase    CreditNote[]    @relation("CNBaseCurrency")
 
   @@map("currencies")
 }
@@ -315,6 +325,12 @@ model Account {
   receivablePartners Partner[] @relation("PartnerReceivableAccount")
   payablePartners    Partner[] @relation("PartnerPayableAccount")
 
+  // FR-6xx layered posting-account overrides (revenue/COGS) set on items/categories.
+  revenueForItems      Item[]         @relation("ItemRevenueAccount")
+  cogsForItems         Item[]         @relation("ItemCogsAccount")
+  revenueForCategories ItemCategory[] @relation("CategoryRevenueAccount")
+  cogsForCategories    ItemCategory[] @relation("CategoryCogsAccount")
+
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -356,6 +372,8 @@ model TaxRate {
   defaultForItems    Item[]              @relation("ItemDefaultTax")
   purchaseOrderLines PurchaseOrderLine[] @relation("POLineTax")
   vendorBillLines    VendorBillLine[]    @relation("VBLineTax")
+  salesInvoiceLines  SalesInvoiceLine[]  @relation("SILineTax")
+  creditNoteLines    CreditNoteLine[]    @relation("CNLineTax")
 
   @@index([companyId])
   @@index([companyId, treatment, effectiveDate])
@@ -455,7 +473,9 @@ model JournalEntry {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  vendorBill VendorBill? @relation("VendorBillJournalEntry")
+  vendorBill   VendorBill?   @relation("VendorBillJournalEntry")
+  salesInvoice SalesInvoice? @relation("SalesInvoiceJournalEntry")
+  creditNote   CreditNote?   @relation("CreditNoteJournalEntry")
 
   // Number is unique per company; null (draft) rows are exempt (Postgres treats
   // NULL as distinct), so many drafts coexist.
@@ -555,6 +575,8 @@ model Branch {
   purchaseOrders    PurchaseOrder[]    @relation("BranchPurchaseOrders")
   goodsReceipts     GoodsReceipt[]     @relation("BranchGoodsReceipts")
   vendorBills       VendorBill[]       @relation("BranchVendorBills")
+  salesInvoices     SalesInvoice[]     @relation("BranchSalesInvoices")
+  creditNotes       CreditNote[]       @relation("BranchCreditNotes")
 
   @@index([companyId])
   @@index([deletedAt])
@@ -865,6 +887,8 @@ model Partner {
   stockMovements StockMovement[]
   purchaseOrders PurchaseOrder[]  @relation("PartnerPurchaseOrders")
   vendorBills    VendorBill[]     @relation("PartnerVendorBills")
+  salesInvoices  SalesInvoice[]   @relation("PartnerSalesInvoices")
+  creditNotes    CreditNote[]     @relation("PartnerCreditNotes")
 
   @@unique([companyId, ref])
   @@index([companyId])
@@ -955,6 +979,8 @@ model Uom {
   purchaseOrderLines PurchaseOrderLine[] @relation("UomPurchaseOrderLines")
   goodsReceiptLines  GoodsReceiptLine[]  @relation("UomGoodsReceiptLines")
   vendorBillLines    VendorBillLine[]    @relation("UomVendorBillLines")
+  salesInvoiceLines  SalesInvoiceLine[]  @relation("UomSalesInvoiceLines")
+  creditNoteLines    CreditNoteLine[]    @relation("UomCreditNoteLines")
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -973,6 +999,13 @@ model ItemCategory {
   nameAr String? @map("name_ar")
   nameFr String? @map("name_fr")
   nameEn String? @map("name_en")
+
+  // FR-6xx default posting accounts for items in this category (below the item
+  // override, above the company default). Null → fall through to company default.
+  revenueAccountId String?  @map("revenue_account_id") @db.Uuid
+  revenueAccount   Account? @relation("CategoryRevenueAccount", fields: [revenueAccountId], references: [id])
+  cogsAccountId    String?  @map("cogs_account_id") @db.Uuid
+  cogsAccount      Account? @relation("CategoryCogsAccount", fields: [cogsAccountId], references: [id])
 
   // Self-nesting hierarchy (a parent is always in the same company).
   parentId String?        @map("parent_id") @db.Uuid
@@ -1109,10 +1142,20 @@ model Item {
   defaultTaxRateId String?      @map("default_tax_rate_id") @db.Uuid
   defaultTaxRate   TaxRate?     @relation("ItemDefaultTax", fields: [defaultTaxRateId], references: [id])
 
-  hasSize     Boolean @default(false) @map("has_size")
-  hasColour   Boolean @default(false) @map("has_colour")
-  trackSerial Boolean @default(false) @map("track_serial")
-  trackExpiry Boolean @default(false) @map("track_expiry")
+  // FR-6xx layered posting-account overrides (item → category → company default).
+  // Null falls back to the category, then the company REVENUE/COGS control account.
+  revenueAccountId String?  @map("revenue_account_id") @db.Uuid
+  revenueAccount   Account? @relation("ItemRevenueAccount", fields: [revenueAccountId], references: [id])
+  cogsAccountId    String?  @map("cogs_account_id") @db.Uuid
+  cogsAccount      Account? @relation("ItemCogsAccount", fields: [cogsAccountId], references: [id])
+
+  hasSize        Boolean @default(false) @map("has_size")
+  hasColour      Boolean @default(false) @map("has_colour")
+  trackSerial    Boolean @default(false) @map("track_serial")
+  trackExpiry    Boolean @default(false) @map("track_expiry")
+  // Perpetual inventory: only trackInventory items relieve stock + post COGS on
+  // sale (FR-6xx). Services/non-stock items post revenue + VAT only.
+  trackInventory Boolean @default(true) @map("track_inventory")
 
   imageUrls String[] @default([]) @map("image_urls")
 
@@ -1133,6 +1176,8 @@ model Item {
   purchaseOrderLines PurchaseOrderLine[] @relation("ItemPurchaseOrderLines")
   goodsReceiptLines  GoodsReceiptLine[]  @relation("ItemGoodsReceiptLines")
   vendorBillLines    VendorBillLine[]    @relation("ItemVendorBillLines")
+  salesInvoiceLines  SalesInvoiceLine[]  @relation("ItemSalesInvoiceLines")
+  creditNoteLines    CreditNoteLine[]    @relation("ItemCreditNoteLines")
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -1173,6 +1218,8 @@ model ItemVariant {
   purchaseOrderLines PurchaseOrderLine[] @relation("VariantPurchaseOrderLines")
   goodsReceiptLines  GoodsReceiptLine[]  @relation("VariantGoodsReceiptLines")
   vendorBillLines    VendorBillLine[]    @relation("VariantVendorBillLines")
+  salesInvoiceLines  SalesInvoiceLine[]  @relation("VariantSalesInvoiceLines")
+  creditNoteLines    CreditNoteLine[]    @relation("VariantCreditNoteLines")
 
   @@unique([itemId, sizeId, colourId])
   @@unique([companyId, sku])
@@ -1313,6 +1360,8 @@ model Location {
   movementsFrom      StockMovement[] @relation("StockMovementFrom")
   movementsTo        StockMovement[] @relation("StockMovementTo")
   goodsReceipts      GoodsReceipt[]  @relation("LocationGoodsReceipts")
+  salesInvoices      SalesInvoice[]  @relation("LocationSalesInvoices")
+  creditNotes        CreditNote[]    @relation("LocationCreditNotes")
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -1376,6 +1425,9 @@ model StockMovement {
 
   // The goods-receipt line that generated this movement, if any (FR-501).
   goodsReceiptLine GoodsReceiptLine? @relation("GoodsReceiptLineMovement")
+  // The sales-invoice / credit-note line that generated this movement (FR-6xx).
+  salesInvoiceLine SalesInvoiceLine? @relation("SalesInvoiceLineMovement")
+  creditNoteLine   CreditNoteLine?   @relation("CreditNoteLineMovement")
 
   @@index([companyId])
   @@index([itemId, variantId])
@@ -1666,4 +1718,232 @@ model VendorBillLine {
   @@index([vendorBillId])
   @@index([itemId])
   @@map("vendor_bill_lines")
+}
+
+// ===========================================================================
+// Invoicing / Sales (FR-6xx) — the outbound mirror of purchasing. A sales
+// invoice raises AR + revenue + output VAT and, for stock-tracked items,
+// relieves inventory + posts COGS at moving-average cost (perpetual inventory).
+// A credit note reverses both. Posted = immutable (corrections via credit note).
+// ===========================================================================
+
+enum SalesInvoiceStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum CreditNoteStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+model SalesInvoice {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  invoiceNo  String             @map("invoice_no")
+  status     SalesInvoiceStatus @default(DRAFT)
+  customerId String             @map("customer_id") @db.Uuid
+  customer   Partner            @relation("PartnerSalesInvoices", fields: [customerId], references: [id])
+  branchId   String?            @map("branch_id") @db.Uuid
+  branch     Branch?            @relation("BranchSalesInvoices", fields: [branchId], references: [id])
+
+  // Internal location the goods ship FROM (required only when the invoice has
+  // stock-tracked lines; validated in the service).
+  locationId String?   @map("location_id") @db.Uuid
+  location   Location? @relation("LocationSalesInvoices", fields: [locationId], references: [id])
+
+  currencyCode String   @map("currency_code")
+  currency     Currency @relation("SICurrency", fields: [currencyCode], references: [code])
+  rate         Decimal  @db.Decimal(20, 6)
+
+  // Base currency the *Base totals are denominated in, frozen at creation so a
+  // later Company.baseCurrencyCode change can't relabel them (docs/URGENT.md).
+  baseCurrencyCode String   @map("base_currency_code")
+  baseCurrency     Currency @relation("SIBaseCurrency", fields: [baseCurrencyCode], references: [code])
+
+  invoiceDate DateTime  @map("invoice_date") @db.Date
+  dueDate     DateTime? @map("due_date") @db.Date
+  customerRef String?   @map("customer_ref")
+  notes       String?
+
+  subtotal       Decimal @default(0) @db.Decimal(20, 2)
+  vatTotal       Decimal @default(0) @map("vat_total") @db.Decimal(20, 2)
+  grandTotal     Decimal @default(0) @map("grand_total") @db.Decimal(20, 2)
+  subtotalBase   Decimal @default(0) @map("subtotal_base") @db.Decimal(20, 2)
+  vatTotalBase   Decimal @default(0) @map("vat_total_base") @db.Decimal(20, 2)
+  grandTotalBase Decimal @default(0) @map("grand_total_base") @db.Decimal(20, 2)
+  // Cost of goods sold in base currency (Σ line COGS), frozen at post.
+  cogsTotalBase  Decimal @default(0) @map("cogs_total_base") @db.Decimal(20, 2)
+
+  journalEntryId String?       @unique @map("journal_entry_id") @db.Uuid
+  journalEntry   JournalEntry? @relation("SalesInvoiceJournalEntry", fields: [journalEntryId], references: [id])
+  postedAt       DateTime?     @map("posted_at")
+
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines       SalesInvoiceLine[]
+  creditNotes CreditNote[]
+
+  @@unique([companyId, invoiceNo])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("sales_invoices")
+}
+
+model SalesInvoiceLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  salesInvoiceId String       @map("sales_invoice_id") @db.Uuid
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
+
+  lineNo    Int          @map("line_no")
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation("ItemSalesInvoiceLines", fields: [itemId], references: [id])
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation("VariantSalesInvoiceLines", fields: [variantId], references: [id])
+  uomId     String       @map("uom_id") @db.Uuid
+  uom       Uom          @relation("UomSalesInvoiceLines", fields: [uomId], references: [id])
+
+  qty             Decimal @db.Decimal(20, 3)
+  unitPrice       Decimal @map("unit_price") @db.Decimal(20, 4)
+  lineDiscountPct Decimal @default(0) @map("line_discount_pct") @db.Decimal(5, 2)
+
+  taxRateId    String?      @map("tax_rate_id") @db.Uuid
+  taxRate      TaxRate?     @relation("SILineTax", fields: [taxRateId], references: [id])
+  vatTreatment TaxTreatment @default(STANDARD) @map("vat_treatment")
+  ratePct      Decimal      @default(0) @map("rate_pct") @db.Decimal(5, 2)
+
+  netAmount   Decimal @map("net_amount") @db.Decimal(20, 2)
+  vatAmount   Decimal @map("vat_amount") @db.Decimal(20, 2)
+  totalAmount Decimal @map("total_amount") @db.Decimal(20, 2)
+
+  // Unit COGS in base currency (moving-average), frozen at post; 0 for non-stock.
+  costBase Decimal @default(0) @map("cost_base") @db.Decimal(20, 4)
+
+  // The ISSUE stock movement this line generated on post (traceability).
+  stockMovementId String?        @unique @map("stock_movement_id") @db.Uuid
+  stockMovement   StockMovement? @relation("SalesInvoiceLineMovement", fields: [stockMovementId], references: [id])
+
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([salesInvoiceId])
+  @@index([itemId])
+  @@map("sales_invoice_lines")
+}
+
+model CreditNote {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  creditNoteNo String           @map("credit_note_no")
+  status       CreditNoteStatus @default(DRAFT)
+  customerId   String           @map("customer_id") @db.Uuid
+  customer     Partner          @relation("PartnerCreditNotes", fields: [customerId], references: [id])
+
+  // The invoice being credited, if any (a return references its sale).
+  salesInvoiceId String?       @map("sales_invoice_id") @db.Uuid
+  salesInvoice   SalesInvoice? @relation(fields: [salesInvoiceId], references: [id])
+
+  branchId String? @map("branch_id") @db.Uuid
+  branch   Branch? @relation("BranchCreditNotes", fields: [branchId], references: [id])
+
+  // Internal location returned goods are restocked INTO.
+  locationId String?   @map("location_id") @db.Uuid
+  location   Location? @relation("LocationCreditNotes", fields: [locationId], references: [id])
+
+  currencyCode String   @map("currency_code")
+  currency     Currency @relation("CNCurrency", fields: [currencyCode], references: [code])
+  rate         Decimal  @db.Decimal(20, 6)
+
+  baseCurrencyCode String   @map("base_currency_code")
+  baseCurrency     Currency @relation("CNBaseCurrency", fields: [baseCurrencyCode], references: [code])
+
+  creditNoteDate DateTime @map("credit_note_date") @db.Date
+  reason         String?
+  notes          String?
+
+  subtotal       Decimal @default(0) @db.Decimal(20, 2)
+  vatTotal       Decimal @default(0) @map("vat_total") @db.Decimal(20, 2)
+  grandTotal     Decimal @default(0) @map("grand_total") @db.Decimal(20, 2)
+  subtotalBase   Decimal @default(0) @map("subtotal_base") @db.Decimal(20, 2)
+  vatTotalBase   Decimal @default(0) @map("vat_total_base") @db.Decimal(20, 2)
+  grandTotalBase Decimal @default(0) @map("grand_total_base") @db.Decimal(20, 2)
+  cogsTotalBase  Decimal @default(0) @map("cogs_total_base") @db.Decimal(20, 2)
+
+  journalEntryId String?       @unique @map("journal_entry_id") @db.Uuid
+  journalEntry   JournalEntry? @relation("CreditNoteJournalEntry", fields: [journalEntryId], references: [id])
+  postedAt       DateTime?     @map("posted_at")
+
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines CreditNoteLine[]
+
+  @@unique([companyId, creditNoteNo])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("credit_notes")
+}
+
+model CreditNoteLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  creditNoteId String     @map("credit_note_id") @db.Uuid
+  creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+
+  lineNo    Int          @map("line_no")
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation("ItemCreditNoteLines", fields: [itemId], references: [id])
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation("VariantCreditNoteLines", fields: [variantId], references: [id])
+  uomId     String       @map("uom_id") @db.Uuid
+  uom       Uom          @relation("UomCreditNoteLines", fields: [uomId], references: [id])
+
+  qty             Decimal @db.Decimal(20, 3)
+  unitPrice       Decimal @map("unit_price") @db.Decimal(20, 4)
+  lineDiscountPct Decimal @default(0) @map("line_discount_pct") @db.Decimal(5, 2)
+
+  taxRateId    String?      @map("tax_rate_id") @db.Uuid
+  taxRate      TaxRate?     @relation("CNLineTax", fields: [taxRateId], references: [id])
+  vatTreatment TaxTreatment @default(STANDARD) @map("vat_treatment")
+  ratePct      Decimal      @default(0) @map("rate_pct") @db.Decimal(5, 2)
+
+  netAmount   Decimal @map("net_amount") @db.Decimal(20, 2)
+  vatAmount   Decimal @map("vat_amount") @db.Decimal(20, 2)
+  totalAmount Decimal @map("total_amount") @db.Decimal(20, 2)
+
+  costBase Decimal @default(0) @map("cost_base") @db.Decimal(20, 4)
+
+  stockMovementId String?        @unique @map("stock_movement_id") @db.Uuid
+  stockMovement   StockMovement? @relation("CreditNoteLineMovement", fields: [stockMovementId], references: [id])
+
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([creditNoteId])
+  @@index([itemId])
+  @@map("credit_note_lines")
 }

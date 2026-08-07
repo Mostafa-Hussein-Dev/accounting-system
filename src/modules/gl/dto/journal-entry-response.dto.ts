@@ -33,6 +33,13 @@ export class JournalLineResponseDto {
   @ApiProperty({ description: 'Equivalent in the base currency', example: 100 })
   amountBase!: number;
 
+  @ApiProperty({
+    description:
+      'The currency `amountBase` is denominated in — the company base currency frozen at posting. Self-describing (never re-labelled from the mutable company setting).',
+    example: 'USD',
+  })
+  baseCurrencyCode!: string;
+
   @ApiPropertyOptional({ nullable: true, example: null })
   partnerId!: string | null;
 
@@ -52,6 +59,7 @@ export class JournalLineResponseDto {
     dto.currency = line.currency;
     dto.rate = Number(line.rate);
     dto.amountBase = Number(line.amountBase);
+    dto.baseCurrencyCode = line.baseCurrencyCode;
     dto.partnerId = line.partnerId;
     dto.costCenterId = line.costCenterId;
     dto.description = line.description;
@@ -95,6 +103,14 @@ export class JournalEntryResponseDto {
   })
   reversalOfId!: string | null;
 
+  @ApiProperty({
+    nullable: true,
+    description:
+      'The base currency the totals are in, read from the lines (self-describing). Null only in the rare mixed-base case where the entry spans more than one stored base currency (post a base-currency change).',
+    example: 'USD',
+  })
+  baseCurrencyCode!: string | null;
+
   @ApiProperty({ description: 'Sum of debit base amounts', example: 100 })
   totalDebitBase!: number;
 
@@ -136,6 +152,11 @@ export class JournalEntryResponseDto {
 
     const lines = [...entry.lines].sort((a, b) => a.lineNo - b.lineNo);
     dto.lines = lines.map(JournalLineResponseDto.fromEntity);
+    // Self-describing: read the base currency off the lines rather than the
+    // mutable company setting. Uniform in every normal case; null only if the
+    // entry somehow straddles a base-currency change (mirrors the balance DTOs).
+    const baseCodes = new Set(lines.map((l) => l.baseCurrencyCode));
+    dto.baseCurrencyCode = baseCodes.size === 1 ? [...baseCodes][0] : null;
     dto.totalDebitBase = round2(
       lines
         .filter((l) => l.side === JournalSide.DEBIT)

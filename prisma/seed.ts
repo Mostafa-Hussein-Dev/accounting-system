@@ -516,6 +516,36 @@ const PERMISSIONS = [
     action: 'post',
     description: 'Confirm POs, receive goods, and post vendor bills',
   },
+  {
+    key: 'sales.read',
+    subject: 'Sales',
+    action: 'read',
+    description: 'View sales invoices and credit notes',
+  },
+  {
+    key: 'sales.create',
+    subject: 'Sales',
+    action: 'create',
+    description: 'Create sales invoices and credit notes',
+  },
+  {
+    key: 'sales.update',
+    subject: 'Sales',
+    action: 'update',
+    description: 'Edit draft sales invoices and credit notes',
+  },
+  {
+    key: 'sales.delete',
+    subject: 'Sales',
+    action: 'delete',
+    description: 'Delete draft sales documents',
+  },
+  {
+    key: 'sales.post',
+    subject: 'Sales',
+    action: 'post',
+    description: 'Confirm/post sales invoices and credit notes',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -572,6 +602,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'location.read',
         'stock.read',
         'purchase.read',
+        'sales.read',
       ],
     },
   ];

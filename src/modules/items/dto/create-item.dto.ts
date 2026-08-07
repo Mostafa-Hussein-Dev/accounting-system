@@ -140,6 +140,33 @@ export class CreateItemDto {
   trackExpiry?: boolean;
 
   @ApiPropertyOptional({
+    default: true,
+    description:
+      'Perpetual inventory: a stock item relieves stock + posts COGS on sale. Set false for services/non-stock items (revenue + VAT only).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  trackInventory?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Revenue account override for sales (FR-6xx). Falls back to the category, then the company REVENUE control account.',
+  })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUUID()
+  revenueAccountId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'COGS account override for sales (FR-6xx). Falls back to the category, then the company COGS control account.',
+  })
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUUID()
+  cogsAccountId?: string;
+
+  @ApiPropertyOptional({
     description: 'Image URLs (stored as-is; upload/storage is out of scope).',
     type: [String],
   })

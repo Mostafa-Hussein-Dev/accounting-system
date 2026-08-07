@@ -30,6 +30,8 @@ interface LookupRow {
   nameEn: string | null;
   sortOrder: number;
   parentId?: string | null;
+  revenueAccountId?: string | null;
+  cogsAccountId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -122,6 +124,9 @@ export class CatalogService {
         await this.assertCategory(parentId, companyId, caller);
       }
       data.parentId = parentId ?? null;
+      data.revenueAccountId =
+        (dto as CreateCategoryDto).revenueAccountId ?? null;
+      data.cogsAccountId = (dto as CreateCategoryDto).cogsAccountId ?? null;
     }
     try {
       const row = await this.delegate(kind, caller).create({ data });
@@ -175,6 +180,11 @@ export class CatalogService {
         }
         data.parentId = parentId;
       }
+      const revenueAccountId = (dto as UpdateCategoryDto).revenueAccountId;
+      if (revenueAccountId !== undefined)
+        data.revenueAccountId = revenueAccountId;
+      const cogsAccountId = (dto as UpdateCategoryDto).cogsAccountId;
+      if (cogsAccountId !== undefined) data.cogsAccountId = cogsAccountId;
     }
     try {
       const row = await this.delegate(kind, caller).update({
@@ -278,6 +288,8 @@ export class CatalogService {
     dto.updatedAt = row.updatedAt;
     if (kind === 'itemCategory') {
       dto.parentId = row.parentId ?? null;
+      dto.revenueAccountId = row.revenueAccountId ?? null;
+      dto.cogsAccountId = row.cogsAccountId ?? null;
     }
     return dto;
   }

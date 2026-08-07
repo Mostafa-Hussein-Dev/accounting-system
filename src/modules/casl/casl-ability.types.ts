@@ -27,5 +27,6 @@ export type Subjects =
   | 'Location'
   | 'Stock'
   | 'Purchase'
+  | 'Sales'
   | 'all';
 export type AppAbility = MongoAbility<[Action, Subjects]>;

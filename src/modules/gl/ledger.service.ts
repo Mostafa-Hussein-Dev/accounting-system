@@ -119,7 +119,7 @@ export class LedgerService {
       dto.balance = 0;
       dto.naturalBalance = 0;
     } else {
-      // Mixed base currency: never sum across them (docs/URGENT.md §6.3).
+      // Mixed base currency: never sum across them (docs/PROGRESS.md (base-currency)).
       dto.currency = null;
       dto.totalDebitBase = null;
       dto.totalCreditBase = null;
@@ -241,7 +241,7 @@ export class LedgerService {
 
     // Group by the STORED base currency as well, so figures are never summed
     // across currencies — a trial balance only balances WITHIN one currency
-    // (docs/URGENT.md §6.3).
+    // (docs/PROGRESS.md (base-currency)).
     const grouped = await this.prisma.journalLine.groupBy({
       by: ['accountId', 'side', 'baseCurrencyCode'],
       where: this.postedLineWhere(

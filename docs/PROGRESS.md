@@ -23,8 +23,10 @@ order, each on its own `feature/*` branch merged via PR to `main`.
 | FR-4xx | **Pricing / price lists** | `PricingModule` — price lists + lines, currency-aware. |
 | FR-402 | **Stock ledger** | `StockMovement` sub-ledger, **moving-average (AVCO)** valuation per item/variant; `StockService.postMovementInTx()` is the reusable in-transaction entry point (inbound/outbound); negative-stock blocked; seeded internal locations (Inventory Adjustment, etc.). Valuation reports as-of a date. The stock ledger is the sub-ledger behind inventory account **37** (`ControlType.INVENTORY`). |
 | FR-501 | **Purchasing** | `PurchaseOrder` → `GoodsReceipt` (posts an **inbound** `StockMovement` via `StockService`, AVCO) → `VendorBill` (posts GL via `PostingService`: **DR inventory 37** + DR input VAT 4426 + **CR AP** partner). PO unit cost is **optional**, defaulting from `item.costPrice`. **Over-billing guard**: a PO line can't be billed beyond its ordered qty/amount — counts non-cancelled (DRAFT+POSTED) bill lines, excluding the bill being confirmed. Merged via PR #14. |
+| FR-6xx | **Invoicing (sales invoices + credit notes)** | Outbound mirror of Purchasing. Confirm posts a balanced GL entry — **DR AR (customer) · CR revenue (70) · CR output VAT (4427)** — and, for stock items, relieves inventory + posts **COGS (60) / inventory (37)** at moving-average (perpetual) via `StockService.postMovementInTx`. **Credit note** reverses the accounting + restocks. **Layered revenue/COGS account resolution** (item → category → company default; new optional `revenue/cogsAccountId` on Item + Category, defaults on accounts 70/60). `trackInventory` flag → services post revenue+VAT only. Posted = immutable. Merged via PR (`feature/invoicing`). Covers FR-602/603/605 + the AR/stock half of FR-601. |
 | FR-1102 | **Audit trail** | `AuditModule` wired (cross-cutting change log). |
-| URGENT | **Base-currency self-describing money** | See dedicated section below. Each posted amount now records **which** base currency it was frozen in; balances report it and never mislabel or silently sum across currencies; optional `?presentIn=` presentation currency. Merged both backend + frontend. |
+| URGENT | **Base-currency self-describing money** | See dedicated section below. Each posted amount records **which** base currency it was frozen in; balances report it and never mislabel or silently sum across currencies; optional `?presentIn=` presentation currency. Merged both backend + frontend. |
+| — | **Base-currency integrity (Fix A/B/C)** | Completes the 3-layer currency model. **A:** base currency is **locked** once postings exist (`BASE_CURRENCY_LOCKED` on both company-update paths). **B:** trial balance is currency-aware (never sums across base currencies — per-currency `byBaseCurrency[]` groups + `?presentIn`); partner statement refuses a mixed-base partner (`STATEMENT_MIXED_BASE`). **C:** stock valuation/on-hand self-describe from the ledger `costCurrency` and refuse a mixed stream (`STOCK_MIXED_COST_CURRENCY`). Branch `fix/base-currency-integrity` — pushed, **pending PR/merge**. |
 | — | Auth / Users / Roles / CASL RBAC | JWT access+refresh, password reset, platform-admin, seeded roles |
 | — | **Multi-company membership** | A user belongs to many companies (`UserCompany`); per-company roles (`UserRole.companyId`); `User.isPlatformAdmin` flag (replaces "null company = admin"). Active company is token-scoped — auto for single-company, else `POST /auth/switch-company`; `CompanyMembershipGuard` re-verifies membership per request. `GET /companies` lists own; `POST /companies` = owner self-service (gated on `company.create`, auto-provisioned). `GET /auth/me` returns `activeCompanyId` + `companies`. CASL scopes permissions to the active company. |
 | — | **User management + Invitations** | `/users` gated by `user.{create,read,update,delete}` (Member gets `user.read`). `GET /permissions` (permission.read) for the role builder. **Invitations** (consent-based): `POST /invitations` (admin, `user.create`) emails an accept link + temp password; `POST /invitations/accept` (public, token) creates the user on acceptance + grants membership/roles; list/revoke; `GET /invitations/durations`. `InvitationDuration` enum sets expiry. **Temp-password one-time use:** invited users get `User.mustChangePassword` — `JwtAuthGuard` blocks every route except `change-password`/`me`/logout with 403 `PASSWORD_CHANGE_REQUIRED` until `POST /auth/change-password` clears it (flag also in login/`me` response for the frontend). |
@@ -36,10 +38,11 @@ order, each on its own `feature/*` branch merged via PR to `main`.
 - Smaller: `Branch.stockLocationId` FK, item/category default VAT, `JournalLine.partnerId`/`costCenterId` FKs, `JournalEntry.sourceDoc*` FK.
 
 ### Next
-- **Invoicing (FR-6xx)** — the sales side, mirror of Purchasing: customer invoice posts DR AR (partner) · CR revenue · CR output VAT (4427), and for stock items also an **outbound** `StockMovement` (AVCO cost-out) + COGS/inventory leg via `StockService`/`PostingService`. Then **Payments** (receipts against AR) follows.
+- **Cash & Payments (FR-8xx / FR-503)** — receipts from customers (DR cash/bank · CR AR) and payments to suppliers (DR AP · CR cash/bank), against invoices or on-account, with FX gain/loss when rates moved; posts via `PostingService`. This closes the invoice→payment→ledger→statement loop.
+- Then **VAT return (FR-903)** and the remaining **financial statements (FR-905)** — both must follow the currency-aware reporting pattern (see docs/DEFERRED.md).
 
 ### Path to a working invoice
-GL engine ✅ → Partners ✅ → Items ✅ → Stock ledger ✅ → **Invoicing (FR-6xx, next)**.
+GL engine ✅ → Partners ✅ → Items ✅ → Stock ledger ✅ → Purchasing ✅ → **Invoicing ✅** → Payments (next).
 
 ## Working agreement (the rules the user has set)
 1. **Requirements** from `docs/PRD.md` (FR-xxx + acceptance criteria).
@@ -82,11 +85,14 @@ server-computed 4-field Money, derived balances (never stored). Endpoints:
 modules call. Not done here (deferred): period locking (FR-904), auto-posting
 rules (FR-902) — hooks/TODOs left in place.
 
-## Base-currency self-describing money — BUILT (URGENT fix)
-Closes the mislabel defect in `docs/URGENT.md`: `amountBase` was frozen at
-posting but nothing recorded **which** currency it was in, so changing the
-mutable `Company.baseCurrencyCode` silently relabelled all historical amounts
-(100 USD shown as "100 LBP").
+## Base-currency self-describing money — BUILT (the former URGENT fix)
+Closes the base-currency mislabel defect (originally tracked in `docs/URGENT.md`,
+now removed since it is fully resolved — this section is the record). `amountBase`
+was frozen at posting but nothing recorded **which** currency it was in, so
+changing the mutable `Company.baseCurrencyCode` silently relabelled all historical
+amounts (100 USD shown as "100 LBP"). Fixed by stamping `baseCurrencyCode` per
+line, self-describing/`?presentIn` reads, and the integrity fixes A/B/C (lock +
+currency-aware trial balance/statement + stock valuation).
 
 - **Schema:** every posted amount now carries its base currency next to the
   frozen figure — `baseCurrencyCode` on `JournalLine`, `PurchaseOrder`,
@@ -167,11 +173,11 @@ module (invoicing/payments/reports) or a frontend/export piece.
 ### §12 Invoicing & Sales
 | FR | Feature | Status | Note |
 |---|---|---|---|
-| FR-601 | Document flow (quote→order→invoice→delivery) | ⬜ | Next module |
-| FR-602 | Invoice content & calculation | ⬜ | |
-| FR-603 | Confirm & post | ⬜ | |
-| FR-604 | Deliver / print / send | ⬜ | |
-| FR-605 | Credit notes / returns / void | ⬜ | |
+| FR-601 | Document flow (quote→order→invoice→delivery) | 🟡 | Invoice built + balances/posts + stock-out; quotation→order→delivery-note conversion deferred |
+| FR-602 | Invoice content & calculation | ✅ | Server-computed lines/totals, line discount, VAT snapshot, multi-currency (base + doc) |
+| FR-603 | Confirm & post | ✅ | Draft→confirm posts AR/revenue/VAT + COGS/inventory; posted immutable |
+| FR-604 | Deliver / print / send | ⬜ | PDF/print/email/WhatsApp — deferred (frontend/integrations) |
+| FR-605 | Credit notes / returns | ✅ | Credit note reverses accounting + restocks (void/soft-delete of drafts) |
 
 ### §13 Cash & Payments
 | FR | Feature | Status | Note |
@@ -188,7 +194,7 @@ module (invoicing/payments/reports) or a frontend/export piece.
 | FR-902 | Automatic posting | 🟡 | PostingService core built + used by purchasing; configurable per-company rule engine deferred |
 | FR-903 | VAT return | ⬜ | Accounts mapped; report not built |
 | FR-904 | Fiscal periods & close | ⬜ | Deferred; hook left at post path |
-| FR-905 | Financial statements | 🟡 | Trial balance done; balance sheet / income statement / GL report + export not |
+| FR-905 | Financial statements | 🟡 | Trial balance done + **currency-aware** (byBaseCurrency groups + `?presentIn`); balance sheet / income statement / GL report + export not (must follow the same pattern — docs/DEFERRED.md) |
 | FR-906 | Accounting integrity | 🟡 | Balanced/immutable/server-money/derived/currency/tenant/audit enforced; period-locking pending FR-904 |
 
 ### §15 Reporting
@@ -214,11 +220,15 @@ module (invoicing/payments/reports) or a frontend/export piece.
 - **Phase 0 (Foundations)** — essentially complete ✅ (tenancy, auth/RBAC,
   company/branch, chart, currencies/rates, numbering, audit; migration tooling is
   the open ops piece).
-- **Phase 1 (Core commercial MVP)** — roughly half: the **inbound** half is done
-  (GL ✅, Partners ✅, Items ✅, Stock ✅, Purchasing ✅). The **outbound** half is
-  the gap: Invoicing → Payments → VAT return → financial statements → reporting.
-- **Critical path to a working invoice-to-cash cycle:** FR-6xx Invoicing (next) →
-  FR-8xx Payments → FR-903/905 VAT & statements.
+- **Phase 1 (Core commercial MVP)** — well past half: GL ✅, Partners ✅, Items ✅,
+  Stock ✅, Purchasing ✅, **Invoicing ✅**. Remaining: **Payments**, then VAT
+  return → financial statements → reporting.
+- **Currency model** is now the full 3-layer standard (transaction currency per
+  line · frozen + **locked** base currency · display-only `?presentIn`),
+  consistent across account/partner balances, trial balance, statements and stock
+  valuation (base-currency integrity Fix A/B/C).
+- **Critical path to a working invoice-to-cash cycle:** Invoicing ✅ → **FR-8xx
+  Payments (next)** → FR-903/905 VAT & statements.
 - **Cross-cutting items still open** on many done modules: PDF/Excel/WhatsApp
   exports, period locking (FR-904), and the configurable posting-rule engine
   (FR-902).

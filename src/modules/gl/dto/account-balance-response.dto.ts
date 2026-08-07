@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { NormalBalance } from '@prisma/client';
 
 /** The rate used to convert one source base currency into the presentation
- *  currency (Tier 2, docs/URGENT.md §6.5). */
+ *  currency (Tier 2, docs/PROGRESS.md (base-currency)). */
 export class PresentationRateDto {
   @ApiProperty({ description: 'Source base currency.', example: 'USD' })
   from!: string;
@@ -29,7 +29,7 @@ export class BalancePresentationDto {
 }
 
 /** One base-currency slice of a balance (there is >1 only after a company's
- *  base currency changed while it had postings — see docs/URGENT.md). */
+ *  base currency changed while it had postings — see docs/PROGRESS.md (base-currency)). */
 export class BaseCurrencyBalanceDto {
   @ApiProperty({ example: 'USD' }) currency!: string;
   @ApiProperty({ example: 1500 }) totalDebitBase!: number;
@@ -48,7 +48,7 @@ export class BaseCurrencyBalanceDto {
  * baseCurrencyCode on the lines (never the mutable company setting). In the rare
  * case an account holds lines in more than one base currency, the scalar totals
  * are null and `byBaseCurrency` carries a figure per currency — the numbers are
- * never silently summed across currencies (docs/URGENT.md).
+ * never silently summed across currencies (docs/PROGRESS.md (base-currency)).
  */
 export class AccountBalanceResponseDto {
   @ApiProperty({ example: 'b3f1c2e0-1234-4a5b-9c8d-1234567890ab' })

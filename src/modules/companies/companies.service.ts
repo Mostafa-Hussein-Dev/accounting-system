@@ -365,7 +365,7 @@ export class CompaniesService {
    * it once anything has been posted would silently re-denominate every stored
    * base amount (a 100 USD balance reading as "100 LBP") and mis-scale the stock
    * valuation — the same mislabel the per-line baseCurrencyCode stamping was
-   * added to prevent (docs/URGENT.md). Real ERPs fix it at setup, so we reject
+   * added to prevent (docs/PROGRESS.md (base-currency)). Real ERPs fix it at setup, so we reject
    * the change once the company has any postings (journal lines or stock
    * movements). A no-op (same code) is always allowed.
    */

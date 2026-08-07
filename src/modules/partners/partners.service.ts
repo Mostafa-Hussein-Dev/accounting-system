@@ -397,7 +397,7 @@ export class PartnersService {
       dto.totalCreditBase = 0;
       dto.balanceBase = 0;
     } else {
-      // Mixed base currency: never sum across them (docs/URGENT.md §6.3).
+      // Mixed base currency: never sum across them (docs/PROGRESS.md (base-currency)).
       dto.baseCurrency = null;
       dto.totalDebitBase = null;
       dto.totalCreditBase = null;

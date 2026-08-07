@@ -18,7 +18,7 @@ type ExchangeRateReader = Pick<Prisma.TransactionClient, 'exchangeRate'>;
  * Resolve the rate to convert `from` -> `to` as of `onDate`, via the USD pivot
  * (ExchangeRate.rate is "<currency> per 1 USD", never inverted). Two hops for a
  * non-USD -> non-USD pair. Returns null when any leg has no rate on/before the
- * date — a missing rate is never a silent fallback of 1 (docs/URGENT.md §6.5).
+ * date — a missing rate is never a silent fallback of 1 (docs/PROGRESS.md (base-currency)).
  */
 export async function resolvePresentationRate(
   prisma: ExchangeRateReader,

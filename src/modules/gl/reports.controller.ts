@@ -45,6 +45,8 @@ export class ReportsController {
       query.companyId,
       query.numberPrefix,
       query.rollUp,
+      query.presentIn,
+      query.rateType,
     );
   }
 }

@@ -578,6 +578,20 @@ export class PartnersService {
         },
       },
     });
+    // A statement is a single-currency running ledger — its opening balance and
+    // running total can only be summed WITHIN one base currency. A partner whose
+    // history spans more than one base currency (legacy data from before the
+    // base-currency lock, Fix A) can't produce one meaningful running balance, so
+    // we refuse rather than sum across currencies; the balance endpoint gives the
+    // honest per-currency breakdown instead.
+    if (baseCodes.length > 1) {
+      throw new ConflictException({
+        code: 'STATEMENT_MIXED_BASE',
+        message:
+          "This partner's history spans more than one base currency, so a single running statement can't be produced. Use GET /partners/:id/balance for the per-currency breakdown.",
+        field: null,
+      });
+    }
     const statementBaseCurrency =
       baseCodes.length === 1
         ? baseCodes[0].baseCurrencyCode

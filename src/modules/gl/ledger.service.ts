@@ -215,6 +215,8 @@ export class LedgerService {
     companyIdQuery?: string,
     numberPrefix?: string[],
     rollUp?: boolean,
+    presentIn?: string,
+    rateType?: string,
   ): Promise<TrialBalanceResponseDto> {
     const companyId = this.resolveCompanyId(companyIdQuery, caller);
     const asOfDate = this.parseAsOf(asOf);
@@ -237,8 +239,11 @@ export class LedgerService {
       }
     }
 
+    // Group by the STORED base currency as well, so figures are never summed
+    // across currencies — a trial balance only balances WITHIN one currency
+    // (docs/URGENT.md §6.3).
     const grouped = await this.prisma.journalLine.groupBy({
-      by: ['accountId', 'side'],
+      by: ['accountId', 'side', 'baseCurrencyCode'],
       where: this.postedLineWhere(
         companyId,
         asOfDate,
@@ -248,62 +253,172 @@ export class LedgerService {
       _sum: { amountBase: true },
     });
 
-    // Fold the (accountId, side) rows into a debit/credit total per account.
-    const perAccount = new Map<string, { debit: number; credit: number }>();
+    // currency -> (accountId -> {debit, credit})
+    const byCurrency = new Map<
+      string,
+      Map<string, { debit: number; credit: number }>
+    >();
+    const allAccountIds = new Set<string>();
     for (const g of grouped) {
+      const perAccount =
+        byCurrency.get(g.baseCurrencyCode) ??
+        new Map<string, { debit: number; credit: number }>();
       const bucket = perAccount.get(g.accountId) ?? { debit: 0, credit: 0 };
       const amount = Number(g._sum.amountBase ?? 0);
-      if (g.side === JournalSide.DEBIT) {
-        bucket.debit += amount;
-      } else {
-        bucket.credit += amount;
-      }
+      if (g.side === JournalSide.DEBIT) bucket.debit += amount;
+      else bucket.credit += amount;
       perAccount.set(g.accountId, bucket);
+      byCurrency.set(g.baseCurrencyCode, perAccount);
+      allAccountIds.add(g.accountId);
+    }
+
+    const currencies = [...byCurrency.keys()];
+    if (currencies.length === 0) {
+      return this.emptyTrialBalance(companyId, asOfDate, !!rollUp);
     }
 
     const accounts = await this.prisma.account.findMany({
-      where: { id: { in: [...perAccount.keys()] } },
+      where: { id: { in: [...allAccountIds] } },
       select: { id: true, number: true, name: true, accountClass: true },
     });
     const accountById = new Map(accounts.map((a) => [a.id, a]));
 
-    const rows = rollUp
-      ? this.rollUpRows(perAccount, accountById, numberPrefix)
-      : this.perAccountRows(perAccount, accountById);
-
-    const totalDebit = round2(rows.reduce((s, r) => s + r.debit, 0));
-    const totalCredit = round2(rows.reduce((s, r) => s + r.credit, 0));
-
-    // Currency from the STORED base currency of the lines in scope: a single
-    // code when uniform, null when the scope spans more than one base currency
-    // (post a base-currency change) — in which case the rows should be read via
-    // ?presentIn to convert to one currency (docs/URGENT.md).
-    const baseCurrencies = await this.prisma.journalLine.groupBy({
-      by: ['baseCurrencyCode'],
-      where: this.postedLineWhere(
-        companyId,
-        asOfDate,
-        accountIds ? { accountId: { in: accountIds } } : {},
-        branchId,
-      ),
-    });
+    const buildFlat = (
+      map: Map<string, { debit: number; credit: number }>,
+    ): {
+      rows: TrialBalanceRowDto[];
+      totalDebit: number;
+      totalCredit: number;
+      isBalanced: boolean;
+    } => {
+      const rows = rollUp
+        ? this.rollUpRows(map, accountById, numberPrefix)
+        : this.perAccountRows(map, accountById);
+      const totalDebit = round2(rows.reduce((s, r) => s + r.debit, 0));
+      const totalCredit = round2(rows.reduce((s, r) => s + r.credit, 0));
+      return {
+        rows,
+        totalDebit,
+        totalCredit,
+        isBalanced: totalDebit === totalCredit,
+      };
+    };
 
     const dto = new TrialBalanceResponseDto();
     dto.companyId = companyId;
     dto.asOf = asOfDate.toISOString().slice(0, 10);
-    dto.currency =
-      baseCurrencies.length === 1
-        ? baseCurrencies[0].baseCurrencyCode
-        : baseCurrencies.length === 0
-          ? await this.getBaseCurrency(companyId)
-          : null;
     dto.rolledUp = !!rollUp;
-    dto.rows = rows;
-    dto.totalDebit = totalDebit;
-    dto.totalCredit = totalCredit;
-    // A full trial balance always balances; a prefix-filtered section may not.
-    dto.isBalanced = totalDebit === totalCredit;
+
+    // Tier 2: convert every currency slice into one presentation currency so the
+    // report reads as a single balancing trial balance.
+    if (presentIn) {
+      const conv = await this.convertToPresentation(
+        companyId,
+        byCurrency,
+        presentIn,
+        rateType,
+        asOfDate,
+      );
+      dto.presentation = {
+        currency: presentIn,
+        converted: conv.ok,
+        rates: conv.rates,
+      };
+      if (conv.ok) {
+        const flat = buildFlat(conv.map);
+        dto.currency = presentIn;
+        dto.rows = flat.rows;
+        dto.totalDebit = flat.totalDebit;
+        dto.totalCredit = flat.totalCredit;
+        dto.isBalanced = flat.isBalanced;
+        dto.byBaseCurrency = null;
+        return dto;
+      }
+      // A rate was missing -> fall through to the honest per-currency breakdown.
+    } else {
+      dto.presentation = null;
+    }
+
+    if (currencies.length === 1) {
+      const flat = buildFlat(byCurrency.get(currencies[0])!);
+      dto.currency = currencies[0];
+      dto.rows = flat.rows;
+      dto.totalDebit = flat.totalDebit;
+      dto.totalCredit = flat.totalCredit;
+      dto.isBalanced = flat.isBalanced;
+      dto.byBaseCurrency = null;
+      return dto;
+    }
+
+    // Mixed base currency, no usable presentIn: one balanced trial balance per
+    // currency, never a summed-across-currencies scalar.
+    const groups = currencies.sort().map((cur) => {
+      const flat = buildFlat(byCurrency.get(cur)!);
+      return {
+        currency: cur,
+        rows: flat.rows,
+        totalDebit: flat.totalDebit,
+        totalCredit: flat.totalCredit,
+        isBalanced: flat.isBalanced,
+      };
+    });
+    dto.currency = null;
+    dto.rows = [];
+    dto.totalDebit = null;
+    dto.totalCredit = null;
+    dto.byBaseCurrency = groups;
+    dto.isBalanced = groups.every((g) => g.isBalanced);
     return dto;
+  }
+
+  /** Convert every per-currency, per-account slice into one presentation
+   *  currency; `ok` is false if any source currency lacked a rate. */
+  private async convertToPresentation(
+    companyId: string,
+    byCurrency: Map<string, Map<string, { debit: number; credit: number }>>,
+    presentIn: string,
+    rateType: string | undefined,
+    asOfDate: Date,
+  ): Promise<{
+    ok: boolean;
+    map: Map<string, { debit: number; credit: number }>;
+    rates: PresentationRateDto[];
+  }> {
+    const rt = rateType ?? DEFAULT_RATE_TYPE;
+    const map = new Map<string, { debit: number; credit: number }>();
+    const rates: PresentationRateDto[] = [];
+    let ok = true;
+    for (const [currency, perAccount] of byCurrency) {
+      let rate = 1;
+      if (currency !== presentIn) {
+        const pr = await resolvePresentationRate(
+          this.prisma,
+          companyId,
+          currency,
+          presentIn,
+          asOfDate,
+          rt,
+        );
+        if (!pr) {
+          ok = false;
+          continue;
+        }
+        rate = pr.rate;
+        rates.push({
+          from: currency,
+          rate: pr.rate,
+          rateType: pr.rateType,
+          rateDate: pr.rateDate,
+        });
+      }
+      for (const [accId, { debit, credit }] of perAccount) {
+        const b = map.get(accId) ?? { debit: 0, credit: 0 };
+        b.debit += debit * rate;
+        b.credit += credit * rate;
+        map.set(accId, b);
+      }
+    }
+    return { ok, map, rates };
   }
 
   /** One row per account, net placed in the debit or credit column. */

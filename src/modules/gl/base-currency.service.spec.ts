@@ -181,4 +181,66 @@ describe('LedgerService — self-describing base currency (URGENT)', () => {
     expect(bal.presentation!.currency).toBe('EUR');
     expect(bal.presentation!.balance).toBeNull();
   });
+
+  // Fix B: the trial balance must not sum across currencies either.
+  it('trial balance: mixed base returns one balanced report per currency, never summed', async () => {
+    // accA/accB hold USD 100 + LBP 50 (from the earlier entries).
+    const tb = await ledger.trialBalance(caller);
+    expect(tb.currency).toBeNull();
+    expect(tb.rows).toEqual([]);
+    expect(tb.totalDebit).toBeNull();
+    expect(tb.totalCredit).toBeNull();
+    expect(tb.byBaseCurrency).not.toBeNull();
+
+    const byCur = Object.fromEntries(
+      tb.byBaseCurrency!.map((g) => [g.currency, g]),
+    );
+    expect(Object.keys(byCur).sort()).toEqual(['LBP', 'USD']);
+    expect(byCur.USD.totalDebit).toBe(100);
+    expect(byCur.USD.totalCredit).toBe(100);
+    expect(byCur.USD.isBalanced).toBe(true);
+    expect(byCur.LBP.totalDebit).toBe(50);
+    expect(byCur.LBP.totalCredit).toBe(50);
+    expect(byCur.LBP.isBalanced).toBe(true);
+    // Every per-currency group balances -> the whole thing is balanced.
+    expect(tb.isBalanced).toBe(true);
+  });
+
+  it('trial balance: ?presentIn converts a mixed scope into one balancing report', async () => {
+    // USD 100 -> 100*89500 LBP, plus LBP 50 -> total 8,950,050 LBP on accA.
+    const tb = await ledger.trialBalance(
+      caller,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      'LBP',
+    );
+    expect(tb.presentation).not.toBeNull();
+    expect(tb.presentation!.converted).toBe(true);
+    expect(tb.currency).toBe('LBP');
+    expect(tb.byBaseCurrency ?? null).toBeNull();
+
+    const accARow = tb.rows.find((r) => r.accountNumber === 'A100');
+    expect(accARow!.debit).toBe(8_950_050);
+    expect(tb.totalDebit).toBe(8_950_050);
+    expect(tb.totalCredit).toBe(8_950_050);
+    expect(tb.isBalanced).toBe(true);
+  });
+
+  it('trial balance: ?presentIn falls back to the breakdown when a rate is missing', async () => {
+    const tb = await ledger.trialBalance(
+      caller,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      'EUR',
+    );
+    expect(tb.presentation!.converted).toBe(false);
+    expect(tb.currency).toBeNull();
+    expect(tb.byBaseCurrency).not.toBeNull();
+  });
 });

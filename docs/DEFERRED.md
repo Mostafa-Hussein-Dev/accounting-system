@@ -36,6 +36,37 @@ calls `PostingService.post()` inside the document's transaction, stamping
 `sourceDocType`/`sourceDocId` (deferred item #6).
 
 
+### FR-903 / FR-905 / FR-100x — Remaining GL reports (deferred) — MUST be currency-aware
+The three-layer currency model (transaction currency per line · frozen +
+**locked** base currency · display-only presentation) is enforced across the
+BUILT read surfaces: `GET /accounts/:id/balance`, `GET /partners/:id/balance`
+and `GET /reports/trial-balance` all (a) group by the stored `baseCurrencyCode`
+and **never sum across base currencies**, (b) return a `byBaseCurrency` breakdown
+when a scope is mixed, and (c) accept `?presentIn=XXX` (+ `?rateType`) to
+translate into one currency. The partner statement refuses a mixed-base partner
+(`STATEMENT_MIXED_BASE`); stock valuation/on-hand label themselves from the
+ledger's `costCurrency` and refuse a mixed stream (`STOCK_MIXED_COST_CURRENCY`).
+The base currency is **locked once postings exist** (`BASE_CURRENCY_LOCKED`), so
+a mixed scope only arises for legacy/migration data.
+
+**These reports are NOT built yet, and each MUST follow the same pattern when it is:**
+- **FR-905** — **balance sheet, income statement, general ledger** (only the trial
+  balance exists today). Derive from posted `journal_lines`, group by
+  `baseCurrencyCode`, never sum across currencies, offer `?presentIn`. Reuse
+  `LedgerService`'s `convertToPresentation`/`present` helpers.
+- **FR-903** — **VAT return**: output − input VAT for a period. VAT figures must be
+  taken from the frozen base amounts per currency (or presented in one via
+  `?presentIn`), never summed across base currencies.
+- **FR-1001 / FR-1002** — **report runner + standard reports** (sales/inventory/
+  cash/aged AR-AP/dashboards): the report parameter panel already anticipates a
+  currency choice (PRD §19.12 "currency: USD/LBP/both"); implement it as the
+  presentation layer (`?presentIn`), and any money aggregation groups by base
+  currency first.
+
+Rule of thumb for any new money report: **aggregate within a base currency, then
+optionally translate for display — never add amounts that carry different
+`baseCurrencyCode`/`costCurrency` values.**
+
 ### FR-1102 — Audit trail — BUILT (migration `20260727120000_add_audit_logs`)
 Implemented as a hybrid (src/modules/audit): an `AuditLog` append-only model +
 `AuditAction` enum; a global `AuditInterceptor` (APP_INTERCEPTOR) that best-

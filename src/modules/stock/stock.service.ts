@@ -379,7 +379,17 @@ export class StockService {
     const client = this.clientFor(caller);
     const item = await this.resolveItem(client, query.itemId, companyId);
     const variantId = query.variantId ?? null;
-    const currency = await this.baseCurrency(client, companyId);
+    const valWhere: Prisma.StockMovementWhereInput = {
+      itemId: item.id,
+      variantId,
+    };
+    if (query.locationId) {
+      valWhere.OR = [
+        { fromLocationId: query.locationId },
+        { toLocationId: query.locationId },
+      ];
+    }
+    const currency = await this.streamCostCurrency(client, companyId, valWhere);
 
     let qty: number;
     let value: number;
@@ -670,9 +680,13 @@ export class StockService {
   ): Promise<ValuationResponseDto> {
     const companyId = this.resolveCompanyId(query.companyId, caller);
     const client = this.clientFor(caller);
-    const currency = await this.baseCurrency(client, companyId);
     const asOf = this.parseDate(query.asOf);
     const dateFilter = { movementDate: { lte: asOf } };
+    const currency = await this.streamCostCurrency(
+      client,
+      companyId,
+      dateFilter,
+    );
 
     const [inRows, outRows] = await Promise.all([
       client.stockMovement.groupBy({
@@ -1101,6 +1115,37 @@ export class StockService {
       select: { baseCurrencyCode: true },
     });
     return company.baseCurrencyCode;
+  }
+
+  /**
+   * The single cost currency of the movements in scope, read from the stock
+   * ledger's stored `costCurrency` (self-describing, like a journal line's
+   * baseCurrencyCode) rather than the mutable company setting. With the base
+   * currency now locked (Fix A) a stream is always single-currency, so this
+   * normally returns that one code; it throws only for legacy data that predates
+   * the lock and mixes cost currencies — never silently summing across them. No
+   * movements → the company base is a safe label.
+   */
+  private async streamCostCurrency(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    where: Prisma.StockMovementWhereInput,
+  ): Promise<string> {
+    const distinct = await tx.stockMovement.groupBy({
+      by: ['costCurrency'],
+      where: { companyId, ...where },
+    });
+    if (distinct.length > 1) {
+      throw new ConflictException({
+        code: 'STOCK_MIXED_COST_CURRENCY',
+        message:
+          'This stock valuation spans more than one cost currency (legacy data from before the base-currency lock); it cannot be reported as a single currency.',
+        field: null,
+      });
+    }
+    return distinct.length === 1
+      ? distinct[0].costCurrency
+      : this.baseCurrency(tx, companyId);
   }
 
   private parseDate(value: string | undefined): Date {

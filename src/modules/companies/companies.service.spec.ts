@@ -41,6 +41,15 @@ describe('CompaniesService (settings — FR-108)', () => {
   });
 
   afterAll(async () => {
+    await prisma.journalLine.deleteMany({
+      where: { companyId: { in: createdIds } },
+    });
+    await prisma.journalEntry.deleteMany({
+      where: { companyId: { in: createdIds } },
+    });
+    await prisma.account.deleteMany({
+      where: { companyId: { in: createdIds } },
+    });
     await prisma.company.deleteMany({ where: { id: { in: createdIds } } });
     await prisma.$disconnect();
   });
@@ -139,6 +148,61 @@ describe('CompaniesService (settings — FR-108)', () => {
     await expect(
       service.updateSettings(c.id, { baseCurrencyCode: 'ZZZ' }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  // Fix A: the base currency fixes the currency the books are kept in — once
+  // anything is posted, changing it would silently re-denominate stored amounts.
+  it('locks the base currency once the company has postings', async () => {
+    const c = await make(); // USD
+    const acc = await prisma.account.create({
+      data: {
+        companyId: c.id,
+        number: '1',
+        name: 'Cash',
+        accountClass: 1,
+        type: 'ASSET',
+        normalBalance: 'DEBIT',
+      },
+    });
+    await prisma.journalEntry.create({
+      data: {
+        companyId: c.id,
+        date: new Date('2026-01-01'),
+        status: 'DRAFT',
+        lines: {
+          create: [
+            {
+              companyId: c.id,
+              lineNo: 1,
+              accountId: acc.id,
+              side: 'DEBIT',
+              amountOriginal: 10,
+              currency: 'USD',
+              rate: 1,
+              amountBase: 10,
+              baseCurrencyCode: 'USD',
+            },
+          ],
+        },
+      },
+    });
+
+    // Both write paths must refuse the change...
+    await expect(
+      service.update(c.id, { baseCurrencyCode: 'LBP' }),
+    ).rejects.toMatchObject({ response: { code: 'BASE_CURRENCY_LOCKED' } });
+    await expect(
+      service.updateSettings(c.id, { baseCurrencyCode: 'LBP' }),
+    ).rejects.toMatchObject({ response: { code: 'BASE_CURRENCY_LOCKED' } });
+
+    // ...but a same-currency no-op is still allowed, and other settings still save.
+    const same = await service.update(c.id, { baseCurrencyCode: 'USD' });
+    expect(same.baseCurrencyCode).toBe('USD');
+    const settings = await service.updateSettings(c.id, {
+      fiscalYearStartMonth: 7,
+    });
+    expect(settings.fiscalYearStartMonth).toBe(7);
+    expect(settings.baseCurrencyCode).toBe('USD');
   });
 
   it('leaves the settings JSON intact when only columns are patched', async () => {

@@ -177,9 +177,14 @@ export class CompaniesService {
   }
 
   async update(id: string, dto: UpdateCompanyDto): Promise<CompanyResponseDto> {
-    await this.getRawCompany(id);
+    const existing = await this.getRawCompany(id);
     if (dto.baseCurrencyCode) {
       await this.assertCurrencyExists(dto.baseCurrencyCode);
+      await this.assertBaseCurrencyChangeAllowed(
+        id,
+        dto.baseCurrencyCode,
+        existing.baseCurrencyCode,
+      );
     }
     try {
       const company = await this.prisma.company.update({
@@ -256,6 +261,11 @@ export class CompaniesService {
     const columns: Prisma.CompanyUncheckedUpdateInput = {};
     if (dto.baseCurrencyCode !== undefined) {
       await this.assertCurrencyExists(dto.baseCurrencyCode);
+      await this.assertBaseCurrencyChangeAllowed(
+        id,
+        dto.baseCurrencyCode,
+        company.baseCurrencyCode,
+      );
       columns.baseCurrencyCode = dto.baseCurrencyCode;
     }
     if (dto.fiscalYearStartMonth !== undefined) {
@@ -345,6 +355,35 @@ export class CompaniesService {
       throw new BadRequestException({
         code: 'INVALID_BASE_CURRENCY',
         message: `Currency ${code} was not found.`,
+        field: 'baseCurrencyCode',
+      });
+    }
+  }
+
+  /**
+   * The base currency is the currency the company's books are kept in. Changing
+   * it once anything has been posted would silently re-denominate every stored
+   * base amount (a 100 USD balance reading as "100 LBP") and mis-scale the stock
+   * valuation — the same mislabel the per-line baseCurrencyCode stamping was
+   * added to prevent (docs/URGENT.md). Real ERPs fix it at setup, so we reject
+   * the change once the company has any postings (journal lines or stock
+   * movements). A no-op (same code) is always allowed.
+   */
+  private async assertBaseCurrencyChangeAllowed(
+    companyId: string,
+    newCode: string,
+    currentCode: string,
+  ): Promise<void> {
+    if (newCode === currentCode) return;
+    const [lines, movements] = await Promise.all([
+      this.prisma.journalLine.count({ where: { companyId } }),
+      this.prisma.stockMovement.count({ where: { companyId } }),
+    ]);
+    if (lines > 0 || movements > 0) {
+      throw new ConflictException({
+        code: 'BASE_CURRENCY_LOCKED',
+        message:
+          'The base currency cannot be changed once the company has postings (journal lines or stock movements); it fixes the currency the books are kept in.',
         field: 'baseCurrencyCode',
       });
     }

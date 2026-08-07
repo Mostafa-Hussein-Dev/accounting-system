@@ -37,7 +37,7 @@ export class TrialBalanceRowDto {
  * One self-contained trial balance in a single base currency. Used to present a
  * mixed-base company (post a base-currency change): a trial balance can only
  * balance WITHIN one currency, so a mixed scope returns one of these per stored
- * base currency rather than summing across them (docs/URGENT.md §6.3).
+ * base currency rather than summing across them (docs/PROGRESS.md (base-currency)).
  */
 export class TrialBalanceCurrencyGroupDto {
   @ApiProperty({ example: 'USD' })

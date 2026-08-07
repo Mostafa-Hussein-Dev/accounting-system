@@ -518,7 +518,7 @@ model JournalLine {
 
   // The currency `amountBase` is denominated in — the company base currency AT
   // POSTING TIME, stored WITH the frozen amount so it can never be relabelled by
-  // a later Company.baseCurrencyCode change (see docs/URGENT.md). Balances group
+  // a later Company.baseCurrencyCode change (see docs/PROGRESS.md (base-currency)). Balances group
   // by this, not by the mutable company setting.
   baseCurrencyCode String   @map("base_currency_code")
   baseCurrency     Currency @relation("JournalLineBaseCurrency", fields: [baseCurrencyCode], references: [code])
@@ -1483,7 +1483,7 @@ model PurchaseOrder {
   rate         Decimal  @db.Decimal(20, 6)
 
   // Base currency the *Base totals are denominated in, frozen at creation so a
-  // later Company.baseCurrencyCode change can't relabel them (docs/URGENT.md).
+  // later Company.baseCurrencyCode change can't relabel them (docs/PROGRESS.md (base-currency)).
   baseCurrencyCode String   @map("base_currency_code")
   baseCurrency     Currency @relation("POBaseCurrency", fields: [baseCurrencyCode], references: [code])
 
@@ -1643,7 +1643,7 @@ model VendorBill {
   rate         Decimal  @db.Decimal(20, 6)
 
   // Base currency the *Base totals are denominated in, frozen at creation so a
-  // later Company.baseCurrencyCode change can't relabel them (docs/URGENT.md).
+  // later Company.baseCurrencyCode change can't relabel them (docs/PROGRESS.md (base-currency)).
   baseCurrencyCode String   @map("base_currency_code")
   baseCurrency     Currency @relation("VBBaseCurrency", fields: [baseCurrencyCode], references: [code])
 
@@ -1761,7 +1761,7 @@ model SalesInvoice {
   rate         Decimal  @db.Decimal(20, 6)
 
   // Base currency the *Base totals are denominated in, frozen at creation so a
-  // later Company.baseCurrencyCode change can't relabel them (docs/URGENT.md).
+  // later Company.baseCurrencyCode change can't relabel them (docs/PROGRESS.md (base-currency)).
   baseCurrencyCode String   @map("base_currency_code")
   baseCurrency     Currency @relation("SIBaseCurrency", fields: [baseCurrencyCode], references: [code])
 

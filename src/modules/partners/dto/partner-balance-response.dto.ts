@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /** The rate used to convert one source base currency into the presentation
- *  currency (Tier 2, docs/URGENT.md §6.5). */
+ *  currency (Tier 2, docs/PROGRESS.md (base-currency)). */
 export class PartnerPresentationRateDto {
   @ApiProperty({ example: 'USD' }) from!: string;
   @ApiProperty({ example: 89500 }) rate!: number;
@@ -21,7 +21,7 @@ export class PartnerBalancePresentationDto {
 }
 
 /** One base-currency slice of a partner balance (>1 only after the company's
- *  base currency changed while it had postings — docs/URGENT.md). */
+ *  base currency changed while it had postings — docs/PROGRESS.md (base-currency)). */
 export class PartnerBaseCurrencyBalanceDto {
   @ApiProperty({ example: 'USD' }) currency!: string;
   @ApiProperty({ example: 1500 }) totalDebitBase!: number;

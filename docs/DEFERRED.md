@@ -309,6 +309,33 @@ Delivered in `src/modules/purchasing` (migrations `20260801140000_add_purchasing
 - editing a posted bill (only reversal today); per-item-category valuation
   accounts (single company INVENTORY account for now).
 
+### FR-801 — Cash & Payments — BUILT (migrations `20260814120000_add_payments`, `20260814120100_mark_fx_control`)
+`src/modules/payments`: customer receipts + supplier payments, allocation against
+open sales invoices / vendor bills or on-account, realised FX gain/loss
+(`ControlType.FX_GAIN`→775 / `FX_LOSS`→675), posts a POSTED JE directly, void
+reverses via `PostingService.reverse`. `cashAccountId` targets a CASH/BANK account.
+
+**Deferred within/around FR-8xx (revisit when built):**
+- **FR-802 cheque lifecycle** — `method=CHEQUE` is accepted and posts immediately
+  like cash; a `Cheque` model with status (pending/cleared/bounced), due dates,
+  and cheque printing (legacy `CHQPRT`) is not built.
+- **FR-803 currency-exchange desk** — a standalone USD↔LBP exchange transaction
+  (legacy `SARFE`) is not built. NOTE: realised FX gain/loss *on settlement* is
+  already handled by FR-801; this is only the dedicated buy/sell-currency screen.
+- **FR-804 Banks & reconciliation** — payments post to a CASH/BANK GL account
+  directly; a `Bank` model, bank reconciliation, and petty-cash tooling are not
+  built.
+- **Re-allocating an on-account credit later** — an unallocated receipt/payment
+  books to AR/AP at the payment rate; applying that on-account credit to a
+  document in a *later* step (and any FX it would then realise) is not built.
+  Allocation happens at payment time only.
+- **Cross-currency allocation** — a payment can only be allocated to a document in
+  the *same* currency (`ALLOCATION_CURRENCY_MISMATCH`); paying an LBP invoice with
+  USD cash is out of scope.
+- **Settlement status on documents** — paid/open is DERIVED from allocations
+  (`GET /payments/open-items`); no `paid`/`partially_paid` status is written back
+  onto the invoice/bill row (posted docs stay immutable at DRAFT/POSTED/CANCELLED).
+
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist
   yet, add a row here **and** a `NOTE`/`TODO(FR-xxx)` comment at the code site.

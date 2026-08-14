@@ -968,6 +968,10 @@ export const DEFAULT_CHART: DefaultAccountSeed[] = [
     type: EXPENSE,
     normalBalance: DEBIT,
     parentNumber: '67',
+    // Realised FX loss target when a foreign-currency document is settled below
+    // its booked base value (FR-801 / §21.4).
+    isControl: true,
+    controlType: ControlType.FX_LOSS,
   },
   {
     number: '7',
@@ -1103,6 +1107,10 @@ export const DEFAULT_CHART: DefaultAccountSeed[] = [
     type: REVENUE,
     normalBalance: CREDIT,
     parentNumber: '77',
+    // Realised FX gain target when a foreign-currency document is settled above
+    // its booked base value (FR-801 / §21.4).
+    isControl: true,
+    controlType: ControlType.FX_GAIN,
   },
   {
     number: '78',

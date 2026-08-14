@@ -546,6 +546,24 @@ const PERMISSIONS = [
     action: 'post',
     description: 'Confirm/post sales invoices and credit notes',
   },
+  {
+    key: 'payment.read',
+    subject: 'Payment',
+    action: 'read',
+    description: 'View customer receipts and supplier payments',
+  },
+  {
+    key: 'payment.create',
+    subject: 'Payment',
+    action: 'create',
+    description: 'Record and post customer receipts and supplier payments',
+  },
+  {
+    key: 'payment.void',
+    subject: 'Payment',
+    action: 'void',
+    description: 'Void a posted payment (creates a reversing journal entry)',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -603,6 +621,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'stock.read',
         'purchase.read',
         'sales.read',
+        'payment.read',
       ],
     },
   ];
@@ -864,6 +883,7 @@ async function seedDefaultSequences(companyId: string): Promise<void> {
     { docType: 'CREDIT_NOTE', prefix: 'CN-' },
     { docType: 'PURCHASE_ORDER', prefix: 'PO-' },
     { docType: 'PAYMENT_RECEIPT', prefix: 'REC-' },
+    { docType: 'SUPPLIER_PAYMENT', prefix: 'PAY-' },
     { docType: 'JOURNAL_ENTRY', prefix: 'JE-' },
     { docType: 'STOCK_MOVEMENT', prefix: 'STK-' },
     { docType: 'GOODS_RECEIPT', prefix: 'GRN-' },

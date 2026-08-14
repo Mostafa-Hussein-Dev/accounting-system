@@ -54,9 +54,14 @@ a mixed scope only arises for legacy/migration data.
   balance exists today). Derive from posted `journal_lines`, group by
   `baseCurrencyCode`, never sum across currencies, offer `?presentIn`. Reuse
   `LedgerService`'s `convertToPresentation`/`present` helpers.
-- **FR-903** — **VAT return**: output − input VAT for a period. VAT figures must be
-  taken from the frozen base amounts per currency (or presented in one via
-  `?presentIn`), never summed across base currencies.
+- ~~**FR-903** — **VAT return**~~ — **BUILT** (`feature/vat-return`):
+  `LedgerService.vatReturn` + `GET /reports/vat-return?from&to`. Output VAT (net
+  credit on VAT_OUT/4427) − input VAT (net debit on VAT_IN/4426) over a period,
+  derived from posted journal lines, grouped by `baseCurrencyCode` (never summed
+  across), with `?presentIn` conversion — exactly the pattern below. **Still
+  deferred within FR-903:** the taxable-base breakdown (net sales/purchases behind
+  the VAT — needs document-side aggregation or a VAT sub-ledger), per-tax-rate
+  splits, and a filing-ready PDF/Excel export (JSON only for now).
 - **FR-1001 / FR-1002** — **report runner + standard reports** (sales/inventory/
   cash/aged AR-AP/dashboards): the report parameter panel already anticipates a
   currency choice (PRD §19.12 "currency: USD/LBP/both"); implement it as the

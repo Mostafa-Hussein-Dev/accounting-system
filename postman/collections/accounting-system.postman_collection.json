@@ -572,6 +572,44 @@
               "body": "{\n  \"data\": {\n    \"companyId\": \"586b91ef-6b89-4e9b-bcaa-99976d65fc4a\",\n    \"asOf\": \"2026-12-31\",\n    \"currency\": \"USD\",\n    \"rolledUp\": true,\n    \"rows\": [\n      {\n        \"accountId\": \"\",\n        \"accountNumber\": \"6\",\n        \"accountName\": \"Class 6\",\n        \"debit\": 250,\n        \"credit\": 0\n      },\n      {\n        \"accountId\": \"\",\n        \"accountNumber\": \"7\",\n        \"accountName\": \"Class 7\",\n        \"debit\": 0,\n        \"credit\": 250\n      }\n    ],\n    \"totalDebit\": 250,\n    \"totalCredit\": 250,\n    \"isBalanced\": true\n  },\n  \"meta\": null\n}"
             }
           ]
+        },
+        {
+          "name": "VAT return",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/vat-return?from=2026-01-01&to=2026-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "vat-return"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "presentIn",
+                  "value": "USD",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },

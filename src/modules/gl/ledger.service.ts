@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AccountType,
   ControlType,
   JournalSide,
   JournalStatus,
@@ -30,6 +31,27 @@ import {
   VatReturnResponseDto,
   vatDirection,
 } from './dto/vat-return-response.dto';
+import {
+  GeneralLedgerCurrencyGroupDto,
+  GeneralLedgerResponseDto,
+  GeneralLedgerRowDto,
+} from './dto/general-ledger-response.dto';
+import {
+  IncomeStatementCurrencyGroupDto,
+  IncomeStatementResponseDto,
+  StatementLineDto,
+} from './dto/income-statement-response.dto';
+import {
+  BalanceSheetCurrencyGroupDto,
+  BalanceSheetResponseDto,
+} from './dto/balance-sheet-response.dto';
+
+type AccountMeta = {
+  number: string;
+  name: string;
+  accountClass: number;
+  type: AccountType;
+};
 import {
   DEFAULT_RATE_TYPE,
   resolvePresentationRate,
@@ -637,6 +659,755 @@ export class LedgerService {
       }
     }
     return { ok, map, rates };
+  }
+
+  /**
+   * Income statement / P&L (FR-905): revenue (class 7) − expenses (class 6) over
+   * a period = net result. Currency-aware (mirrors the trial balance).
+   */
+  async incomeStatement(
+    caller: AuthenticatedUser,
+    from: string,
+    to: string,
+    rollUp?: boolean,
+    branchId?: string,
+    companyIdQuery?: string,
+    presentIn?: string,
+    rateType?: string,
+  ): Promise<IncomeStatementResponseDto> {
+    const companyId = this.resolveCompanyId(companyIdQuery, caller);
+    const fromDate = this.parseRequiredDate(from, 'from');
+    const toDate = this.parseRequiredDate(to, 'to');
+    this.assertRange(fromDate, toDate);
+
+    const dto = new IncomeStatementResponseDto();
+    dto.companyId = companyId;
+    dto.from = fromDate.toISOString().slice(0, 10);
+    dto.to = toDate.toISOString().slice(0, 10);
+    dto.rolledUp = !!rollUp;
+    dto.revenue = [];
+    dto.expenses = [];
+    dto.byBaseCurrency = null;
+    dto.presentation = null;
+
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        companyId,
+        deletedAt: null,
+        type: { in: [AccountType.REVENUE, AccountType.EXPENSE] },
+      },
+      select: {
+        id: true,
+        number: true,
+        name: true,
+        accountClass: true,
+        type: true,
+      },
+    });
+    const accountById = new Map<string, AccountMeta>(
+      accounts.map((a) => [a.id, a]),
+    );
+
+    const grouped = accounts.length
+      ? await this.prisma.journalLine.groupBy({
+          by: ['accountId', 'side', 'baseCurrencyCode'],
+          where: this.periodLineWhere(
+            companyId,
+            fromDate,
+            toDate,
+            { accountId: { in: accounts.map((a) => a.id) } },
+            branchId,
+          ),
+          _sum: { amountBase: true },
+        })
+      : [];
+    const byCurrency = this.groupByCurrencyAccount(grouped);
+
+    const assign = (g: IncomeStatementCurrencyGroupDto): void => {
+      dto.revenue = g.revenue;
+      dto.totalRevenue = g.totalRevenue;
+      dto.expenses = g.expenses;
+      dto.totalExpenses = g.totalExpenses;
+      dto.netResult = g.netResult;
+    };
+
+    if (presentIn) {
+      const conv = await this.convertToPresentation(
+        companyId,
+        byCurrency,
+        presentIn,
+        rateType,
+        toDate,
+      );
+      dto.presentation = {
+        currency: presentIn,
+        converted: conv.ok,
+        rates: conv.rates,
+      };
+      if (conv.ok) {
+        dto.currency = presentIn;
+        assign(this.buildIncomeGroup(presentIn, conv.map, accountById, rollUp));
+        return dto;
+      }
+    }
+
+    const currencies = [...byCurrency.keys()];
+    if (currencies.length === 0) {
+      dto.currency = await this.getBaseCurrency(companyId);
+      dto.totalRevenue = 0;
+      dto.totalExpenses = 0;
+      dto.netResult = 0;
+      return dto;
+    }
+    if (currencies.length === 1) {
+      dto.currency = currencies[0];
+      assign(
+        this.buildIncomeGroup(
+          currencies[0],
+          byCurrency.get(currencies[0])!,
+          accountById,
+          rollUp,
+        ),
+      );
+      return dto;
+    }
+    dto.currency = null;
+    dto.totalRevenue = null;
+    dto.totalExpenses = null;
+    dto.netResult = null;
+    dto.byBaseCurrency = currencies
+      .sort()
+      .map((c) =>
+        this.buildIncomeGroup(c, byCurrency.get(c)!, accountById, rollUp),
+      );
+    return dto;
+  }
+
+  /**
+   * Balance sheet (FR-905): assets vs liabilities + equity as of a date. The
+   * cumulative result (revenue − expenses up to asOf) is folded into equity as a
+   * "Result for the period" line so the sheet balances. Currency-aware.
+   */
+  async balanceSheet(
+    caller: AuthenticatedUser,
+    asOf?: string,
+    rollUp?: boolean,
+    branchId?: string,
+    companyIdQuery?: string,
+    presentIn?: string,
+    rateType?: string,
+  ): Promise<BalanceSheetResponseDto> {
+    const companyId = this.resolveCompanyId(companyIdQuery, caller);
+    const asOfDate = this.parseAsOf(asOf);
+
+    const dto = new BalanceSheetResponseDto();
+    dto.companyId = companyId;
+    dto.asOf = asOfDate.toISOString().slice(0, 10);
+    dto.rolledUp = !!rollUp;
+    dto.assets = [];
+    dto.liabilities = [];
+    dto.equity = [];
+    dto.isBalanced = true;
+    dto.byBaseCurrency = null;
+    dto.presentation = null;
+
+    const accounts = await this.prisma.account.findMany({
+      where: { companyId, deletedAt: null },
+      select: {
+        id: true,
+        number: true,
+        name: true,
+        accountClass: true,
+        type: true,
+      },
+    });
+    const accountById = new Map<string, AccountMeta>(
+      accounts.map((a) => [a.id, a]),
+    );
+
+    const grouped = await this.prisma.journalLine.groupBy({
+      by: ['accountId', 'side', 'baseCurrencyCode'],
+      where: this.postedLineWhere(companyId, asOfDate, {}, branchId),
+      _sum: { amountBase: true },
+    });
+    const byCurrency = this.groupByCurrencyAccount(grouped);
+
+    const assign = (g: BalanceSheetCurrencyGroupDto): void => {
+      dto.assets = g.assets;
+      dto.totalAssets = g.totalAssets;
+      dto.liabilities = g.liabilities;
+      dto.totalLiabilities = g.totalLiabilities;
+      dto.equity = g.equity;
+      dto.totalEquity = g.totalEquity;
+      dto.isBalanced = g.isBalanced;
+    };
+
+    if (presentIn) {
+      const conv = await this.convertToPresentation(
+        companyId,
+        byCurrency,
+        presentIn,
+        rateType,
+        asOfDate,
+      );
+      dto.presentation = {
+        currency: presentIn,
+        converted: conv.ok,
+        rates: conv.rates,
+      };
+      if (conv.ok) {
+        dto.currency = presentIn;
+        assign(
+          this.buildBalanceGroup(presentIn, conv.map, accountById, rollUp),
+        );
+        return dto;
+      }
+    }
+
+    const currencies = [...byCurrency.keys()];
+    if (currencies.length === 0) {
+      dto.currency = await this.getBaseCurrency(companyId);
+      dto.totalAssets = 0;
+      dto.totalLiabilities = 0;
+      dto.totalEquity = 0;
+      dto.isBalanced = true;
+      return dto;
+    }
+    if (currencies.length === 1) {
+      dto.currency = currencies[0];
+      assign(
+        this.buildBalanceGroup(
+          currencies[0],
+          byCurrency.get(currencies[0])!,
+          accountById,
+          rollUp,
+        ),
+      );
+      return dto;
+    }
+    const groups = currencies
+      .sort()
+      .map((c) =>
+        this.buildBalanceGroup(c, byCurrency.get(c)!, accountById, rollUp),
+      );
+    dto.currency = null;
+    dto.totalAssets = null;
+    dto.totalLiabilities = null;
+    dto.totalEquity = null;
+    dto.byBaseCurrency = groups;
+    dto.isBalanced = groups.every((g) => g.isBalanced);
+    return dto;
+  }
+
+  /**
+   * General ledger (FR-905): one account's posted lines over a period with a
+   * running balance (opening → each line → closing). Currency-aware.
+   */
+  async generalLedger(
+    caller: AuthenticatedUser,
+    accountId: string,
+    from: string,
+    to: string,
+    branchId?: string,
+    companyIdQuery?: string,
+    presentIn?: string,
+    rateType?: string,
+  ): Promise<GeneralLedgerResponseDto> {
+    const account = await this.prisma.account.findFirst({
+      where: { id: accountId, deletedAt: null },
+    });
+    if (
+      !account ||
+      (!isPlatformAdmin(caller) && account.companyId !== caller.companyId)
+    ) {
+      throw new NotFoundException({
+        code: 'ACCOUNT_NOT_FOUND',
+        message: `Account with id ${accountId} was not found.`,
+        field: null,
+      });
+    }
+    const companyId = account.companyId;
+    const fromDate = this.parseRequiredDate(from, 'from');
+    const toDate = this.parseRequiredDate(to, 'to');
+    this.assertRange(fromDate, toDate);
+
+    const branchFilter = branchId ? { branchId } : {};
+    const openingGrouped = await this.prisma.journalLine.groupBy({
+      by: ['baseCurrencyCode', 'side'],
+      where: {
+        companyId,
+        accountId,
+        journalEntry: {
+          status: JournalStatus.POSTED,
+          deletedAt: null,
+          date: { lt: fromDate },
+          ...branchFilter,
+        },
+      },
+      _sum: { amountBase: true },
+    });
+    const openingByCur = new Map<string, number>();
+    for (const g of openingGrouped) {
+      const amt = Number(g._sum?.amountBase ?? 0);
+      openingByCur.set(
+        g.baseCurrencyCode,
+        (openingByCur.get(g.baseCurrencyCode) ?? 0) +
+          (g.side === JournalSide.DEBIT ? amt : -amt),
+      );
+    }
+
+    const lines = await this.prisma.journalLine.findMany({
+      where: {
+        companyId,
+        accountId,
+        journalEntry: {
+          status: JournalStatus.POSTED,
+          deletedAt: null,
+          date: { gte: fromDate, lte: toDate },
+          ...branchFilter,
+        },
+      },
+      select: {
+        side: true,
+        amountBase: true,
+        baseCurrencyCode: true,
+        partnerId: true,
+        lineNo: true,
+        journalEntry: {
+          select: {
+            date: true,
+            entryNumber: true,
+            description: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: [
+        { journalEntry: { date: 'asc' } },
+        { journalEntry: { createdAt: 'asc' } },
+        { lineNo: 'asc' },
+      ],
+    });
+    type GlLine = (typeof lines)[number];
+    const linesByCur = new Map<string, GlLine[]>();
+    for (const l of lines) {
+      const arr = linesByCur.get(l.baseCurrencyCode) ?? [];
+      arr.push(l);
+      linesByCur.set(l.baseCurrencyCode, arr);
+    }
+
+    const buildGroup = (cur: string): GeneralLedgerCurrencyGroupDto => {
+      const opening = round2(openingByCur.get(cur) ?? 0);
+      let running = opening;
+      let totalDebit = 0;
+      let totalCredit = 0;
+      const rows: GeneralLedgerRowDto[] = (linesByCur.get(cur) ?? []).map(
+        (l) => {
+          const debit = l.side === JournalSide.DEBIT ? Number(l.amountBase) : 0;
+          const credit =
+            l.side === JournalSide.CREDIT ? Number(l.amountBase) : 0;
+          running = round2(running + debit - credit);
+          totalDebit = round2(totalDebit + debit);
+          totalCredit = round2(totalCredit + credit);
+          return {
+            date: l.journalEntry.date.toISOString().slice(0, 10),
+            entryNumber: l.journalEntry.entryNumber,
+            description: l.journalEntry.description,
+            debit,
+            credit,
+            runningBalance: running,
+            partnerId: l.partnerId,
+          };
+        },
+      );
+      return {
+        currency: cur,
+        openingBalance: opening,
+        rows,
+        totalDebit,
+        totalCredit,
+        closingBalance: round2(opening + totalDebit - totalCredit),
+      };
+    };
+
+    const dto = new GeneralLedgerResponseDto();
+    dto.companyId = companyId;
+    dto.accountId = account.id;
+    dto.accountNumber = account.number;
+    dto.accountName = account.name;
+    dto.from = fromDate.toISOString().slice(0, 10);
+    dto.to = toDate.toISOString().slice(0, 10);
+    dto.rows = [];
+    dto.byBaseCurrency = null;
+    dto.presentation = null;
+
+    if (presentIn) {
+      const conv = await this.convertGeneralLedger(
+        companyId,
+        openingByCur,
+        linesByCur,
+        presentIn,
+        rateType,
+        toDate,
+      );
+      dto.presentation = {
+        currency: presentIn,
+        converted: conv.ok,
+        rates: conv.rates,
+      };
+      if (conv.ok) {
+        dto.currency = presentIn;
+        dto.openingBalance = conv.openingBalance;
+        dto.rows = conv.rows;
+        dto.totalDebit = conv.totalDebit;
+        dto.totalCredit = conv.totalCredit;
+        dto.closingBalance = conv.closingBalance;
+        return dto;
+      }
+    }
+
+    const currencies = [
+      ...new Set([...openingByCur.keys(), ...linesByCur.keys()]),
+    ];
+    if (currencies.length === 0) {
+      dto.currency = await this.getBaseCurrency(companyId);
+      dto.openingBalance = 0;
+      dto.totalDebit = 0;
+      dto.totalCredit = 0;
+      dto.closingBalance = 0;
+      return dto;
+    }
+    if (currencies.length === 1) {
+      const g = buildGroup(currencies[0]);
+      dto.currency = g.currency;
+      dto.openingBalance = g.openingBalance;
+      dto.rows = g.rows;
+      dto.totalDebit = g.totalDebit;
+      dto.totalCredit = g.totalCredit;
+      dto.closingBalance = g.closingBalance;
+      return dto;
+    }
+    dto.currency = null;
+    dto.openingBalance = null;
+    dto.totalDebit = null;
+    dto.totalCredit = null;
+    dto.closingBalance = null;
+    dto.byBaseCurrency = currencies.sort().map(buildGroup);
+    return dto;
+  }
+
+  // --- statement helpers ---
+
+  private assertRange(from: Date, to: Date): void {
+    if (from > to) {
+      throw new BadRequestException({
+        code: 'REPORT_INVALID_RANGE',
+        message: '`from` must be on or before `to`.',
+        field: 'from',
+      });
+    }
+  }
+
+  private periodLineWhere(
+    companyId: string,
+    from: Date,
+    to: Date,
+    extra: Prisma.JournalLineWhereInput,
+    branchId?: string,
+  ): Prisma.JournalLineWhereInput {
+    return {
+      companyId,
+      ...extra,
+      journalEntry: {
+        status: JournalStatus.POSTED,
+        deletedAt: null,
+        date: { gte: from, lte: to },
+        ...(branchId ? { branchId } : {}),
+      },
+    };
+  }
+
+  /** grouped rows → currency → (accountId → {debit, credit}). */
+  private groupByCurrencyAccount(
+    grouped: {
+      accountId: string;
+      side: JournalSide;
+      baseCurrencyCode: string;
+      _sum: { amountBase: Prisma.Decimal | null };
+    }[],
+  ): Map<string, Map<string, { debit: number; credit: number }>> {
+    const byCurrency = new Map<
+      string,
+      Map<string, { debit: number; credit: number }>
+    >();
+    for (const g of grouped) {
+      const perAccount =
+        byCurrency.get(g.baseCurrencyCode) ??
+        new Map<string, { debit: number; credit: number }>();
+      const bucket = perAccount.get(g.accountId) ?? { debit: 0, credit: 0 };
+      const amt = Number(g._sum.amountBase ?? 0);
+      if (g.side === JournalSide.DEBIT) bucket.debit += amt;
+      else bucket.credit += amt;
+      perAccount.set(g.accountId, bucket);
+      byCurrency.set(g.baseCurrencyCode, perAccount);
+    }
+    return byCurrency;
+  }
+
+  private accumLine(
+    m: Map<string, StatementLineDto>,
+    accId: string,
+    a: AccountMeta,
+    rollUp: boolean | undefined,
+    amount: number,
+  ): void {
+    const key = rollUp ? `class-${a.accountClass}` : accId;
+    const existing = m.get(key);
+    if (existing) {
+      existing.amount += amount;
+      return;
+    }
+    m.set(key, {
+      accountId: rollUp ? '' : accId,
+      accountNumber: rollUp ? String(a.accountClass) : a.number,
+      accountName: rollUp ? `Class ${a.accountClass}` : a.name,
+      amount,
+    });
+  }
+
+  private finalizeLines(m: Map<string, StatementLineDto>): StatementLineDto[] {
+    return [...m.values()]
+      .map((l) => ({ ...l, amount: round2(l.amount) }))
+      .filter((l) => l.amount !== 0)
+      .sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
+  }
+
+  private buildIncomeGroup(
+    currency: string,
+    map: Map<string, { debit: number; credit: number }>,
+    accountById: Map<string, AccountMeta>,
+    rollUp?: boolean,
+  ): IncomeStatementCurrencyGroupDto {
+    const revenue = new Map<string, StatementLineDto>();
+    const expenses = new Map<string, StatementLineDto>();
+    for (const [accId, { debit, credit }] of map) {
+      const a = accountById.get(accId);
+      if (!a) continue;
+      if (a.type === AccountType.REVENUE) {
+        this.accumLine(revenue, accId, a, rollUp, credit - debit);
+      } else if (a.type === AccountType.EXPENSE) {
+        this.accumLine(expenses, accId, a, rollUp, debit - credit);
+      }
+    }
+    const revenueLines = this.finalizeLines(revenue);
+    const expenseLines = this.finalizeLines(expenses);
+    const totalRevenue = round2(revenueLines.reduce((s, l) => s + l.amount, 0));
+    const totalExpenses = round2(
+      expenseLines.reduce((s, l) => s + l.amount, 0),
+    );
+    return {
+      currency,
+      revenue: revenueLines,
+      totalRevenue,
+      expenses: expenseLines,
+      totalExpenses,
+      netResult: round2(totalRevenue - totalExpenses),
+    };
+  }
+
+  private buildBalanceGroup(
+    currency: string,
+    map: Map<string, { debit: number; credit: number }>,
+    accountById: Map<string, AccountMeta>,
+    rollUp?: boolean,
+  ): BalanceSheetCurrencyGroupDto {
+    const assets = new Map<string, StatementLineDto>();
+    const liabilities = new Map<string, StatementLineDto>();
+    const equity = new Map<string, StatementLineDto>();
+    let result = 0;
+    for (const [accId, { debit, credit }] of map) {
+      const a = accountById.get(accId);
+      if (!a) continue;
+      const net = debit - credit;
+      switch (a.type) {
+        case AccountType.ASSET:
+          this.accumLine(assets, accId, a, rollUp, net);
+          break;
+        case AccountType.LIABILITY:
+          this.accumLine(liabilities, accId, a, rollUp, -net);
+          break;
+        case AccountType.EQUITY:
+          this.accumLine(equity, accId, a, rollUp, -net);
+          break;
+        case AccountType.REVENUE:
+          result += credit - debit;
+          break;
+        case AccountType.EXPENSE:
+          result -= debit - credit;
+          break;
+      }
+    }
+    const assetLines = this.finalizeLines(assets);
+    const liabilityLines = this.finalizeLines(liabilities);
+    const equityLines = this.finalizeLines(equity);
+    // The undistributed result of the period keeps the sheet balanced until a
+    // year-end close (FR-904) rolls it into retained earnings.
+    equityLines.push({
+      accountId: '',
+      accountNumber: 'RESULT',
+      accountName: 'Result for the period',
+      amount: round2(result),
+    });
+    const totalAssets = round2(assetLines.reduce((s, l) => s + l.amount, 0));
+    const totalLiabilities = round2(
+      liabilityLines.reduce((s, l) => s + l.amount, 0),
+    );
+    const totalEquity = round2(equityLines.reduce((s, l) => s + l.amount, 0));
+    return {
+      currency,
+      assets: assetLines,
+      totalAssets,
+      liabilities: liabilityLines,
+      totalLiabilities,
+      equity: equityLines,
+      totalEquity,
+      isBalanced: totalAssets === round2(totalLiabilities + totalEquity),
+    };
+  }
+
+  /** Convert a general ledger's opening + lines into one presentation currency,
+   *  merging all source currencies into a single date-ordered running series. */
+  private async convertGeneralLedger(
+    companyId: string,
+    openingByCur: Map<string, number>,
+    linesByCur: Map<
+      string,
+      {
+        side: JournalSide;
+        amountBase: Prisma.Decimal;
+        partnerId: string | null;
+        journalEntry: {
+          date: Date;
+          entryNumber: string | null;
+          description: string | null;
+          createdAt: Date;
+        };
+      }[]
+    >,
+    presentIn: string,
+    rateType: string | undefined,
+    asOfDate: Date,
+  ): Promise<{
+    ok: boolean;
+    rates: PresentationRateDto[];
+    openingBalance: number | null;
+    rows: GeneralLedgerRowDto[];
+    totalDebit: number | null;
+    totalCredit: number | null;
+    closingBalance: number | null;
+  }> {
+    const rt = rateType ?? DEFAULT_RATE_TYPE;
+    const currencies = new Set([...openingByCur.keys(), ...linesByCur.keys()]);
+    const rateByCur = new Map<string, number>();
+    const rates: PresentationRateDto[] = [];
+    for (const cur of currencies) {
+      if (cur === presentIn) {
+        rateByCur.set(cur, 1);
+        continue;
+      }
+      const pr = await resolvePresentationRate(
+        this.prisma,
+        companyId,
+        cur,
+        presentIn,
+        asOfDate,
+        rt,
+      );
+      if (!pr) {
+        return {
+          ok: false,
+          rates,
+          openingBalance: null,
+          rows: [],
+          totalDebit: null,
+          totalCredit: null,
+          closingBalance: null,
+        };
+      }
+      rateByCur.set(cur, pr.rate);
+      rates.push({
+        from: cur,
+        rate: pr.rate,
+        rateType: pr.rateType,
+        rateDate: pr.rateDate,
+      });
+    }
+
+    let opening = 0;
+    for (const [cur, val] of openingByCur)
+      opening += val * (rateByCur.get(cur) ?? 1);
+
+    const merged: {
+      date: Date;
+      createdAt: Date;
+      entryNumber: string | null;
+      description: string | null;
+      debit: number;
+      credit: number;
+      partnerId: string | null;
+    }[] = [];
+    for (const [cur, arr] of linesByCur) {
+      const rate = rateByCur.get(cur) ?? 1;
+      for (const l of arr) {
+        merged.push({
+          date: l.journalEntry.date,
+          createdAt: l.journalEntry.createdAt,
+          entryNumber: l.journalEntry.entryNumber,
+          description: l.journalEntry.description,
+          debit: l.side === JournalSide.DEBIT ? Number(l.amountBase) * rate : 0,
+          credit:
+            l.side === JournalSide.CREDIT ? Number(l.amountBase) * rate : 0,
+          partnerId: l.partnerId,
+        });
+      }
+    }
+    merged.sort(
+      (a, b) =>
+        a.date.getTime() - b.date.getTime() ||
+        a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+
+    const dp = await this.currencyDecimals(presentIn);
+    const rnd = (n: number): number => {
+      const f = 10 ** dp;
+      return Math.round((n + Number.EPSILON) * f) / f;
+    };
+    let running = opening;
+    let totalDebit = 0;
+    let totalCredit = 0;
+    const rows: GeneralLedgerRowDto[] = merged.map((m) => {
+      running += m.debit - m.credit;
+      totalDebit += m.debit;
+      totalCredit += m.credit;
+      return {
+        date: m.date.toISOString().slice(0, 10),
+        entryNumber: m.entryNumber,
+        description: m.description,
+        debit: rnd(m.debit),
+        credit: rnd(m.credit),
+        runningBalance: rnd(running),
+        partnerId: m.partnerId,
+      };
+    });
+    return {
+      ok: true,
+      rates,
+      openingBalance: rnd(opening),
+      rows,
+      totalDebit: rnd(totalDebit),
+      totalCredit: rnd(totalCredit),
+      closingBalance: rnd(opening + totalDebit - totalCredit),
+    };
   }
 
   /** One row per account, net placed in the debit or credit column. */

@@ -50,10 +50,14 @@ The base currency is **locked once postings exist** (`BASE_CURRENCY_LOCKED`), so
 a mixed scope only arises for legacy/migration data.
 
 **These reports are NOT built yet, and each MUST follow the same pattern when it is:**
-- **FR-905** — **balance sheet, income statement, general ledger** (only the trial
-  balance exists today). Derive from posted `journal_lines`, group by
-  `baseCurrencyCode`, never sum across currencies, offer `?presentIn`. Reuse
-  `LedgerService`'s `convertToPresentation`/`present` helpers.
+- ~~**FR-905** — **balance sheet, income statement, general ledger**~~ — **BUILT**
+  (`feature/financial-statements`): `LedgerService.generalLedger`/`incomeStatement`/
+  `balanceSheet` + `GET /reports/{general-ledger,income-statement,balance-sheet}`,
+  all currency-aware (per-`baseCurrencyCode`, `?presentIn`). The balance sheet
+  folds the cumulative (7−6) result into equity as a "Result for the period" line
+  so it balances until FR-904's year-end close rolls it to retained earnings.
+  **Still deferred within FR-905:** PDF/Excel export, and a whole-ledger (all
+  accounts) general-ledger listing (currently one account per call).
 - ~~**FR-903** — **VAT return**~~ — **BUILT** (`feature/vat-return`):
   `LedgerService.vatReturn` + `GET /reports/vat-return?from&to`. Output VAT (net
   credit on VAT_OUT/4427) − input VAT (net debit on VAT_IN/4426) over a period,

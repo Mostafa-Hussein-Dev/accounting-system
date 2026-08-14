@@ -96,7 +96,10 @@ must enforce them:
 - A Journal Entry has many Journal Lines (debit or credit, never both)
 - A Stock Movement is created for every inventory change —
   never update a quantity directly
-- A Payment is allocated to one or more Documents
+- A Payment (customer receipt or supplier payment) is allocated to zero or more
+  Documents (an unallocated amount sits on the partner's account); settling a
+  foreign-currency document at a rate other than booked posts a realised FX
+  gain/loss line (FR-801)
 
 ## Soft delete rule
 Tables that use soft delete (deleted_at column):
@@ -125,6 +128,14 @@ draft -> confirmed -> partially_paid -> paid -> void
 
 No status can go backwards except via void (which creates a reversal,
 it does not undo the original).
+
+**As-built note (FR-801):** sales invoices and vendor bills use the enum
+`DRAFT -> POSTED -> CANCELLED`; the `partially_paid`/`paid` settlement state above
+is **derived** from payment allocations at read time (`GET /payments/open-items`,
+partner balance), not written back onto the immutable posted row. A **Payment**
+has its own lifecycle `POSTED -> VOID`: it posts a journal entry directly on
+create, and `void` posts a reversing entry (the original stays, per the immutable-
+ledger rule) and excludes the payment's allocations from open-balance maths.
 
 ## PasswordResetToken
 One row per issued password-reset code (`POST /auth/forgot-password` /

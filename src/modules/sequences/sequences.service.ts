@@ -41,6 +41,7 @@ const DEFAULT_SEQUENCES: { docType: DocumentType; prefix: string }[] = [
   { docType: DocumentType.CREDIT_NOTE, prefix: 'CN-' },
   { docType: DocumentType.PURCHASE_ORDER, prefix: 'PO-' },
   { docType: DocumentType.PAYMENT_RECEIPT, prefix: 'REC-' },
+  { docType: DocumentType.SUPPLIER_PAYMENT, prefix: 'PAY-' },
   { docType: DocumentType.JOURNAL_ENTRY, prefix: 'JE-' },
   { docType: DocumentType.STOCK_MOVEMENT, prefix: 'STK-' },
   { docType: DocumentType.GOODS_RECEIPT, prefix: 'GRN-' },

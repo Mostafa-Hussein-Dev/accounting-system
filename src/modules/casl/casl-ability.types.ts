@@ -6,7 +6,14 @@ import { MongoAbility } from '@casl/ability';
 // (FR-901/PRD §5) — distinct from plain update so they can be granted on their
 // own. 'manage' still implies all of them.
 export type Action =
-  'create' | 'read' | 'update' | 'delete' | 'post' | 'reverse' | 'manage';
+  | 'create'
+  | 'read'
+  | 'update'
+  | 'delete'
+  | 'post'
+  | 'reverse'
+  | 'void'
+  | 'manage';
 export type Subjects =
   | 'User'
   | 'Company'
@@ -28,5 +35,6 @@ export type Subjects =
   | 'Stock'
   | 'Purchase'
   | 'Sales'
+  | 'Payment'
   | 'all';
 export type AppAbility = MongoAbility<[Action, Subjects]>;

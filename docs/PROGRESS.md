@@ -24,6 +24,7 @@ order, each on its own `feature/*` branch merged via PR to `main`.
 | FR-402 | **Stock ledger** | `StockMovement` sub-ledger, **moving-average (AVCO)** valuation per item/variant; `StockService.postMovementInTx()` is the reusable in-transaction entry point (inbound/outbound); negative-stock blocked; seeded internal locations (Inventory Adjustment, etc.). Valuation reports as-of a date. The stock ledger is the sub-ledger behind inventory account **37** (`ControlType.INVENTORY`). |
 | FR-501 | **Purchasing** | `PurchaseOrder` → `GoodsReceipt` (posts an **inbound** `StockMovement` via `StockService`, AVCO) → `VendorBill` (posts GL via `PostingService`: **DR inventory 37** + DR input VAT 4426 + **CR AP** partner). PO unit cost is **optional**, defaulting from `item.costPrice`. **Over-billing guard**: a PO line can't be billed beyond its ordered qty/amount — counts non-cancelled (DRAFT+POSTED) bill lines, excluding the bill being confirmed. Merged via PR #14. |
 | FR-6xx | **Invoicing (sales invoices + credit notes)** | Outbound mirror of Purchasing. Confirm posts a balanced GL entry — **DR AR (customer) · CR revenue (70) · CR output VAT (4427)** — and, for stock items, relieves inventory + posts **COGS (60) / inventory (37)** at moving-average (perpetual) via `StockService.postMovementInTx`. **Credit note** reverses the accounting + restocks. **Layered revenue/COGS account resolution** (item → category → company default; new optional `revenue/cogsAccountId` on Item + Category, defaults on accounts 70/60). `trackInventory` flag → services post revenue+VAT only. Posted = immutable. Merged via PR (`feature/invoicing`). Covers FR-602/603/605 + the AR/stock half of FR-601. |
+| FR-801 + FR-503 | **Cash & Payments** | `src/modules/payments` — customer **receipts** (DR cash/bank · CR AR) + supplier **payments** (DR AP · CR cash/bank), allocated against open sales invoices / vendor bills or taken **on-account**. **Realised FX gain/loss** line (new `ControlType.FX_GAIN`→775 / `FX_LOSS`→675) balances the entry when a foreign-currency document is settled at a rate other than booked (§21.4). Posts a POSTED JE directly (invoicing pattern); **void** reverses via `PostingService.reverse`. `cashAccountId` must be a CASH/BANK account (full Bank model FR-804 deferred). Endpoints: `POST /payments`, `GET /payments`, `GET /payments/:id`, `GET /payments/open-items`, `POST /payments/:id/void`. Perms `payment.{read,create,void}`. New `DocumentType.SUPPLIER_PAYMENT` (PAY-); customer receipts reuse `PAYMENT_RECEIPT` (REC-). Branch `feature/payments`. |
 | FR-1102 | **Audit trail** | `AuditModule` wired (cross-cutting change log). |
 | URGENT | **Base-currency self-describing money** | See dedicated section below. Each posted amount records **which** base currency it was frozen in; balances report it and never mislabel or silently sum across currencies; optional `?presentIn=` presentation currency. Merged both backend + frontend. |
 | — | **Base-currency integrity (Fix A/B/C)** | Completes the 3-layer currency model. **A:** base currency is **locked** once postings exist (`BASE_CURRENCY_LOCKED` on both company-update paths). **B:** trial balance is currency-aware (never sums across base currencies — per-currency `byBaseCurrency[]` groups + `?presentIn`); partner statement refuses a mixed-base partner (`STATEMENT_MIXED_BASE`). **C:** stock valuation/on-hand self-describe from the ledger `costCurrency` and refuse a mixed stream (`STOCK_MIXED_COST_CURRENCY`). Branch `fix/base-currency-integrity` — pushed, **pending PR/merge**. |
@@ -38,8 +39,9 @@ order, each on its own `feature/*` branch merged via PR to `main`.
 - Smaller: `Branch.stockLocationId` FK, item/category default VAT, `JournalLine.partnerId`/`costCenterId` FKs, `JournalEntry.sourceDoc*` FK.
 
 ### Next
-- **Cash & Payments (FR-8xx / FR-503)** — receipts from customers (DR cash/bank · CR AR) and payments to suppliers (DR AP · CR cash/bank), against invoices or on-account, with FX gain/loss when rates moved; posts via `PostingService`. This closes the invoice→payment→ledger→statement loop.
-- Then **VAT return (FR-903)** and the remaining **financial statements (FR-905)** — both must follow the currency-aware reporting pattern (see docs/DEFERRED.md).
+- **Cash & Payments (FR-801 / FR-503) — DONE** on `feature/payments` (see Done table). The invoice→payment→ledger→statement loop is now closed for both AR and AP.
+- **VAT return (FR-903)** and the remaining **financial statements (FR-905)** — both must follow the currency-aware reporting pattern (see docs/DEFERRED.md). ← next.
+- Then the MVP-scope **POS (FR-701–704)** and **HR/Payroll (§17.2)** modules; Payroll + platform session/device management FRs are pending in docs/NEEDED.md.
 
 ### Path to a working invoice
 GL engine ✅ → Partners ✅ → Items ✅ → Stock ledger ✅ → Purchasing ✅ → **Invoicing ✅** → Payments (next).
@@ -168,7 +170,7 @@ module (invoicing/payments/reports) or a frontend/export piece.
 |---|---|---|---|
 | FR-501 | PO → receipt → purchase invoice | ✅ | Full flow + AVCO + GL posting + over-billing guard (PR #14) |
 | FR-502 | Landed cost (imports) | ⬜ | Not started |
-| FR-503 | Supplier balances & payments | 🟡 | Balance done; supplier payment needs Cash & Payments |
+| FR-503 | Supplier balances & payments | ✅ | Balance done; supplier payment built in Cash & Payments (FR-801) |
 
 ### §12 Invoicing & Sales
 | FR | Feature | Status | Note |
@@ -182,10 +184,10 @@ module (invoicing/payments/reports) or a frontend/export piece.
 ### §13 Cash & Payments
 | FR | Feature | Status | Note |
 |---|---|---|---|
-| FR-801 | Receipts & payments | ⬜ | Scaffold only |
-| FR-802 | Cheque management | ⬜ | |
-| FR-803 | Currency exchange (USD↔LBP) | ⬜ | |
-| FR-804 | Banks & reconciliation | ⬜ | |
+| FR-801 | Receipts & payments | ✅ | Receipts + supplier payments + allocation + on-account + realised FX gain/loss; void reverses. `feature/payments` |
+| FR-802 | Cheque management | 🟡 | `method=CHEQUE` accepted (posts like cash); cheque lifecycle (pending/cleared/bounced/print) deferred |
+| FR-803 | Currency exchange (USD↔LBP) | ⬜ | Standalone exchange desk deferred (FX gain/loss on settlement IS handled by FR-801) |
+| FR-804 | Banks & reconciliation | ⬜ | Payment posts to a CASH/BANK account directly; Bank model + reconciliation deferred |
 
 ### §14 Accounting / General Ledger
 | FR | Feature | Status | Note |

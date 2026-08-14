@@ -5155,6 +5155,214 @@
       ]
     },
     {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create customer receipt (allocated)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"direction\": \"IN\",\n  \"partnerId\": \"{{customerPartnerId}}\",\n  \"cashAccountId\": \"{{cashAccountId}}\",\n  \"method\": \"CASH\",\n  \"currencyCode\": \"USD\",\n  \"amount\": 99.9,\n  \"paymentDate\": \"2026-08-14\",\n  \"allocations\": [\n    {\n      \"documentId\": \"{{salesInvoiceId}}\",\n      \"amount\": 99.9\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('paymentId',pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create customer receipt (on-account)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"direction\": \"IN\",\n  \"partnerId\": \"{{customerPartnerId}}\",\n  \"cashAccountId\": \"{{cashAccountId}}\",\n  \"method\": \"TRANSFER\",\n  \"currencyCode\": \"USD\",\n  \"amount\": 50,\n  \"paymentDate\": \"2026-08-14\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('paymentId',pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create supplier payment (allocated)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"direction\": \"OUT\",\n  \"partnerId\": \"{{supplierPartnerId}}\",\n  \"cashAccountId\": \"{{cashAccountId}}\",\n  \"method\": \"TRANSFER\",\n  \"currencyCode\": \"USD\",\n  \"amount\": 200,\n  \"paymentDate\": \"2026-08-14\",\n  \"allocations\": [\n    {\n      \"documentId\": \"{{vendorBillId}}\",\n      \"amount\": 200\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){pm.environment.set('paymentId',pm.response.json().data.id);}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Open items (to allocate)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/open-items?partnerId={{customerPartnerId}}&direction=IN",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "open-items"
+              ],
+              "query": [
+                {
+                  "key": "partnerId",
+                  "value": "{{customerPartnerId}}"
+                },
+                {
+                  "key": "direction",
+                  "value": "IN"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get payment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "{{paymentId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Void payment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}/void",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "{{paymentId}}",
+                "void"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Roles",
       "item": [
         {

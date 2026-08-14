@@ -76,6 +76,53 @@ section below; this is the sequencing.
 
 **Blocked on product-owner input:** Payroll, Session Management, Device Management (see `docs/NEEDED.md`).
 
+### Remaining roadmap — combined with FR status
+Same build order as above, annotated with each step's specific FRs and status.
+Legend: ⚠ partial · ❌ not started · ✅ done (shown only where it clarifies a dependency).
+
+**A. Financial reporting & close (immediate)**
+| # | Step | FRs (status) |
+|---|---|---|
+| 1 | **VAT Return** ← next | FR-903 ❌ |
+| 2 | **Financial Statements** | FR-905 ⚠ (trial balance ✅; balance sheet / income statement / GL report ❌) |
+| 3 | **Fiscal periods & close** | FR-904 ❌ → also completes the last piece of FR-906 ✅ (period-locking) |
+| 4 | **Reporting engine** | FR-1001 ❌ · FR-1002 ⚠ (only trial balance today) |
+
+**B. Commercial depth (gaps in built modules)**
+| # | Step | FRs (status) |
+|---|---|---|
+| 5 | **Auto-posting rule engine** | FR-902 ⚠ (`PostingService` core built; mapping engine ❌) |
+| 6 | **Stock counts & inter-branch transfers** | FR-403 ❌ · FR-404 ❌ |
+| 7 | **Landed cost** | FR-502 ❌ |
+| 8 | **Payments follow-ups** | FR-802 ⚠ (cheque lifecycle) · FR-803 ❌ (exchange desk) · FR-804 ❌ (Bank + reconciliation) |
+| 9 | **Credit control enforcement** | FR-302 ⚠ (limit stored; warn/block ❌) |
+| 10 | **Pricing discount rules + bulk tools** | FR-405 ⚠ (price lists ✅; qty/total/period rules ❌) |
+| 11 | **Document-flow conversions** (quote→order→delivery) | FR-601 ⚠ (invoice ✅; conversions ❌) |
+| 12 | **Barcode & label printing** | FR-406 ❌ |
+| 13 | **Serial/expiry capture** | FR-407 ❌ |
+
+**C. New MVP modules (reclassified 2026-08-14)**
+| # | Step | FRs (status) |
+|---|---|---|
+| 14 | **Point of Sale** | FR-701–704 ❌ (fully specced §17.1) |
+| 15 | **HR & Payroll** | §17.2 — FRs **pending** (`NEEDED.md`) |
+| 16 | **Platform Session Management** | FR-2xx — FRs **pending** (`NEEDED.md`) |
+| 17 | **Platform Device Management** | FR-2xx — FRs **pending** (`NEEDED.md`) |
+
+**D. Admin / ops & cross-cutting**
+| # | Step | FRs (status) |
+|---|---|---|
+| 18 | **Admin panel + platform stats** | FR-1101 ⚠ (backend CRUD exists; panel + stats ❌) |
+| 19 | **Backups** | FR-1103 ❌ |
+| 20 | **Exports** (PDF/print/email/WhatsApp) | FR-604 ❌ + statement/invoice exports; needs mail/WhatsApp provider |
+| 21 | **Backend i18n** | FR-107 ❌ (design parked) |
+| 22 | **Data migration** | §22 ❌ |
+
+**Every remaining FR at a glance**
+- **Partial (⚠):** FR-302, FR-405, FR-601, FR-802, FR-902, FR-905, FR-1002, FR-1101
+- **Not started (❌):** FR-403, FR-404, FR-406, FR-407, FR-502, FR-604, FR-803, FR-804, FR-903, FR-904, FR-1001, FR-1103, FR-107, FR-701–704, §22
+- **Pending your FRs:** §17.2 Payroll, FR-2xx Session Management, FR-2xx Device Management
+
 ## Working agreement (the rules the user has set)
 1. **Requirements** from `docs/PRD.md` (FR-xxx + acceptance criteria).
 2. **Conventions** from `docs/` — CONVENTIONS, ARCHITECTURE, MODELS, API-DESIGN. "When in doubt, follow the convention — don't invent."

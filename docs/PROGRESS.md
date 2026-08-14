@@ -46,6 +46,36 @@ order, each on its own `feature/*` branch merged via PR to `main`.
 ### Path to a working invoice
 GL engine ✅ → Partners ✅ → Items ✅ → Stock ledger ✅ → Purchasing ✅ → **Invoicing ✅** → **Payments ✅**. Invoice→payment→ledger→statement is closed; next is reporting (VAT return FR-903, financial statements FR-905).
 
+### Remaining roadmap (build order)
+Ordered list of what's left. Per-FR status is in the "Full FR roadmap status"
+section below; this is the sequencing.
+
+**A. Financial reporting & close (immediate)**
+1. **VAT Return** (FR-903) — output 4427 − input 4426 for a period. ← next
+2. **Financial Statements** (FR-905) — balance sheet, income statement, GL report (trial balance ✅); currency-aware pattern.
+3. **Fiscal periods & close** (FR-904) — period lock (GL hook already left) + year-end close.
+4. **Reporting engine** (FR-1001/1002) — report runner + standard reports/dashboards (sales/inventory/cash/aged AR-AP).
+
+**B. Commercial depth (gaps in built modules)**
+5. **Auto-posting rule engine** (FR-902) — configurable per-company mapping (`PostingService` core built).
+6. **Stock counts & inter-branch transfers** (FR-403/404).
+7. **Landed cost** (FR-502).
+8. **Payments follow-ups** (FR-802 cheque lifecycle, FR-803 exchange desk, FR-804 Bank + reconciliation).
+9. **Credit control enforcement** (FR-302), **pricing discount rules** (FR-405), **document-flow conversions** quote→order→delivery (FR-601), **barcode/label print** (FR-406), **serial/expiry capture** (FR-407).
+
+**C. New MVP modules (reclassified in 2026-08-14)**
+10. **Point of Sale** (FR-701–704, §17.1) — fully specced.
+11. **HR & Payroll** (§17.2) — **FRs pending** → `docs/NEEDED.md`.
+12. **Platform Session Management** + **Device Management** (FR-2xx) — **FRs pending** → `docs/NEEDED.md`.
+
+**D. Admin / ops & cross-cutting**
+13. **Admin panel + platform stats** (FR-1101), **Backups** (FR-1103).
+14. **Exports** — PDF/print/email/WhatsApp (FR-604 + statement/invoice exports); needs mail/WhatsApp provider.
+15. **Backend i18n** (FR-107) — translation catalogue (design decision parked).
+16. **Data migration** (§22) — legacy Paradox → v2.
+
+**Blocked on product-owner input:** Payroll, Session Management, Device Management (see `docs/NEEDED.md`).
+
 ## Working agreement (the rules the user has set)
 1. **Requirements** from `docs/PRD.md` (FR-xxx + acceptance criteria).
 2. **Conventions** from `docs/` — CONVENTIONS, ARCHITECTURE, MODELS, API-DESIGN. "When in doubt, follow the convention — don't invent."
@@ -153,7 +183,7 @@ module (invoicing/payments/reports) or a frontend/export piece.
 | FR | Feature | Status | Note |
 |---|---|---|---|
 | FR-301 | Customer/supplier master | ✅ | Partners + addresses + balances (USD/LBP, self-describing); "open invoices" tab awaits invoicing |
-| FR-302 | Credit control | 🟡 | Limit stored; warn/block on sale needs invoicing |
+| FR-302 | Credit control | 🟡 | Limit **stored**; warn/block on a new invoice not yet enforced |
 | FR-303 | Account statement | 🟡 | Statement + running balance endpoint done; PDF/Excel/WhatsApp export not |
 
 ### §10 Inventory & Items

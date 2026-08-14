@@ -25,6 +25,7 @@ order, each on its own `feature/*` branch merged via PR to `main`.
 | FR-501 | **Purchasing** | `PurchaseOrder` → `GoodsReceipt` (posts an **inbound** `StockMovement` via `StockService`, AVCO) → `VendorBill` (posts GL via `PostingService`: **DR inventory 37** + DR input VAT 4426 + **CR AP** partner). PO unit cost is **optional**, defaulting from `item.costPrice`. **Over-billing guard**: a PO line can't be billed beyond its ordered qty/amount — counts non-cancelled (DRAFT+POSTED) bill lines, excluding the bill being confirmed. Merged via PR #14. |
 | FR-6xx | **Invoicing (sales invoices + credit notes)** | Outbound mirror of Purchasing. Confirm posts a balanced GL entry — **DR AR (customer) · CR revenue (70) · CR output VAT (4427)** — and, for stock items, relieves inventory + posts **COGS (60) / inventory (37)** at moving-average (perpetual) via `StockService.postMovementInTx`. **Credit note** reverses the accounting + restocks. **Layered revenue/COGS account resolution** (item → category → company default; new optional `revenue/cogsAccountId` on Item + Category, defaults on accounts 70/60). `trackInventory` flag → services post revenue+VAT only. Posted = immutable. Merged via PR (`feature/invoicing`). Covers FR-602/603/605 + the AR/stock half of FR-601. |
 | FR-801 + FR-503 | **Cash & Payments** | `src/modules/payments` — customer **receipts** (DR cash/bank · CR AR) + supplier **payments** (DR AP · CR cash/bank), allocated against open sales invoices / vendor bills or taken **on-account**. **Realised FX gain/loss** line (new `ControlType.FX_GAIN`→775 / `FX_LOSS`→675) balances the entry when a foreign-currency document is settled at a rate other than booked (§21.4). Posts a POSTED JE directly (invoicing pattern); **void** reverses via `PostingService.reverse`. `cashAccountId` must be a CASH/BANK account (full Bank model FR-804 deferred). Endpoints: `POST /payments`, `GET /payments`, `GET /payments/:id`, `GET /payments/open-items`, `POST /payments/:id/void`. Perms `payment.{read,create,void}`. New `DocumentType.SUPPLIER_PAYMENT` (PAY-); customer receipts reuse `PAYMENT_RECEIPT` (REC-). **Merged to main via PR #18.** |
+| FR-903 | **VAT Return** | `LedgerService.vatReturn` + `GET /reports/vat-return?from&to[&presentIn&rateType&branchId]`. Output VAT (net credit on VAT_OUT/4427) − input VAT (net debit on VAT_IN/4426) over a period = net VAT payable/recoverable. Pure read over posted journal lines (no schema); credit notes/reversals/voids net out automatically. **Currency-aware** like the trial balance (per-`baseCurrencyCode` groups, `?presentIn` conversion). Perm reuses `JournalEntry.read`. Taxable-base breakdown + PDF/Excel export deferred. Branch `feature/vat-return`. |
 | FR-1102 | **Audit trail** | `AuditModule` wired (cross-cutting change log). |
 | URGENT | **Base-currency self-describing money** | See dedicated section below. Each posted amount records **which** base currency it was frozen in; balances report it and never mislabel or silently sum across currencies; optional `?presentIn=` presentation currency. Merged both backend + frontend. |
 | — | **Base-currency integrity (Fix A/B/C)** | Completes the 3-layer currency model. **A:** base currency is **locked** once postings exist (`BASE_CURRENCY_LOCKED` on both company-update paths). **B:** trial balance is currency-aware (never sums across base currencies — per-currency `byBaseCurrency[]` groups + `?presentIn`); partner statement refuses a mixed-base partner (`STATEMENT_MIXED_BASE`). **C:** stock valuation/on-hand self-describe from the ledger `costCurrency` and refuse a mixed stream (`STOCK_MIXED_COST_CURRENCY`). Branch `fix/base-currency-integrity` — pushed, **pending PR/merge**. |
@@ -40,8 +41,9 @@ order, each on its own `feature/*` branch merged via PR to `main`.
 
 ### Next
 - **Cash & Payments (FR-801 / FR-503) — DONE**, merged to main (PR #18; see Done table). The invoice→payment→ledger→statement loop is now closed for both AR and AP.
-- **VAT return (FR-903)** and the remaining **financial statements (FR-905)** — both must follow the currency-aware reporting pattern (see docs/DEFERRED.md). ← next.
-- Then the MVP-scope **POS (FR-701–704)** and **HR/Payroll (§17.2)** modules; Payroll + platform session/device management FRs are pending in docs/NEEDED.md.
+- **VAT return (FR-903) — DONE** (`feature/vat-return`; `GET /reports/vat-return`).
+- **Financial statements (FR-905)** — balance sheet, income statement, GL report (trial balance ✅); same currency-aware pattern (see docs/DEFERRED.md). ← next.
+- Then **fiscal periods & close (FR-904)**, the **reporting engine (FR-1001/1002)**, and the MVP-scope **POS (FR-701–704)** / **HR/Payroll (§17.2)**; Payroll + platform session/device management FRs pending in docs/NEEDED.md.
 
 ### Path to a working invoice
 GL engine ✅ → Partners ✅ → Items ✅ → Stock ledger ✅ → Purchasing ✅ → **Invoicing ✅** → **Payments ✅**. Invoice→payment→ledger→statement is closed; next is reporting (VAT return FR-903, financial statements FR-905).
@@ -51,7 +53,7 @@ Ordered list of what's left. Per-FR status is in the "Full FR roadmap status"
 section below; this is the sequencing.
 
 **A. Financial reporting & close (immediate)**
-1. **VAT Return** (FR-903) — output 4427 − input 4426 for a period. ← next
+1. ~~**VAT Return** (FR-903)~~ ✅ DONE — output 4427 − input 4426 for a period (`GET /reports/vat-return`).
 2. **Financial Statements** (FR-905) — balance sheet, income statement, GL report (trial balance ✅); currency-aware pattern.
 3. **Fiscal periods & close** (FR-904) — period lock (GL hook already left) + year-end close.
 4. **Reporting engine** (FR-1001/1002) — report runner + standard reports/dashboards (sales/inventory/cash/aged AR-AP).
@@ -83,8 +85,8 @@ Legend: ⚠ partial · ❌ not started · ✅ done (shown only where it clarifie
 **A. Financial reporting & close (immediate)**
 | # | Step | FRs (status) |
 |---|---|---|
-| 1 | **VAT Return** ← next | FR-903 ❌ |
-| 2 | **Financial Statements** | FR-905 ⚠ (trial balance ✅; balance sheet / income statement / GL report ❌) |
+| 1 | **VAT Return** | FR-903 ✅ (`GET /reports/vat-return`, currency-aware; base breakdown + export deferred) |
+| 2 | **Financial Statements** ← next | FR-905 ⚠ (trial balance ✅; balance sheet / income statement / GL report ❌) |
 | 3 | **Fiscal periods & close** | FR-904 ❌ → also completes the last piece of FR-906 ✅ (period-locking) |
 | 4 | **Reporting engine** | FR-1001 ❌ · FR-1002 ⚠ (only trial balance today) |
 
@@ -120,7 +122,8 @@ Legend: ⚠ partial · ❌ not started · ✅ done (shown only where it clarifie
 
 **Every remaining FR at a glance**
 - **Partial (⚠):** FR-302, FR-405, FR-601, FR-802, FR-902, FR-905, FR-1002, FR-1101
-- **Not started (❌):** FR-403, FR-404, FR-406, FR-407, FR-502, FR-604, FR-803, FR-804, FR-903, FR-904, FR-1001, FR-1103, FR-107, FR-701–704, §22
+- **Not started (❌):** FR-403, FR-404, FR-406, FR-407, FR-502, FR-604, FR-803, FR-804, FR-904, FR-1001, FR-1103, FR-107, FR-701–704, §22
+- **Newly done (✅):** FR-903 (VAT return)
 - **Pending your FRs:** §17.2 Payroll, FR-2xx Session Management, FR-2xx Device Management
 
 ## Working agreement (the rules the user has set)
@@ -273,7 +276,7 @@ module (invoicing/payments/reports) or a frontend/export piece.
 |---|---|---|---|
 | FR-901 | Manual journal entries | ✅ | Draft→post→reverse, balanced, immutable |
 | FR-902 | Automatic posting | 🟡 | PostingService core built + used by purchasing; configurable per-company rule engine deferred |
-| FR-903 | VAT return | ⬜ | Accounts mapped; report not built |
+| FR-903 | VAT return | ✅ | `GET /reports/vat-return` — output − input VAT per period, currency-aware (`?presentIn`); ledger-derived. Taxable-base breakdown + export deferred |
 | FR-904 | Fiscal periods & close | ⬜ | Deferred; hook left at post path |
 | FR-905 | Financial statements | 🟡 | Trial balance done + **currency-aware** (byBaseCurrency groups + `?presentIn`); balance sheet / income statement / GL report + export not (must follow the same pattern — docs/DEFERRED.md) |
 | FR-906 | Accounting integrity | 🟡 | Balanced/immutable/server-money/derived/currency/tenant/audit enforced; period-locking pending FR-904 |

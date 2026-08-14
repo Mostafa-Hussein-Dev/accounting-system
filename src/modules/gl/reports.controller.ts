@@ -8,6 +8,8 @@ import {
 import { LedgerService } from './ledger.service';
 import { QueryTrialBalanceDto } from './dto/query-trial-balance.dto';
 import { TrialBalanceResponseDto } from './dto/trial-balance-response.dto';
+import { QueryVatReturnDto } from './dto/query-vat-return.dto';
+import { VatReturnResponseDto } from './dto/vat-return-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -45,6 +47,33 @@ export class ReportsController {
       query.companyId,
       query.numberPrefix,
       query.rollUp,
+      query.presentIn,
+      query.rateType,
+    );
+  }
+
+  @Get('vat-return')
+  @RequirePermissions({ action: 'read', subject: 'JournalEntry' })
+  @ApiOperation({
+    summary:
+      'VAT return (FR-903): output VAT − input VAT for a period = net VAT payable/recoverable.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The VAT return for the period',
+    type: VatReturnResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  vatReturn(
+    @Query() query: QueryVatReturnDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<VatReturnResponseDto> {
+    return this.ledger.vatReturn(
+      caller,
+      query.from,
+      query.to,
+      query.branchId,
+      query.companyId,
       query.presentIn,
       query.rateType,
     );

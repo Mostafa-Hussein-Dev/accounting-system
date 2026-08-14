@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  ControlType,
   JournalSide,
   JournalStatus,
   NormalBalance,
@@ -23,6 +24,12 @@ import {
   TrialBalanceResponseDto,
   TrialBalanceRowDto,
 } from './dto/trial-balance-response.dto';
+import {
+  VatReturnCurrencyGroupDto,
+  VatReturnPresentationDto,
+  VatReturnResponseDto,
+  vatDirection,
+} from './dto/vat-return-response.dto';
 import {
   DEFAULT_RATE_TYPE,
   resolvePresentationRate,
@@ -371,6 +378,217 @@ export class LedgerService {
     return dto;
   }
 
+  /**
+   * VAT return (FR-903): output VAT (on sales) − input VAT (on purchases) over a
+   * period = net VAT payable/recoverable. Derived from posted journal lines on
+   * the VAT_OUT / VAT_IN control accounts within [from, to] — credit notes,
+   * reversals and voids net out automatically. Currency-aware (mirrors the trial
+   * balance): grouped by stored base currency, never summed across them.
+   */
+  async vatReturn(
+    caller: AuthenticatedUser,
+    from: string,
+    to: string,
+    branchId?: string,
+    companyIdQuery?: string,
+    presentIn?: string,
+    rateType?: string,
+  ): Promise<VatReturnResponseDto> {
+    const companyId = this.resolveCompanyId(companyIdQuery, caller);
+    const fromDate = this.parseRequiredDate(from, 'from');
+    const toDate = this.parseRequiredDate(to, 'to');
+    if (fromDate > toDate) {
+      throw new BadRequestException({
+        code: 'VAT_RETURN_INVALID_RANGE',
+        message: '`from` must be on or before `to`.',
+        field: 'from',
+      });
+    }
+
+    const dto = new VatReturnResponseDto();
+    dto.companyId = companyId;
+    dto.from = fromDate.toISOString().slice(0, 10);
+    dto.to = toDate.toISOString().slice(0, 10);
+    dto.byBaseCurrency = null;
+    dto.presentation = null;
+
+    // The VAT control accounts (output 4427 / input 4426).
+    const vatAccounts = await this.prisma.account.findMany({
+      where: {
+        companyId,
+        deletedAt: null,
+        controlType: { in: [ControlType.VAT_OUT, ControlType.VAT_IN] },
+      },
+      select: { id: true, controlType: true },
+    });
+    if (vatAccounts.length === 0) {
+      dto.currency = await this.getBaseCurrency(companyId);
+      dto.outputVat = 0;
+      dto.inputVat = 0;
+      dto.netVat = 0;
+      dto.direction = 'NIL';
+      return dto;
+    }
+    const kindByAccount = new Map(
+      vatAccounts.map((a) => [a.id, a.controlType]),
+    );
+
+    const grouped = await this.prisma.journalLine.groupBy({
+      by: ['accountId', 'side', 'baseCurrencyCode'],
+      where: {
+        companyId,
+        accountId: { in: vatAccounts.map((a) => a.id) },
+        journalEntry: {
+          status: JournalStatus.POSTED,
+          deletedAt: null,
+          date: { gte: fromDate, lte: toDate },
+          ...(branchId ? { branchId } : {}),
+        },
+      },
+      _sum: { amountBase: true },
+    });
+
+    // currency -> { output, input }
+    const perCurrency = new Map<string, { output: number; input: number }>();
+    for (const g of grouped) {
+      const kind = kindByAccount.get(g.accountId);
+      const amt = Number(g._sum.amountBase ?? 0);
+      const bucket = perCurrency.get(g.baseCurrencyCode) ?? {
+        output: 0,
+        input: 0,
+      };
+      if (kind === ControlType.VAT_OUT) {
+        // Output VAT is credit-normal: sales credit it, credit notes debit it.
+        bucket.output += g.side === JournalSide.CREDIT ? amt : -amt;
+      } else {
+        // Input VAT is debit-normal: purchases debit it.
+        bucket.input += g.side === JournalSide.DEBIT ? amt : -amt;
+      }
+      perCurrency.set(g.baseCurrencyCode, bucket);
+    }
+
+    const groups: VatReturnCurrencyGroupDto[] = [...perCurrency.entries()]
+      .map(([currency, { output, input }]) => {
+        const outputVat = round2(output);
+        const inputVat = round2(input);
+        const netVat = round2(outputVat - inputVat);
+        return {
+          currency,
+          outputVat,
+          inputVat,
+          netVat,
+          direction: vatDirection(netVat),
+        };
+      })
+      .sort((a, b) => a.currency.localeCompare(b.currency));
+
+    // Tier 2: convert into one presentation currency.
+    if (presentIn) {
+      const conv = await this.convertVat(
+        companyId,
+        groups,
+        presentIn,
+        rateType,
+        toDate,
+      );
+      dto.presentation = conv;
+      if (conv.converted) {
+        dto.currency = presentIn;
+        dto.outputVat = conv.outputVat;
+        dto.inputVat = conv.inputVat;
+        dto.netVat = conv.netVat;
+        dto.direction = conv.direction;
+        return dto;
+      }
+      // A rate was missing → fall through to the honest per-currency breakdown.
+    }
+
+    if (groups.length === 0) {
+      dto.currency = await this.getBaseCurrency(companyId);
+      dto.outputVat = 0;
+      dto.inputVat = 0;
+      dto.netVat = 0;
+      dto.direction = 'NIL';
+      return dto;
+    }
+    if (groups.length === 1) {
+      const g = groups[0];
+      dto.currency = g.currency;
+      dto.outputVat = g.outputVat;
+      dto.inputVat = g.inputVat;
+      dto.netVat = g.netVat;
+      dto.direction = g.direction;
+      return dto;
+    }
+    // Mixed base currency: one return per currency, never summed across them.
+    dto.currency = null;
+    dto.outputVat = null;
+    dto.inputVat = null;
+    dto.netVat = null;
+    dto.direction = null;
+    dto.byBaseCurrency = groups;
+    return dto;
+  }
+
+  /** Convert per-currency VAT figures into one presentation currency; `converted`
+   *  is false if any source currency lacked a rate. */
+  private async convertVat(
+    companyId: string,
+    groups: VatReturnCurrencyGroupDto[],
+    presentIn: string,
+    rateType: string | undefined,
+    asOfDate: Date,
+  ): Promise<VatReturnPresentationDto> {
+    const rt = rateType ?? DEFAULT_RATE_TYPE;
+    const rates: PresentationRateDto[] = [];
+    let output = 0;
+    let input = 0;
+    let ok = true;
+    for (const g of groups) {
+      let rate = 1;
+      if (g.currency !== presentIn) {
+        const pr = await resolvePresentationRate(
+          this.prisma,
+          companyId,
+          g.currency,
+          presentIn,
+          asOfDate,
+          rt,
+        );
+        if (!pr) {
+          ok = false;
+          continue;
+        }
+        rate = pr.rate;
+        rates.push({
+          from: g.currency,
+          rate: pr.rate,
+          rateType: pr.rateType,
+          rateDate: pr.rateDate,
+        });
+      }
+      output += g.outputVat * rate;
+      input += g.inputVat * rate;
+    }
+    const dp = await this.currencyDecimals(presentIn);
+    const round = (n: number): number => {
+      const f = 10 ** dp;
+      return Math.round((n + Number.EPSILON) * f) / f;
+    };
+    const outputVat = ok ? round(output) : null;
+    const inputVat = ok ? round(input) : null;
+    const netVat = ok ? round(output - input) : null;
+    return {
+      currency: presentIn,
+      converted: ok,
+      outputVat,
+      inputVat,
+      netVat,
+      direction: netVat === null ? null : vatDirection(netVat),
+      rates,
+    };
+  }
+
   /** Convert every per-currency, per-account slice into one presentation
    *  currency; `ok` is false if any source currency lacked a rate. */
   private async convertToPresentation(
@@ -540,6 +758,18 @@ export class LedgerService {
         code: 'INVALID_AS_OF_DATE',
         message: `asOf "${asOf}" is not a valid date.`,
         field: 'asOf',
+      });
+    }
+    return d;
+  }
+
+  private parseRequiredDate(value: string, field: string): Date {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestException({
+        code: 'INVALID_DATE',
+        message: `${field} "${value}" is not a valid date.`,
+        field,
       });
     }
     return d;

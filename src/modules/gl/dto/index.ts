@@ -6,3 +6,5 @@ export * from './query-journal-entries.dto';
 export * from './journal-entry-response.dto';
 export * from './account-balance-response.dto';
 export * from './trial-balance-response.dto';
+export * from './query-vat-return.dto';
+export * from './vat-return-response.dto';

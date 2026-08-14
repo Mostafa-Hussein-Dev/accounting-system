@@ -10,6 +10,12 @@ import { QueryTrialBalanceDto } from './dto/query-trial-balance.dto';
 import { TrialBalanceResponseDto } from './dto/trial-balance-response.dto';
 import { QueryVatReturnDto } from './dto/query-vat-return.dto';
 import { VatReturnResponseDto } from './dto/vat-return-response.dto';
+import { QueryGeneralLedgerDto } from './dto/query-general-ledger.dto';
+import { GeneralLedgerResponseDto } from './dto/general-ledger-response.dto';
+import { QueryIncomeStatementDto } from './dto/query-income-statement.dto';
+import { IncomeStatementResponseDto } from './dto/income-statement-response.dto';
+import { QueryBalanceSheetDto } from './dto/query-balance-sheet.dto';
+import { BalanceSheetResponseDto } from './dto/balance-sheet-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompanyMembershipGuard } from '../auth/guards/company-membership.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -72,6 +78,77 @@ export class ReportsController {
       caller,
       query.from,
       query.to,
+      query.branchId,
+      query.companyId,
+      query.presentIn,
+      query.rateType,
+    );
+  }
+
+  @Get('general-ledger')
+  @RequirePermissions({ action: 'read', subject: 'JournalEntry' })
+  @ApiOperation({
+    summary:
+      'General ledger (FR-905): one account’s posted lines over a period with a running balance.',
+  })
+  @ApiResponse({ status: 200, type: GeneralLedgerResponseDto })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  generalLedger(
+    @Query() query: QueryGeneralLedgerDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<GeneralLedgerResponseDto> {
+    return this.ledger.generalLedger(
+      caller,
+      query.accountId,
+      query.from,
+      query.to,
+      query.branchId,
+      query.companyId,
+      query.presentIn,
+      query.rateType,
+    );
+  }
+
+  @Get('income-statement')
+  @RequirePermissions({ action: 'read', subject: 'JournalEntry' })
+  @ApiOperation({
+    summary:
+      'Income statement / P&L (FR-905): revenue − expenses over a period = net result.',
+  })
+  @ApiResponse({ status: 200, type: IncomeStatementResponseDto })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  incomeStatement(
+    @Query() query: QueryIncomeStatementDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<IncomeStatementResponseDto> {
+    return this.ledger.incomeStatement(
+      caller,
+      query.from,
+      query.to,
+      query.rollUp,
+      query.branchId,
+      query.companyId,
+      query.presentIn,
+      query.rateType,
+    );
+  }
+
+  @Get('balance-sheet')
+  @RequirePermissions({ action: 'read', subject: 'JournalEntry' })
+  @ApiOperation({
+    summary:
+      'Balance sheet (FR-905): assets vs liabilities + equity as of a date; the period result is folded into equity.',
+  })
+  @ApiResponse({ status: 200, type: BalanceSheetResponseDto })
+  @ApiResponse({ status: 403, description: 'Permission denied' })
+  balanceSheet(
+    @Query() query: QueryBalanceSheetDto,
+    @CurrentUser() caller: AuthenticatedUser,
+  ): Promise<BalanceSheetResponseDto> {
+    return this.ledger.balanceSheet(
+      caller,
+      query.asOf,
+      query.rollUp,
       query.branchId,
       query.companyId,
       query.presentIn,

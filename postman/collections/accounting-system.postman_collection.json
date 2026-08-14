@@ -610,6 +610,130 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "General ledger (one account)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/general-ledger?accountId={{accountId}}&from=2026-01-01&to=2026-12-31&presentIn=USD&branchId={{branchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "general-ledger"
+              ],
+              "query": [
+                {
+                  "key": "accountId",
+                  "value": "{{accountId}}"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "presentIn",
+                  "value": "USD",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Income statement (P&L)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/income-statement?from=2026-01-01&to=2026-12-31&rollUp=true&presentIn=USD&branchId={{branchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "income-statement"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "rollUp",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
+                  "key": "presentIn",
+                  "value": "USD",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Balance sheet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/balance-sheet?asOf=2026-12-31&rollUp=true&presentIn=USD&branchId={{branchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "balance-sheet"
+              ],
+              "query": [
+                {
+                  "key": "asOf",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "rollUp",
+                  "value": "true",
+                  "disabled": true
+                },
+                {
+                  "key": "presentIn",
+                  "value": "USD",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },

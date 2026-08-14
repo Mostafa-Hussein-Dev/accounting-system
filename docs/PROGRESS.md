@@ -210,11 +210,24 @@ module (invoicing/payments/reports) or a frontend/export piece.
 | FR-1102 | Audit trail | 🟡 | Module wired; full create/update/delete + before/after coverage not verified |
 | FR-1103 | Backups | ⬜ | Ops task |
 
-### §17 Future (post-MVP)
-| Item | Status |
-|---|---|
-| Point of Sale | ⬜ Out of MVP scope |
-| HR / Payroll | ⬜ Out of MVP scope |
+### §17 Point of Sale & HR/Payroll — **now in MVP** (scope change 2026-08-14)
+| FR | Feature | Status | Note |
+|---|---|---|---|
+| FR-701 | POS sale screen | ⬜ | Touch sale; barcode/search/grid; line+total discount; USD/LBP running total; hold/recall; mixed-currency tender; posts like a cash invoice |
+| FR-702 | Cash session (drawer) | ⬜ | Open float per station/cashier; track; close with denomination count + Z-report (variance) |
+| FR-703 | POS offline mode | ⬜ | Cached catalogue, offline sales, station-prefixed numbers, auto-sync + deterministic conflict resolution |
+| FR-704 | POS peripherals | ⬜ | ESC/POS receipt printer (WebUSB/Serial), HID scanner, WebSerial scale — Chromium+HTTPS only |
+| FR-7xx | HR & Payroll | ⬜ | Employee records, attendance, Lebanese payroll (NSSF + income-tax withholding), MoF forms. **Detailed FRs pending — see docs/NEEDED.md** |
+| FR-2xx | **User session management** (platform-wide) | ⬜ | Active-sessions view, revoke/logout-everywhere, idle/concurrent policy. **Detailed FRs pending — see docs/NEEDED.md** |
+| FR-2xx | **Device management** (platform-wide) | ⬜ | Registered sign-in devices (web/mobile/POS-as-client), trust/approve/revoke. **Detailed FRs pending — see docs/NEEDED.md** |
+
+> **Scope note (2026-08-14):** Point of Sale, HR/Payroll, and platform-wide
+> **user session management + device management** were reclassified into the
+> **MVP** (PRD §17). Financial statements (FR-905) and VAT return (FR-903) were
+> already MVP (§14). POS is fully specified (FR-701–704); Payroll, session
+> management, and device management FRs are still to be supplied by the owner
+> (`docs/NEEDED.md`). NOTE: FR-702 (POS cash drawer) and FR-704 (POS peripherals)
+> are POS-internal and are **not** the platform session/device modules.
 
 ### Big picture
 - **Phase 0 (Foundations)** — essentially complete ✅ (tenancy, auth/RBAC,
@@ -223,6 +236,9 @@ module (invoicing/payments/reports) or a frontend/export piece.
 - **Phase 1 (Core commercial MVP)** — well past half: GL ✅, Partners ✅, Items ✅,
   Stock ✅, Purchasing ✅, **Invoicing ✅**. Remaining: **Payments**, then VAT
   return → financial statements → reporting.
+- **Phase 2/3 (POS + HR/Payroll)** — now **in MVP** (scope change 2026-08-14),
+  built after core commercial closes. POS spec is FR-701–704 (§17.1); Payroll FRs
+  pending. Neither started.
 - **Currency model** is now the full 3-layer standard (transaction currency per
   line · frozen + **locked** base currency · display-only `?presentIn`),
   consistent across account/partner balances, trial balance, statements and stock

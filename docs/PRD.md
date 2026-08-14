@@ -1,17 +1,17 @@
 # Accounting System — Detailed Product Requirements Document (Developer Edition)
 
-**A complete specification for rebuilding the legacy Corel Paradox 9 desktop system as a modern web application. The MVP is the accounting and core commercial system (customers/suppliers, inventory, purchasing, invoicing, cash & payments); Point of Sale and Payroll are future work.**
+**A complete specification for rebuilding the legacy Corel Paradox 9 desktop system as a modern web application. The MVP is the full accounting and commercial system — customers/suppliers, inventory, purchasing, invoicing, cash & payments, **Point of Sale**, and **HR/Payroll** — including cross-cutting platform capabilities (user session management, device management, financial statements, VAT return).**
 
 | | |
 |---|---|
 | **Document** | Detailed PRD — Developer Edition |
 | **Product** | Accounting System |
-| **Version** | 2.1 — Detailed |
+| **Version** | 2.2 — Detailed |
 | **Status** | For development |
-| **Date** | June 2026 |
+| **Date** | August 2026 |
 | **Replaces** | Corel Paradox 9 / ObjectPAL thick-client (legacy desktop system) |
-| **MVP scope** | Accounting + core commercial (sales, purchasing, inventory, cash & payments) |
-| **Future work** | Point of Sale, HR/Payroll (§17) |
+| **MVP scope** | Accounting + commercial (sales, purchasing, inventory, cash & payments), **Point of Sale**, **HR/Payroll**, plus platform user session management & device management, financial statements & VAT return |
+| **Future work** | Additional modules scoped later based on business need (§17.x) |
 | **Audience** | Developers (frontend, backend, mobile), QA, project manager, accounting stakeholder |
 | **Initial tenants** | LUMICA, SOLIGHT-DEVICE |
 
@@ -21,7 +21,7 @@
 
 - **Section 3** is a glossary of business/accounting terms — keep it open while reading.
 - **Sections 7–16** are the functional requirements, written as numbered features (`FR-xxx`) each with **acceptance criteria** (a testable checklist QA will verify).
-- **Section 17** lists future work (post-MVP).
+- **Section 17** specifies the Point of Sale and HR/Payroll modules (§17.3 lists any genuine post-MVP work).
 - **Sections 18–19** describe user flows and screens.
 - **Sections 20–26** are the technical spec: data model (with fields), exact calculation formulas, migration, integrations, non-functional requirements, architecture, and the API.
 - Words written as `code` refer to a legacy table/field or a technical identifier.
@@ -41,7 +41,7 @@
 
 The business runs on a ~25-year-old Corel Paradox 9 desktop program (≈1,347 data tables, 1,069 screens, 2,838 reports). It manages a company's **sales, inventory, purchasing, cash, and full accounting**, in **Arabic / French / English**, in **two currencies (US Dollar and Lebanese Pound)**, for **multiple companies and branches**. It is a single-PC/LAN program with no internet capability; all "integrations" are done by scripts writing text files.
 
-The new system rebuilds this as a secure, multi-user **web application** backed by a proper relational database, while preserving the **Lebanese accounting behaviour** that the current system already implements. The first release (MVP) focuses on the **accounting and core commercial workflow**; Point of Sale and Payroll are planned as later work (§17). This document specifies it in full.
+The new system rebuilds this as a secure, multi-user **web application** backed by a proper relational database, while preserving the **Lebanese accounting behaviour** that the current system already implements. The MVP covers the **full accounting and commercial workflow, plus Point of Sale and HR/Payroll (§17)**. This document specifies it in full.
 
 ## 2. What This Application Is (in plain words)
 
@@ -55,7 +55,7 @@ Think of it as the software that runs the back office of a trading company in Le
 - Automatically keep the **accounting books** (every sale, purchase, and payment updates the general ledger using double-entry bookkeeping), calculate **VAT**, and produce financial reports (balance sheet, income statement, customer statements, VAT return).
 - Do all of the above for **several companies/branches**, with **user accounts and permissions**, an **audit trail**, and **backups**.
 
-The MVP covers the accounting and core commercial modules above. Additional capabilities such as **Point of Sale** and **Payroll** are planned as later work (§17).
+The MVP covers all of the above **plus Point of Sale** (a fast counter-sales terminal with cash-drawer sessions, offline operation, and POS peripherals) and **HR/Payroll** (Lebanese payroll with NSSF and income-tax withholding) — see §17.
 
 ## 3. Glossary of Business & Accounting Terms
 
@@ -102,7 +102,6 @@ The MVP covers the accounting and core commercial modules above. Additional capa
 - **G5.** **Migrate** legacy data accurately, with balances reconciled.
 
 ### 4.2 Non-Goals (MVP)
-- **Point of Sale (POS)** and **Payroll** — planned as later work (§17), not in the MVP.
 - One-to-one recreation of all 2,838 legacy reports / 1,069 screens (they will be rationalised to the distinct set in use).
 - A public customer storefront (Shopify stays the e-commerce front; we sync with it).
 
@@ -134,7 +133,7 @@ The MVP covers the accounting and core commercial modules above. Additional capa
 
 The system uses **role-based access control (RBAC)** with optional per-permission overrides per user (the legacy system had very granular per-form permissions — `ACCPRIV`, `HISPRIV`, `ITMPRIV`, `PrintPermission`).
 
-Default roles: **System Administrator, Accountant, Sales clerk, Purchasing officer, Inventory/Warehouse, Branch Manager, Read-only/Auditor.** (Roles for future modules, e.g. Cashier and HR/Payroll, are added when those modules are built — §17.)
+Default roles: **System Administrator, Accountant, Sales clerk, Purchasing officer, Inventory/Warehouse, Branch Manager, Cashier (POS), HR/Payroll officer, Read-only/Auditor.**
 
 Independently-permissioned sensitive actions: price override, discount beyond a threshold, void/refund, view item cost, post/reverse journal entries, unlock a period, manage users, run backups, see other branches/companies.
 
@@ -406,14 +405,62 @@ Acceptance Criteria:
 Acceptance Criteria:
 - [ ] Scheduled automatic database backups to off-site/object storage (replaces `BackupReindexData.BAT`); tested restore procedure.
 
-## 17. Future Work (Post-MVP)
+## 17. Module: Point of Sale (POS) & HR/Payroll
 
-The following are planned for **after the MVP** and are intentionally kept high-level (no detailed functional requirements yet):
+Point of Sale and HR/Payroll are **in the MVP**. POS is fully specified below
+(FR-701–704). HR/Payroll's detailed functional requirements are being finalised
+(§17.2).
 
-- **Point of Sale (POS):** a fast, touch-friendly counter-sales module with barcode scanning, receipt printing, cash-drawer sessions, offline operation with automatic sync, and POS hardware (receipt printer, scanner, weighing scale). POS sales will post to accounting and stock exactly like a cash sale. To be specified in a later phase.
-- **HR & Payroll:** employee records, attendance, and Lebanese payroll (NSSF contributions and income-tax withholding), posting to accounting and producing the statutory Ministry of Finance forms. Rates and ceilings will be configurable and dated. To be specified in a later phase.
+### 17.1 Point of Sale (POS)
 
-Additional modules may be scoped later based on business need.
+A fast, touch-friendly counter-sales terminal. POS sales **post to accounting and
+stock exactly like a cash invoice** (§12/§13), so the ledger, VAT, and stock
+ledger stay authoritative — POS is a specialised front end over the same posting
+engine, not a parallel books.
+
+**FR-701 — POS sale screen.**
+Description: Fast touch sales screen (legacy `INVNUM_POS`, `goodspos`, `POSPictureItem`).
+Acceptance Criteria:
+- [ ] Add items by barcode scan, search, or category/image grid.
+- [ ] Adjust quantity, apply line/total discount (permissioned), see running total in **USD and LBP**.
+- [ ] Hold/recall orders (legacy `HOLDITEM`).
+- [ ] Tender: cash, card, cheque, prepaid/gift; **mixed-currency payment** with correct change and rounding **per currency**.
+- [ ] Print receipt; the sale **posts to accounting and stock exactly like a cash invoice**.
+
+**FR-702 — Cash session (drawer).**
+Description: Per-station/cashier cash-drawer session management (open float → track → close with count).
+Acceptance Criteria:
+- [ ] Open a session with an **opening float** (per station/cashier).
+- [ ] During the session, all sales/cash movements are tracked.
+- [ ] Close with a **cash count by denomination** (legacy `countmoney`) and a **Z-report** (expected vs counted, variance).
+
+**FR-703 — Offline mode.**
+Description: POS keeps working without internet and reconciles on reconnect (§NFR-4).
+Acceptance Criteria:
+- [ ] When offline, POS can search the **cached catalogue**, complete sales, and print receipts.
+- [ ] Offline sales **queue locally and sync automatically** on reconnect with no data loss and **no number collisions** (station-prefixed numbers).
+- [ ] Conflicts are resolved **deterministically** and surfaced to the manager if manual review is needed.
+
+**FR-704 — POS peripherals.**
+Description: POS hardware/peripheral integration (receipt printer, scanner, scale). *(Distinct from platform-wide Device Management — see `docs/NEEDED.md`.)*
+Acceptance Criteria:
+- [ ] Receipt printer via **ESC/POS over WebUSB/WebSerial**.
+- [ ] Barcode scanner in **HID-keyboard mode** (no driver), optional WebHID.
+- [ ] Weighing scale over **WebSerial** for weighed items (legacy `GoodsScale`, `SCALE*`).
+- [ ] *(Note: these browser APIs are Chromium-only and need HTTPS — POS terminals must use a Chromium browser.)*
+
+### 17.2 HR & Payroll
+
+**In the MVP.** Employee records, attendance, and Lebanese payroll (NSSF
+contributions and income-tax withholding), posting to accounting and producing
+the statutory Ministry of Finance forms; rates and ceilings configurable and
+dated. **Detailed functional requirements (FR-xxx + acceptance criteria) are to
+be supplied and inserted here.**
+
+### 17.3 Future work (post-MVP)
+
+Additional modules may be scoped later based on business need. None are currently
+committed beyond the MVP defined in §7–§17.2.
 
 ---
 
@@ -687,6 +734,9 @@ purchasing:  GET/POST /purchase-orders, /goods-receipts, /purchase-invoices
 sales:       GET/POST /quotations, /orders, /invoices,
              POST /invoices/:id/confirm, /pay, /credit-note, GET /invoices/:id/pdf
 payments:    GET/POST /payments, /cheques, /exchange
+pos:         POST /pos/sessions/open, /pos/sessions/:id/close (Z-report),
+             POST /pos/sales (posts like a cash invoice), /pos/sales/hold,
+             POST /pos/sync (offline queue reconcile), GET /pos/catalogue (cached)
 accounting:  GET/POST /journal-entries, POST /journal-entries/:id/reverse,
              GET /reports/trial-balance|balance-sheet|income-statement,
              GET /vat/return, POST /periods/:id/lock
@@ -704,11 +754,13 @@ admin:       /companies, /branches, /users, /roles, /currencies, /exchange-rates
 |---|---|---|
 | **0 Foundations** | Tenancy, auth/RBAC, company/branch, **chart of accounts**, currencies/rates, i18n, numbering, audit, migration tooling | A company can be set up; chart seeded; login/roles work; migration dry-run runs end-to-end |
 | **1 Core commercial (MVP)** | Partners, Items + **stock ledger**, Purchasing, Invoicing, **journal/posting**, Cash & Payments, financial reports + **VAT** | Invoice→payment→ledger→statement works; trial balance & VAT correct (USD/LBP); migrated balances reconcile |
-| **Future (post-MVP)** | Point of Sale, then HR/Payroll; further modules as needed (§17) | Scoped and prioritised after MVP go-live |
+| **2 Point of Sale (MVP)** | POS sale screen, cash-drawer sessions, offline mode + sync, POS peripherals (§17.1) | Counter sale posts to ledger + stock like a cash invoice; drawer opens/closes with Z-report; offline sales sync with no collisions |
+| **3 HR/Payroll (MVP)** | Employee records, attendance, Lebanese payroll — NSSF + income-tax withholding, MoF forms (§17.2) | Payroll run posts to accounting; statutory forms produced (detailed FRs pending) |
+| **Future (post-MVP)** | Additional modules as scoped by business need (§17.3) | Scoped and prioritised after MVP go-live |
 
 ## 28. Open Questions & Decisions Needed
 
-1. **Post-MVP priority:** after the accounting MVP, which comes first — **Point of Sale** or **HR/Payroll**? (§17)
+1. **Intra-MVP sequencing:** within the MVP, in what order are POS (§17.1) and HR/Payroll (§17.2) built relative to Cash & Payments and the reports? (Payments is the current critical-path next step.)
 2. **Base currency per company:** USD (recommended) or LBP; standard rate type(s).
 3. **VAT rate at go-live:** 11% or the proposed 12% (per parliamentary status); confirm exempt/zero-rated cases relevant to the business.
 4. **E-filing depth required now:** VAT, and (later) payroll forms / e-invoicing?
@@ -740,4 +792,4 @@ admin:       /companies, /branches, /users, /roles, /currencies, /exchange-rates
 
 ---
 
-*End of Detailed PRD (Developer Edition), v2.1. The MVP scope is the accounting and core commercial system (§7–§16); Point of Sale and Payroll are future work (§17). Pending the §28 decisions, the next deliverables are the distinct-report inventory and a finalised physical schema once the full legacy export is available.*
+*End of Detailed PRD (Developer Edition), v2.2. The MVP scope is the full accounting and commercial system **including Point of Sale and HR/Payroll** (§7–§17.2). Pending the §28 decisions, the outstanding specification work is the HR/Payroll detailed FRs (§17.2), the distinct-report inventory, and a finalised physical schema once the full legacy export is available.*

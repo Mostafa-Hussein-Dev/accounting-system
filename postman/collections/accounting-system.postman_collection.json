@@ -738,6 +738,115 @@
       ]
     },
     {
+      "name": "Fiscal Periods",
+      "item": [
+        {
+          "name": "List periods (by year)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fiscal-periods?year=2026",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fiscal-periods"
+              ],
+              "query": [
+                {
+                  "key": "year",
+                  "value": "2026"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Lock period",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fiscal-periods/lock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fiscal-periods",
+                "lock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 2026,\n  \"month\": 8\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unlock period",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fiscal-periods/unlock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fiscal-periods",
+                "unlock"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 2026,\n  \"month\": 8\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Close year",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fiscal-periods/close-year",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fiscal-periods",
+                "close-year"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 2030\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Accounts",
       "item": [
         {

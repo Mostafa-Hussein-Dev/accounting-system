@@ -20,6 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SequencesService } from '../sequences/sequences.service';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { AuditService } from '../audit/audit.service';
+import { FiscalPeriodsService } from '../fiscal-periods/fiscal-periods.service';
 import { GlService } from './gl.service';
 import { PostingService } from './posting.service';
 import { LedgerService } from './ledger.service';
@@ -54,6 +55,7 @@ describe('GL engine (FR-901/FR-906)', () => {
         LedgerService,
         SequencesService,
         AuditService,
+        FiscalPeriodsService,
       ],
     }).compile();
 

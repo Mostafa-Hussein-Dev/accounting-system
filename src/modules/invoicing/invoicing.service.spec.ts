@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SequencesService } from '../sequences/sequences.service';
 import { StockService } from '../stock/stock.service';
 import { AuditService } from '../audit/audit.service';
+import { FiscalPeriodsService } from '../fiscal-periods/fiscal-periods.service';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { SalesInvoicesService } from './sales-invoices.service';
 import { CreditNotesService } from './credit-notes.service';
@@ -45,6 +46,7 @@ describe('Invoicing (FR-6xx) — sales invoice + credit note', () => {
         StockService,
         SequencesService,
         AuditService,
+        FiscalPeriodsService,
       ],
     }).compile();
     prisma = moduleRef.get(PrismaService);

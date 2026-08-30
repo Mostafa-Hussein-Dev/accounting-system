@@ -43,6 +43,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'CreditNoteLine',
   'Payment',
   'PaymentAllocation',
+  'FiscalPeriod',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

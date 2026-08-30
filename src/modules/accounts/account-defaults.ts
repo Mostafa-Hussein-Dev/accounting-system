@@ -116,6 +116,10 @@ export const DEFAULT_CHART: DefaultAccountSeed[] = [
     type: EQUITY,
     normalBalance: CREDIT,
     parentNumber: '12',
+    // Year-end close target (FR-904): net result (class 7 − class 6) rolls here.
+    // Credit-normal but holds a debit when the year is a loss.
+    isControl: true,
+    controlType: ControlType.RETAINED_EARNINGS,
   },
   {
     number: '125',

@@ -13,6 +13,9 @@ export type Action =
   | 'post'
   | 'reverse'
   | 'void'
+  | 'lock'
+  | 'unlock'
+  | 'close'
   | 'manage';
 export type Subjects =
   | 'User'
@@ -36,5 +39,6 @@ export type Subjects =
   | 'Purchase'
   | 'Sales'
   | 'Payment'
+  | 'FiscalPeriod'
   | 'all';
 export type AppAbility = MongoAbility<[Action, Subjects]>;

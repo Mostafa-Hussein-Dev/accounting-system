@@ -15,17 +15,20 @@ forget. Keep this list updated as modules land.
 
 ## Larger deferred features (need a design pass)
 
-### FR-904 — Fiscal periods & period locking (deferred; GL hook left in place)
-The GL engine (FR-901/906) enforces every ledger invariant **except period
-locking**, because no `FiscalPeriod` model exists yet. `PostingService.post`
-carries a `TODO(FR-904)` at the exact point the check belongs. When picked up:
+### FR-904 — Fiscal periods & period locking — BUILT (`feature/fiscal-periods`)
+`src/modules/fiscal-periods`: monthly `FiscalPeriod` (OPEN/LOCKED, lazy rows,
+absent = open). `FiscalPeriodsService.assertOpen` is called on **all 6 posting
+paths** (PostingService.post/reverse + sales-invoice/credit-note/vendor-bill/
+payment confirms) → `409 PERIOD_LOCKED`, backed by a **DB trigger**
+(`assert_fiscal_period_open` on `journal_entries`). **Year-end close** zeroes
+class 6/7 into retained earnings (121, new `ControlType.RETAINED_EARNINGS`) per
+base currency, then locks the year (honours `fiscalYearStartMonth`).
+Migrations `20260815120000_add_fiscal_periods` (+trigger),
+`20260815120100_mark_retained_earnings`. Perms `period.{read,lock,unlock,close}`.
 
-- Add a `FiscalPeriod` model (company, start/end, status open/locked) and a
-  year-end close (roll class 7 − class 6 into retained earnings; carry opening
-  balances forward per currency).
-- In `PostingService.post` **and** `reverse`, reject posting into a locked
-  period unless a permissioned, audited unlock is present.
-- Consider a DB-level guard mirroring the existing balance triggers.
+**Still deferred within FR-904:** reopening a **closed year** (unlock + reverse
+the closing entry) is manual for now; period-locking of **stock movements** (this
+guards GL postings only); auto-generating a full year of period rows.
 
 ### FR-902 — Automatic posting rules (deferred; posting core already built)
 `PostingService.post()`/`reverse()` are the reusable core that documents will

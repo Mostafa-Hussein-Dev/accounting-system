@@ -21,6 +21,7 @@ import { Paginated } from '../../common/types/paginated.type';
 import { SequencesService } from '../sequences/sequences.service';
 import { AuditService } from '../audit/audit.service';
 import { StockService } from '../stock/stock.service';
+import { FiscalPeriodsService } from '../fiscal-periods/fiscal-periods.service';
 import {
   isPlatformAdmin,
   type AuthenticatedUser,
@@ -61,6 +62,7 @@ export class CreditNotesService {
     private readonly sequences: SequencesService,
     private readonly audit: AuditService,
     private readonly stock: StockService,
+    private readonly fiscalPeriods: FiscalPeriodsService,
   ) {}
 
   private clientFor(caller: AuthenticatedUser): Prisma.TransactionClient {
@@ -221,6 +223,12 @@ export class CreditNotesService {
 
     const note = await this.prisma.$transaction(async (tx) => {
       const companyId = existing.companyId;
+      // FR-904: block confirming into a locked fiscal period.
+      await this.fiscalPeriods.assertOpen(
+        companyId,
+        existing.creditNoteDate,
+        tx,
+      );
       const baseCurrency = await this.baseCurrencyOf(tx, companyId);
       const rate = Number(existing.rate);
 

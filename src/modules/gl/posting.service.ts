@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SequencesService } from '../sequences/sequences.service';
 import { AuditService } from '../audit/audit.service';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
+import { FiscalPeriodsService } from '../fiscal-periods/fiscal-periods.service';
 import { GlService } from './gl.service';
 import { ReverseJournalEntryDto } from './dto/reverse-journal-entry.dto';
 import { JournalEntryResponseDto } from './dto/journal-entry-response.dto';
@@ -26,6 +27,7 @@ export class PostingService {
     private readonly sequences: SequencesService,
     private readonly gl: GlService,
     private readonly audit: AuditService,
+    private readonly fiscalPeriods: FiscalPeriodsService,
   ) {}
 
   /**
@@ -46,10 +48,10 @@ export class PostingService {
       });
     }
 
-    // TODO(FR-904): once fiscal periods exist, reject posting into a locked
-    // period here (docs/DEFERRED.md — period locking).
-
     await this.prisma.$transaction(async (tx) => {
+      // FR-904: reject posting into a locked fiscal period (a DB trigger backs
+      // this up on every path; here it yields a clean PERIOD_LOCKED error).
+      await this.fiscalPeriods.assertOpen(entry.companyId, entry.date, tx);
       const entryNumber = await this.sequences.nextNumber(
         entry.companyId,
         entry.branchId,
@@ -127,6 +129,9 @@ export class PostingService {
       dto.reason ?? `Reversal of ${entry.entryNumber ?? entry.id}`;
 
     const reversal = await this.prisma.$transaction(async (tx) => {
+      // FR-904: a reversal is itself a posting — block it if its date lands in a
+      // locked period.
+      await this.fiscalPeriods.assertOpen(entry.companyId, reversalDate, tx);
       const entryNumber = await this.sequences.nextNumber(
         entry.companyId,
         entry.branchId,

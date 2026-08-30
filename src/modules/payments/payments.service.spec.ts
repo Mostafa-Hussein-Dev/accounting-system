@@ -6,6 +6,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SequencesService } from '../sequences/sequences.service';
 import { AuditService } from '../audit/audit.service';
+import { FiscalPeriodsService } from '../fiscal-periods/fiscal-periods.service';
 import { GlService } from '../gl/gl.service';
 import { LedgerService } from '../gl/ledger.service';
 import { PostingService } from '../gl/posting.service';
@@ -116,6 +117,7 @@ describe('Payments (FR-801) — receipts, supplier payments, allocation, FX', ()
         PaymentsService,
         SequencesService,
         AuditService,
+        FiscalPeriodsService,
         GlService,
         LedgerService,
         PostingService,

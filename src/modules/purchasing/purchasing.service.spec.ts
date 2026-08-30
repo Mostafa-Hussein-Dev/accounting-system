@@ -15,6 +15,7 @@ import { GlService } from '../gl/gl.service';
 import { PostingService } from '../gl/posting.service';
 import { LedgerService } from '../gl/ledger.service';
 import { AuditService } from '../audit/audit.service';
+import { FiscalPeriodsService } from '../fiscal-periods/fiscal-periods.service';
 import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { GoodsReceiptsService } from './goods-receipts.service';
@@ -48,6 +49,7 @@ describe('Purchasing (FR-501) — full flow', () => {
         PostingService,
         LedgerService,
         AuditService,
+        FiscalPeriodsService,
       ],
     }).compile();
     prisma = moduleRef.get(PrismaService);

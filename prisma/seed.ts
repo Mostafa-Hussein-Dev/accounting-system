@@ -564,6 +564,30 @@ const PERMISSIONS = [
     action: 'void',
     description: 'Void a posted payment (creates a reversing journal entry)',
   },
+  {
+    key: 'period.read',
+    subject: 'FiscalPeriod',
+    action: 'read',
+    description: 'View fiscal periods and their lock status',
+  },
+  {
+    key: 'period.lock',
+    subject: 'FiscalPeriod',
+    action: 'lock',
+    description: 'Lock a fiscal period to block posting into it',
+  },
+  {
+    key: 'period.unlock',
+    subject: 'FiscalPeriod',
+    action: 'unlock',
+    description: 'Unlock a locked fiscal period (permissioned, audited)',
+  },
+  {
+    key: 'period.close',
+    subject: 'FiscalPeriod',
+    action: 'close',
+    description: 'Run the year-end close (roll P&L into retained earnings)',
+  },
 ] as const;
 
 // Global reference currencies (FR-103) — shared by every tenant. USD is the
@@ -622,6 +646,7 @@ const ROLES: { name: string; description: string; permissionKeys: string[] }[] =
         'purchase.read',
         'sales.read',
         'payment.read',
+        'period.read',
       ],
     },
   ];

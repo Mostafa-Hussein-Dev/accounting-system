@@ -6,9 +6,10 @@ import { JournalEntriesController } from './journal-entries.controller';
 import { ReportsController } from './reports.controller';
 import { CaslModule } from '../casl/casl.module';
 import { SequencesModule } from '../sequences/sequences.module';
+import { FiscalPeriodsModule } from '../fiscal-periods/fiscal-periods.module';
 
 @Module({
-  imports: [CaslModule, SequencesModule],
+  imports: [CaslModule, SequencesModule, FiscalPeriodsModule],
   providers: [GlService, PostingService, LedgerService],
   controllers: [JournalEntriesController, ReportsController],
   // Exported so AccountsModule can expose GET /accounts/:id/balance and future

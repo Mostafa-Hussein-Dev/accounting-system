@@ -43,6 +43,15 @@ enum ControlType {
   COGS
   FX_GAIN // realised positive exchange difference (PCL 775)
   FX_LOSS // realised negative exchange difference (PCL 675)
+  RETAINED_EARNINGS // year-end result carried forward (PCL 121)
+}
+
+// Fiscal-period lifecycle (FR-904). A period is OPEN by default; locking it
+// blocks any (back-)dated posting into that month until a permissioned, audited
+// unlock. Only an explicitly LOCKED period blocks — an absent row reads as open.
+enum FiscalPeriodStatus {
+  OPEN
+  LOCKED
 }
 
 enum TaxTreatment {
@@ -191,6 +200,7 @@ model Company {
   creditNoteLines    CreditNoteLine[]
   payments           Payment[]
   paymentAllocations PaymentAllocation[]
+  fiscalPeriods      FiscalPeriod[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -2066,4 +2076,31 @@ model PaymentAllocation {
   @@index([paymentId])
   @@index([documentType, documentId])
   @@map("payment_allocations")
+}
+
+// ===========================================================================
+// Fiscal periods & close (FR-904). One row per company + month; locking blocks
+// posting into that month (enforced in every posting path + a DB trigger). The
+// year-end close rolls class 7 − class 6 into retained earnings (121) and locks
+// the year. Rows are created lazily (first lock/close), so an absent month = open.
+// ===========================================================================
+model FiscalPeriod {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  year   Int
+  month  Int // 1–12
+  status FiscalPeriodStatus @default(OPEN)
+
+  lockedAt   DateTime? @map("locked_at")
+  lockedById String?   @map("locked_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, year, month])
+  @@index([companyId])
+  @@index([companyId, status])
+  @@map("fiscal_periods")
 }

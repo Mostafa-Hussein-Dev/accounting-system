@@ -3,6 +3,7 @@ import { CaslModule } from '../casl/casl.module';
 import { SequencesModule } from '../sequences/sequences.module';
 import { StockModule } from '../stock/stock.module';
 import { GlModule } from '../gl/gl.module';
+import { FiscalPeriodsModule } from '../fiscal-periods/fiscal-periods.module';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { PurchaseOrdersController } from './purchase-orders.controller';
 import { GoodsReceiptsService } from './goods-receipts.service';
@@ -11,7 +12,13 @@ import { VendorBillsService } from './vendor-bills.service';
 import { VendorBillsController } from './vendor-bills.controller';
 
 @Module({
-  imports: [CaslModule, SequencesModule, StockModule, GlModule],
+  imports: [
+    CaslModule,
+    SequencesModule,
+    StockModule,
+    GlModule,
+    FiscalPeriodsModule,
+  ],
   providers: [PurchaseOrdersService, GoodsReceiptsService, VendorBillsService],
   controllers: [
     PurchaseOrdersController,

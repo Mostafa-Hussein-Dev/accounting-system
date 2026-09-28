@@ -44,6 +44,10 @@ const TENANT_SCOPED_MODELS = new Set([
   'Payment',
   'PaymentAllocation',
   'FiscalPeriod',
+  'StockCount',
+  'StockCountLine',
+  'StockTransfer',
+  'StockTransferLine',
 ]);
 
 const OPERATIONS_WITH_WHERE = new Set([

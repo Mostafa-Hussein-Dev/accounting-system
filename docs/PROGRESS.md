@@ -98,7 +98,7 @@ Legend: ⚠ partial · ❌ not started · ✅ done (shown only where it clarifie
 | # | Step | FRs (status) |
 |---|---|---|
 | 5 | **Auto-posting rule engine** | FR-902 ⚠ (`PostingService` core built; mapping engine ❌) |
-| 6 | **Stock counts & inter-branch transfers** | FR-403 ❌ · FR-404 ❌ |
+| 6 | **Stock counts & inter-branch transfers** | FR-403 ✅ · FR-404 ✅ (in-transit deferred) |
 | 7 | **Landed cost** | FR-502 ❌ |
 | 8 | **Payments follow-ups** | FR-802 ⚠ (cheque lifecycle) · FR-803 ❌ (exchange desk) · FR-804 ❌ (Bank + reconciliation) |
 | 9 | **Credit control enforcement** | FR-302 ⚠ (limit stored; warn/block ❌) |
@@ -126,8 +126,8 @@ Legend: ⚠ partial · ❌ not started · ✅ done (shown only where it clarifie
 
 **Every remaining FR at a glance**
 - **Partial (⚠):** FR-302, FR-405, FR-601, FR-802, FR-902, FR-1002, FR-1101
-- **Not started (❌):** FR-403, FR-404, FR-406, FR-407, FR-502, FR-604, FR-803, FR-804, FR-1001, FR-1103, FR-107, FR-701–704, §22
-- **Newly done (✅):** FR-903 (VAT return), FR-905 (financial statements), FR-904 (fiscal periods & close), FR-906 (integrity now complete)
+- **Not started (❌):** FR-406, FR-407, FR-502, FR-604, FR-803, FR-804, FR-1001, FR-1103, FR-107, FR-701–704, §22
+- **Newly done (✅):** FR-903 (VAT return), FR-905 (financial statements), FR-904 (fiscal periods & close), FR-906 (integrity now complete), FR-403 (stock counts + variance journal), FR-404 (inter-branch transfers)
 - **Pending your FRs:** §17.2 Payroll, FR-2xx Session Management, FR-2xx Device Management
 
 ## Working agreement (the rules the user has set)
@@ -245,8 +245,8 @@ module (invoicing/payments/reports) or a frontend/export piece.
 |---|---|---|---|
 | FR-401 | Item master | ✅ | Items, variants, barcodes, UoM, cost/sale, VAT treatment |
 | FR-402 | Stock ledger & on-hand | ✅ | AVCO movements, derived on-hand, negative-stock block |
-| FR-403 | Stock counts & adjustments | ⬜ | Adjustment movement primitive exists; count workflow + journal not |
-| FR-404 | Inter-branch transfers | ⬜ | transfer_in/out reasons in enum only; no workflow |
+| FR-403 | Stock counts & adjustments | ✅ | `StockCount` doc (DRAFT→POSTED): variance vs current on-hand → ADJUSTMENT movements + one variance journal (Inventory 37 ↔ Inventory-variance 603); period-lock guarded |
+| FR-404 | Inter-branch transfers | ✅ | `StockTransfer` doc (DRAFT→[APPROVED]→POSTED): one value-neutral TRANSFER movement per line across branches; optional approval. In-transit (TRANSIT two-step) deferred |
 | FR-405 | Pricing & discounts | 🟡 | Price lists/lines done; qty/total/period/customer discount rules + bulk price tools not |
 | FR-406 | Barcode & label printing | ⬜ | Frontend label engine |
 | FR-407 | Expiry & serial tracking | ⬜ | Flags may exist; capture + reporting not |

@@ -16,6 +16,7 @@ export type Action =
   | 'lock'
   | 'unlock'
   | 'close'
+  | 'approve'
   | 'manage';
 export type Subjects =
   | 'User'

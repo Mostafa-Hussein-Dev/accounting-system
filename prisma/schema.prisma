@@ -44,6 +44,7 @@ enum ControlType {
   FX_GAIN // realised positive exchange difference (PCL 775)
   FX_LOSS // realised negative exchange difference (PCL 675)
   RETAINED_EARNINGS // year-end result carried forward (PCL 121)
+  INVENTORY_ADJUSTMENT // stock count variance gain/loss (PCL 603) — FR-403
 }
 
 // Fiscal-period lifecycle (FR-904). A period is OPEN by default; locking it
@@ -84,6 +85,8 @@ enum DocumentType {
   STOCK_MOVEMENT
   GOODS_RECEIPT
   PURCHASE_INVOICE
+  STOCK_COUNT
+  STOCK_TRANSFER
 }
 
 // Journal-entry lifecycle (FR-901/FR-906). A DRAFT entry is editable and does
@@ -201,6 +204,10 @@ model Company {
   payments           Payment[]
   paymentAllocations PaymentAllocation[]
   fiscalPeriods      FiscalPeriod[]
+  stockCounts        StockCount[]
+  stockCountLines    StockCountLine[]
+  stockTransfers     StockTransfer[]
+  stockTransferLines StockTransferLine[]
 
   @@index([deletedAt])
   @@map("companies")
@@ -495,6 +502,7 @@ model JournalEntry {
   salesInvoice SalesInvoice? @relation("SalesInvoiceJournalEntry")
   creditNote   CreditNote?   @relation("CreditNoteJournalEntry")
   payment      Payment?      @relation("PaymentJournalEntry")
+  stockCount   StockCount?   @relation("StockCountJournalEntry")
 
   // Number is unique per company; null (draft) rows are exempt (Postgres treats
   // NULL as distinct), so many drafts coexist.
@@ -597,6 +605,9 @@ model Branch {
   salesInvoices     SalesInvoice[]     @relation("BranchSalesInvoices")
   creditNotes       CreditNote[]       @relation("BranchCreditNotes")
   payments          Payment[]          @relation("BranchPayments")
+  stockCounts       StockCount[]       @relation("BranchStockCounts")
+  stockTransfersFrom StockTransfer[]   @relation("StockTransferFromBranch")
+  stockTransfersTo   StockTransfer[]   @relation("StockTransferToBranch")
 
   @@index([companyId])
   @@index([deletedAt])
@@ -1199,6 +1210,8 @@ model Item {
   vendorBillLines    VendorBillLine[]    @relation("ItemVendorBillLines")
   salesInvoiceLines  SalesInvoiceLine[]  @relation("ItemSalesInvoiceLines")
   creditNoteLines    CreditNoteLine[]    @relation("ItemCreditNoteLines")
+  stockCountLines    StockCountLine[]    @relation("ItemStockCountLines")
+  stockTransferLines StockTransferLine[] @relation("ItemStockTransferLines")
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -1241,6 +1254,8 @@ model ItemVariant {
   vendorBillLines    VendorBillLine[]    @relation("VariantVendorBillLines")
   salesInvoiceLines  SalesInvoiceLine[]  @relation("VariantSalesInvoiceLines")
   creditNoteLines    CreditNoteLine[]    @relation("VariantCreditNoteLines")
+  stockCountLines    StockCountLine[]    @relation("VariantStockCountLines")
+  stockTransferLines StockTransferLine[] @relation("VariantStockTransferLines")
 
   @@unique([itemId, sizeId, colourId])
   @@unique([companyId, sku])
@@ -1383,6 +1398,9 @@ model Location {
   goodsReceipts      GoodsReceipt[]  @relation("LocationGoodsReceipts")
   salesInvoices      SalesInvoice[]  @relation("LocationSalesInvoices")
   creditNotes        CreditNote[]    @relation("LocationCreditNotes")
+  stockCounts        StockCount[]    @relation("LocationStockCounts")
+  stockTransfersFrom StockTransfer[] @relation("StockTransferFrom")
+  stockTransfersTo   StockTransfer[] @relation("StockTransferTo")
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -1457,6 +1475,193 @@ model StockMovement {
   @@index([partnerId])
   @@index([movementDate])
   @@map("stock_movements")
+
+  // The stock-count / transfer line that generated this movement, if any.
+  stockCountLine    StockCountLine?    @relation("StockCountLineMovement")
+  stockTransferLine StockTransferLine? @relation("StockTransferLineMovement")
+}
+
+// Stock-count lifecycle (FR-403). DRAFT is editable; POST reconciles the count
+// (posts adjustment movements + one variance journal) and is one-way; CANCELLED
+// is a soft-deleted draft.
+enum StockCountStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+// Stock-transfer lifecycle (FR-404). DRAFT → optional APPROVED → POSTED (moves
+// the stock); CANCELLED is a soft-deleted draft. POST is allowed from DRAFT or
+// APPROVED (approval is optional).
+enum StockTransferStatus {
+  DRAFT
+  APPROVED
+  POSTED
+  CANCELLED
+}
+
+// A physical stock count / inventory reconciliation (FR-403, legacy DATACOLL).
+// The system on-hand is snapshotted per line at creation; the user enters the
+// counted quantities, then POST: each non-zero variance posts an ADJUSTMENT
+// stock movement (against the virtual ADJUSTMENT location) AND the whole count
+// posts ONE balanced journal entry — net variance value DR/CR Inventory (control
+// INVENTORY) against the inventory-variance account (control INVENTORY_ADJUSTMENT).
+// The posted variance is recomputed against CURRENT on-hand at post time (not the
+// stale snapshot), so concurrent sales between draft and post never create phantom
+// differences. Tenant-scoped; soft-deleted like other documents.
+model StockCount {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  countNo String           @map("count_no")
+  status  StockCountStatus @default(DRAFT)
+
+  countDate DateTime @map("count_date") @db.Date
+
+  branchId String? @map("branch_id") @db.Uuid
+  branch   Branch? @relation("BranchStockCounts", fields: [branchId], references: [id])
+
+  // The internal location being counted.
+  locationId String   @map("location_id") @db.Uuid
+  location   Location @relation("LocationStockCounts", fields: [locationId], references: [id])
+
+  notes String?
+
+  // Net variance value posted to the ledger (base currency), frozen at post.
+  varianceValueBase Decimal @default(0) @map("variance_value_base") @db.Decimal(20, 4)
+
+  journalEntryId String?       @unique @map("journal_entry_id") @db.Uuid
+  journalEntry   JournalEntry? @relation("StockCountJournalEntry", fields: [journalEntryId], references: [id])
+  postedAt       DateTime?     @map("posted_at")
+
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines StockCountLine[]
+
+  @@unique([companyId, countNo])
+  @@index([companyId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("stock_counts")
+}
+
+model StockCountLine {
+  id           String     @id @default(uuid()) @db.Uuid
+  companyId    String     @map("company_id") @db.Uuid
+  company      Company    @relation(fields: [companyId], references: [id])
+  stockCountId String     @map("stock_count_id") @db.Uuid
+  stockCount   StockCount @relation(fields: [stockCountId], references: [id], onDelete: Cascade)
+
+  lineNo Int @map("line_no")
+
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation("ItemStockCountLines", fields: [itemId], references: [id])
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation("VariantStockCountLines", fields: [variantId], references: [id])
+
+  // The UoM the counted qty was entered in (converted to the item base UoM at
+  // creation); null = base UoM. systemQty/countedQty are both stored in the item
+  // BASE UoM so they compare directly.
+  uomId String? @map("uom_id") @db.Uuid
+
+  // System on-hand snapshot at line creation (base UoM) — informational; the
+  // posted variance is recomputed against current on-hand at post time.
+  systemQty  Decimal @map("system_qty") @db.Decimal(20, 3)
+  countedQty Decimal @map("counted_qty") @db.Decimal(20, 3)
+
+  // Optional unit cost for a positive variance (found stock); defaults to the
+  // current moving average. Ignored for a negative variance (valued at average).
+  unitCost Decimal? @map("unit_cost") @db.Decimal(20, 4)
+
+  // Frozen at post: counted − current on-hand (base UoM) and its base value.
+  varianceQty       Decimal @default(0) @map("variance_qty") @db.Decimal(20, 3)
+  varianceValueBase Decimal @default(0) @map("variance_value_base") @db.Decimal(20, 4)
+
+  stockMovementId String?        @unique @map("stock_movement_id") @db.Uuid
+  stockMovement   StockMovement? @relation("StockCountLineMovement", fields: [stockMovementId], references: [id])
+
+  @@index([stockCountId])
+  @@index([itemId, variantId])
+  @@map("stock_count_lines")
+}
+
+// An inter-branch (or inter-location) stock transfer document (FR-404, legacy
+// TRANSFERITEMS). DRAFT → [APPROVED] → POSTED. Posting moves each line as ONE
+// value-neutral internal TRANSFER movement from the source internal location to
+// the destination internal location (which may live in a different branch).
+// Value-neutral, so no journal entry — the moving average and total inventory
+// value are unchanged; only the location (and thus branch) of the stock changes.
+// Approval is optional (POST is allowed from DRAFT or APPROVED). Tenant-scoped;
+// soft-deleted like other documents.
+model StockTransfer {
+  id        String  @id @default(uuid()) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  transferNo String              @map("transfer_no")
+  status     StockTransferStatus @default(DRAFT)
+
+  transferDate DateTime @map("transfer_date") @db.Date
+
+  fromLocationId String   @map("from_location_id") @db.Uuid
+  fromLocation   Location @relation("StockTransferFrom", fields: [fromLocationId], references: [id])
+  toLocationId   String   @map("to_location_id") @db.Uuid
+  toLocation     Location @relation("StockTransferTo", fields: [toLocationId], references: [id])
+
+  fromBranchId String? @map("from_branch_id") @db.Uuid
+  fromBranch   Branch? @relation("StockTransferFromBranch", fields: [fromBranchId], references: [id])
+  toBranchId   String? @map("to_branch_id") @db.Uuid
+  toBranch     Branch? @relation("StockTransferToBranch", fields: [toBranchId], references: [id])
+
+  notes String?
+
+  approvedById String?   @map("approved_by_id") @db.Uuid
+  approvedAt   DateTime? @map("approved_at")
+  postedAt     DateTime? @map("posted_at")
+
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines StockTransferLine[]
+
+  @@unique([companyId, transferNo])
+  @@index([companyId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("stock_transfers")
+}
+
+model StockTransferLine {
+  id              String        @id @default(uuid()) @db.Uuid
+  companyId       String        @map("company_id") @db.Uuid
+  company         Company       @relation(fields: [companyId], references: [id])
+  stockTransferId String        @map("stock_transfer_id") @db.Uuid
+  stockTransfer   StockTransfer @relation(fields: [stockTransferId], references: [id], onDelete: Cascade)
+
+  lineNo Int @map("line_no")
+
+  itemId    String       @map("item_id") @db.Uuid
+  item      Item         @relation("ItemStockTransferLines", fields: [itemId], references: [id])
+  variantId String?      @map("variant_id") @db.Uuid
+  variant   ItemVariant? @relation("VariantStockTransferLines", fields: [variantId], references: [id])
+
+  // The UoM the qty was entered in (converted to base at post); null = base UoM.
+  uomId String? @map("uom_id") @db.Uuid
+
+  qty Decimal @db.Decimal(20, 3)
+
+  stockMovementId String?        @unique @map("stock_movement_id") @db.Uuid
+  stockMovement   StockMovement? @relation("StockTransferLineMovement", fields: [stockMovementId], references: [id])
+
+  @@index([stockTransferId])
+  @@index([itemId, variantId])
+  @@map("stock_transfer_lines")
 }
 
 // ===========================================================================

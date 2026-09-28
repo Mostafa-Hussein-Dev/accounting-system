@@ -754,6 +754,21 @@ export const DEFAULT_CHART: DefaultAccountSeed[] = [
     parentNumber: '601',
   },
   {
+    number: '603',
+    name: 'Inventory variances (stock count adjustments)',
+    nameAr: 'فروقات الجرد (تسويات جرد المخزون)',
+    nameEn: 'Inventory variances (stock count adjustments)',
+    accountClass: 6,
+    type: EXPENSE,
+    normalBalance: DEBIT,
+    parentNumber: '60',
+    // Default inventory-adjustment control account (FR-403). A physical stock
+    // count posts its net variance here against Inventory (37): a shortage is a
+    // DEBIT (expense/loss), an overage a CREDIT (contra-expense/gain).
+    isControl: true,
+    controlType: ControlType.INVENTORY_ADJUSTMENT,
+  },
+  {
     number: '61',
     name: 'Raw materials and consumables used',
     nameAr: 'مواد أولية وإستهلاكية مستخدمة',

@@ -6650,6 +6650,155 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Create stock count (draft) — FR-403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){ pm.environment.set('stockCountId', pm.response.json().data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"{{internalLocationId}}\",\n  \"countDate\": \"2026-09-01\",\n  \"notes\": \"Monthly count\",\n  \"lines\": [\n    { \"itemId\": \"{{itemId}}\", \"countedQty\": 8 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/stock-counts",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "stock-counts" ]
+            },
+            "description": "Creates a DRAFT count. Per line it snapshots the current system on-hand (systemQty) and records the counted qty. Nothing posts yet."
+          },
+          "response": []
+        },
+        {
+          "name": "List stock counts — FR-403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock-counts?status=DRAFT",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "stock-counts" ],
+              "query": [
+                { "key": "status", "value": "DRAFT", "description": "DRAFT | POSTED | CANCELLED" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get stock count — FR-403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock-counts/{{stockCountId}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "stock-counts", "{{stockCountId}}" ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Post stock count — FR-403",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock-counts/{{stockCountId}}/post",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "stock-counts", "{{stockCountId}}", "post" ]
+            },
+            "description": "Posts the count: for each variance (recomputed vs CURRENT on-hand) posts an ADJUSTMENT movement AND one balanced variance journal — net value between Inventory (37) and Inventory-variance (603). Shortage = loss (DR 603/CR 37), overage = gain (DR 37/CR 603). Blocked if the count month is a LOCKED fiscal period."
+          },
+          "response": []
+        },
+        {
+          "name": "Create stock transfer (draft) — FR-404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if(pm.response.code<300){ pm.environment.set('stockTransferId', pm.response.json().data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromLocationId\": \"{{internalLocationId}}\",\n  \"toLocationId\": \"{{internalLocationBId}}\",\n  \"transferDate\": \"2026-09-01\",\n  \"notes\": \"Restock branch B\",\n  \"lines\": [\n    { \"itemId\": \"{{itemId}}\", \"qty\": 3 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/stock-transfers",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "stock-transfers" ]
+            },
+            "description": "Creates a DRAFT inter-branch transfer. Set {{internalLocationBId}} to a SECOND internal location (a different branch's stock location)."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve stock transfer (optional) — FR-404",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock-transfers/{{stockTransferId}}/approve",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "stock-transfers", "{{stockTransferId}}", "approve" ]
+            },
+            "description": "Optional approval step (DRAFT → APPROVED). Posting also works directly from DRAFT."
+          },
+          "response": []
+        },
+        {
+          "name": "Post stock transfer — FR-404",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock-transfers/{{stockTransferId}}/post",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "stock-transfers", "{{stockTransferId}}", "post" ]
+            },
+            "description": "Moves each line as one value-neutral TRANSFER movement source→destination. No journal entry — moving average and total inventory value are unchanged; only the location (and branch) of the stock changes."
+          },
+          "response": []
+        },
+        {
+          "name": "List stock transfers — FR-404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stock-transfers?status=POSTED",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "stock-transfers" ],
+              "query": [
+                { "key": "status", "value": "POSTED", "description": "DRAFT | APPROVED | POSTED | CANCELLED" }
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },

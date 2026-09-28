@@ -348,6 +348,27 @@ reverses via `PostingService.reverse`. `cashAccountId` targets a CASH/BANK accou
   (`GET /payments/open-items`); no `paid`/`partially_paid` status is written back
   onto the invoice/bill row (posted docs stay immutable at DRAFT/POSTED/CANCELLED).
 
+### FR-403 / FR-404 — Stock counts & inter-branch transfers — BUILT (migrations `20260816120000_add_stock_ops`, `20260816120100_mark_inventory_adjustment`)
+`src/modules/stock/stock-counts.*` + `stock-transfers.*`. Counts: `StockCount`
+doc, variance recomputed vs current on-hand at post → ADJUSTMENT movements + one
+balanced variance journal (Inventory `INVENTORY`/37 ↔ new
+`INVENTORY_ADJUSTMENT`/603); period-lock guarded. Transfers: `StockTransfer` doc
+(DRAFT→[APPROVED]→POSTED), one value-neutral TRANSFER movement per line across
+branches.
+
+**Deferred within/around FR-403/404 (revisit later):**
+- **True in-transit transfers (TRANSIT two-step)** — a transfer posts a single
+  direct value-neutral move on POST, so goods are never "in the truck". A
+  dispatch→receive two-step through a `TRANSIT` location would need the valuation
+  base (`streamOnHandTotal`/`streamValueNet` and the on-hand reads) to *include*
+  TRANSIT for company valuation while *excluding* it from per-branch on-hand, so
+  the GL inventory account stays tied to Σ movement value during transit. Not
+  built; the `LocationType.TRANSIT` enum value already exists for it.
+- **Scanner import (legacy `DATACOLL`)** — counted quantities are entered via the
+  line payload; a dedicated handheld-scanner import format is not built.
+- **Count against a whole branch/all locations at once** — a count targets one
+  internal location; a branch-wide sweep across its locations is not built.
+
 ## Conventions
 - When you add a placeholder/nullable FK because the target model doesn't exist
   yet, add a row here **and** a `NOTE`/`TODO(FR-xxx)` comment at the code site.

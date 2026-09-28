@@ -742,6 +742,34 @@ export class StockService {
     };
   }
 
+  // --- public helpers for the count/transfer document services -------------
+
+  /**
+   * Current on-hand for a stream at one internal location, in the item base UoM
+   * (public delegate for StockCounts/StockTransfers, which live in this module).
+   */
+  async locationOnHandFor(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    itemId: string,
+    variantId: string | null,
+    locationId: string,
+  ): Promise<number> {
+    return this.locationOnHand(tx, companyId, itemId, variantId, locationId);
+  }
+
+  /** Convert an input quantity (optional UoM) to the item base UoM. */
+  async convertQtyToBase(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    itemId: string,
+    uomId: string | undefined,
+    qty: number,
+  ): Promise<number> {
+    const item = await this.resolveItem(tx, itemId, companyId);
+    return this.convertToBase(tx, item, uomId, qty);
+  }
+
   // --- valuation / on-hand helpers -----------------------------------------
 
   /** Total on-hand for a stream across ALL internal locations (the AVCO base). */

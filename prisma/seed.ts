@@ -487,6 +487,24 @@ const PERMISSIONS = [
     description: 'Adjust stock (physical count reconciliation)',
   },
   {
+    key: 'stock.post',
+    subject: 'Stock',
+    action: 'post',
+    description: 'Post stock counts and stock transfers to the ledger',
+  },
+  {
+    key: 'stock.approve',
+    subject: 'Stock',
+    action: 'approve',
+    description: 'Approve stock transfers before posting',
+  },
+  {
+    key: 'stock.delete',
+    subject: 'Stock',
+    action: 'delete',
+    description: 'Delete/cancel draft stock counts and transfers',
+  },
+  {
     key: 'purchase.read',
     subject: 'Purchase',
     action: 'read',
